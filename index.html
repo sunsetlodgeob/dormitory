@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ドット絵 夕照寮</title>
+<meta name="description" content="横浜市立大学の男子寮「夕照寮」（1970–2010）をドット絵で再現し、館内を歩きまわれるゲーム。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=DotGothic16&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="top" id="top">
+  <p class="logo"><span class="logo-name">夕照寮</span><span class="logo-sub">横浜市立大学 男子寮 ドット絵さんぽ</span></p>
+  <button type="button" class="chip" id="sound-btn" aria-pressed="true">音 ON</button>
+</header>
+
+<main class="wrap">
+  <section class="console" aria-label="ゲーム画面">
+    <div class="screen" id="stage">
+      <canvas id="screen" width="240" height="176" aria-label="夕照寮のドット絵。主人公を動かして寮の中を歩けます"></canvas>
+      <div class="hud" id="hud" hidden><span id="hud-loc"></span><span id="hud-quest"></span></div>
+      <div class="toast" id="toast" role="status" hidden></div>
+      <div class="title-ui" id="title-ui" hidden>
+        <p class="title-kicker">横浜市立大学 男子寮</p>
+        <h1 class="title-name">夕照寮</h1>
+        <p class="title-years">1970 ― 2010</p>
+        <div class="title-actions">
+          <button type="button" class="start" id="start-btn">はじめる</button>
+          <button type="button" class="start start-sub" id="continue-btn" hidden>つづきから</button>
+        </div>
+      </div>
+      <div class="msg" id="msg" hidden>
+        <span class="msg-name" id="msg-name" hidden></span>
+        <p class="msg-text" id="msg-text"></p>
+        <div class="msg-choices" id="msg-choices"></div>
+        <span class="msg-next" id="msg-next" aria-hidden="true">▼</span>
+      </div>
+    </div>
+
+    <div class="pad" id="pad">
+      <div class="dpad" id="dpad" role="group" aria-label="十字キー">
+        <span class="dpad-arm dpad-up"></span><span class="dpad-arm dpad-left"></span>
+        <span class="dpad-hub"></span>
+        <span class="dpad-arm dpad-right"></span><span class="dpad-arm dpad-down"></span>
+      </div>
+      <div class="ab">
+        <button type="button" class="ab-btn ab-b" id="btn-b" aria-label="B ボタン（押しているあいだ走る）">B<small>走る</small></button>
+        <button type="button" class="ab-btn ab-a" id="btn-a" aria-label="A ボタン（話す・調べる）">A<small>話す</small></button>
+      </div>
+    </div>
+    <p class="keys">移動 <kbd>←↑↓→</kbd> / <kbd>WASD</kbd>　話す・調べる <kbd>Z</kbd> <kbd>Enter</kbd>　走る <kbd>X</kbd> か <kbd>Shift</kbd>　画面クリックでその場所へ歩く</p>
+  </section>
+
+  <section class="notes" aria-labelledby="notes-title">
+    <h2 id="notes-title">この再現について</h2>
+    <p class="lead">横浜市立大学の男子寮「夕照寮」を、インターネット上で公開されている情報をもとにドット絵で再現しました。新入生になって、寮の先輩たちにあいさつ回りをしてみてください。</p>
+
+    <h3>公開情報からわかったこと</h3>
+    <ul class="facts">
+      <li><span class="fact">横浜市立大学の男子寮。女子寮は「萌生寮」。</span><a href="https://www.yokohama-cu.ac.jp/event/gakuseiryo_event.html" target="_blank" rel="noopener">横浜市立大学</a></li>
+      <li><span class="fact">所在地は横浜市金沢区。1970年築の3階建て。</span><a href="https://haikyo.info/s/9452.html" target="_blank" rel="noopener">廃墟検索地図</a></li>
+      <li><span class="fact">2010年（平成22年）の閉寮まで、約40年にわたって学生が暮らした。</span><a href="https://www.yokohama-cu.ac.jp/news/2017/pr/dormitory.html" target="_blank" rel="noopener">横浜市立大学</a></li>
+      <li><span class="fact">2018年（平成30年）3月10日に「さようなら学生寮 特別開放デー」。同年春に取り壊し。</span><a href="https://www.yokohama-cu.ac.jp/event/gakuseiryo_event.html" target="_blank" rel="noopener">横浜市立大学</a></li>
+      <li><span class="fact">寮生チーム「男子寮」が全日本コール選手権で3連覇。</span><a href="https://ja.wikipedia.org/wiki/%E5%85%A8%E6%97%A5%E6%9C%AC%E3%82%B3%E3%83%BC%E3%83%AB%E9%81%B8%E6%89%8B%E6%A8%A9" target="_blank" rel="noopener">Wikipedia</a></li>
+    </ul>
+
+    <h3>想像で補ったところ</h3>
+    <ul class="guess">
+      <li>間取り（中廊下の両側に部屋、西端に階段、東端にトイレと洗面所）と部屋数</li>
+      <li>2人部屋という設定、部屋の家具や床（フローリング）</li>
+      <li>食堂・厨房・浴場・談話室・補食室の有無と場所、屋上に出られること</li>
+      <li>外壁や窓の形、玄関まわり、前庭の桜と自転車置き場</li>
+      <li>登場人物はすべて架空です</li>
+    </ul>
+    <p class="small">実際の間取りや設備を覚えている方の情報があれば、より本物に近づけられます。</p>
+  </section>
+</main>
+
+<script src="js/world.js"></script>
+<script src="js/art.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
