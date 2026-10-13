@@ -30,7 +30,7 @@
     m.w = m.rows[0].length;
   }
   const FLOOR_IN = new Set('.,=_~;-%'.split(''));
-  const WALK_EXT = new Set('":;^E'.split(''));
+  const WALK_EXT = new Set('".:-;^ZE'.split(''));
   function walkable(map, x, y) {
     const ch = at(map, x, y);
     if (map.kind === 'ext') return WALK_EXT.has(ch);
@@ -604,8 +604,8 @@
     }
     if (m.tall) for (const t of m.tall) {
       const sx = t.x * TS - cx, sy = t.y * TS - cy;
-      if (sx < -40 || sx > VW + 40 || sy < -10 || sy > VH + 40) continue;
-      list.push({ y: t.y * TS + 15, f: () => D.art.drawTallExt(c, t.ch, t.x, t.y, sx, sy, S.time) });
+      if (sx < -56 || sx > VW + 40 || sy < -40 || sy > VH + 40) continue;
+      list.push({ y: (t.y + (t.h || 1) - 1) * TS + 15, f: () => D.art.drawTallExt(c, t.ch, t.x, t.y, sx, sy, S.time) });
     }
     list.sort((a, b) => a.y - b.y);
     for (const it of list) it.f();

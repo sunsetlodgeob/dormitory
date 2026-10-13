@@ -297,6 +297,8 @@ kbd {
 .fact { min-width: 0; }
 .facts a { flex: none; font: 12px/1.4 var(--font-pixel); color: var(--glow-2); text-underline-offset: 3px; }
 .facts a::before { content: "出典 "; color: var(--muted); }
+.facts .src { flex: none; font: 12px/1.4 var(--font-pixel); color: var(--muted); }
+.facts .src::before { content: "出典 "; }
 .guess li { padding-left: 1.2em; position: relative; color: var(--paper); }
 .guess li::before { content: "?"; position: absolute; left: 0; font-family: var(--font-pixel); color: var(--glow); }
 .small { font-size: 13px; color: var(--muted); margin-top: 14px; }

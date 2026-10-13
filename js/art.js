@@ -203,10 +203,50 @@
         if (ch === '^' && x % 3 !== 2) R(ctx, px, py + 7, 16, 2, P.line);
         break;
       }
+      case 'pave': { // コンクリート舗装（寮の前の駐車スペース）
+        R(ctx, px, py, 16, 16, '#b3aea3');
+        if (x % 2 === 0) R(ctx, px, py, 1, 16, '#a19c91');
+        if (y % 2 === 0) R(ctx, px, py, 16, 1, '#a19c91');
+        for (let i = 0; i < 6; i++) R(ctx, px + ((rnd(x, y, i) * 16) | 0), py + ((rnd(x, y, i + 9) * 16) | 0), 1, 1, i & 1 ? '#c2bdb2' : '#9d988d');
+        if (rnd(x, y, 21) < 0.12) { R(ctx, px + 3, py + 6, 5, 1, '#958f84'); R(ctx, px + 8, py + 7, 4, 1, '#958f84'); }
+        break;
+      }
+      case 'walk': { // 歩道のインターロッキング
+        R(ctx, px, py, 16, 16, '#8e8b85');
+        for (let r = 0; r < 4; r++) {
+          const off = r & 1 ? 4 : 0;
+          for (let i = -1; i < 3; i++) {
+            const a = Math.max(0, off + i * 8), b = Math.min(16, off + i * 8 + 7);
+            if (b > a) R(ctx, px + a, py + r * 4, b - a, 3, ((x * 2 + i + r) & 3) === 0 ? '#b2aea6' : '#a7a49c');
+          }
+        }
+        break;
+      }
+      case 'water': { // 裏手の水辺
+        R(ctx, px, py, 16, 16, y === 0 ? '#183241' : '#1d3a4a');
+        for (let i = 0; i < 3; i++) R(ctx, px + ((rnd(x, y, i) * 12) | 0), py + 2 + i * 5, 4, 1, '#2c5366');
+        break;
+      }
+      case 'seawall': { // 護岸
+        R(ctx, px, py, 16, 16, '#8a8578');
+        R(ctx, px, py, 16, 3, '#55524a');
+        R(ctx, px, py + 3, 16, 1, '#a49f92');
+        R(ctx, px, py + 8, 16, 1, '#5f5c55');
+        if (x % 2 === 0) R(ctx, px + 2, py + 5, 1, 7, '#5f5c55');
+        R(ctx, px, py + 14, 16, 2, '#77736a');
+        break;
+      }
+      case 'zebra': { // 道路のゼブラ
+        drawFloor(ctx, ';road', x, y, px, py);
+        for (let j = 2; j < 14; j++)
+          for (let k = 0; k < 16; k++) if ((px + k + j) % 12 < 3) R(ctx, px + k, py + j, 1, 1, '#e3dfd3');
+        break;
+      }
       default:
         R(ctx, px, py, 16, 16, P.woodA);
     }
   }
+  const EXT_FLOOR = { '.': 'pave', ':': ':', '-': 'walk', ';': ';road', '^': '^', Z: 'zebra', '~': 'water', S: 'seawall', '"': '"' };
 
   // ── 壁 ────────────────────────────────────────
   function faceStyle(map, x, y) {
@@ -295,7 +335,13 @@
     } else if (ch === 'H') {
       R(ctx, px, py, 16, 16, P.concHi);
       R(ctx, px, py + 14, 16, 2, P.concSh);
-      R(ctx, px + ((rnd(x, y, 1) * 12) | 0), py + 6, 3, 1, P.conc);
+      if (at(map, x - 1, y) === 'H' || at(map, x + 1, y) === 'H') {
+        R(ctx, px, py + 7, 16, 1, '#6d6f73');
+        if (x % 2 === 0) R(ctx, px + 7, py + 5, 2, 5, '#55575b');
+      } else {
+        R(ctx, px + 7, py, 1, 16, '#6d6f73');
+        if (y % 2 === 0) R(ctx, px + 5, py + 7, 5, 2, '#55575b');
+      }
     }
   }
 
@@ -387,6 +433,8 @@
       }
       case 'H': { // 屋上の手すり壁（北側は内側の面が見える）
         R(ctx, px, py, 16, 5, P.concHi);
+        R(ctx, px, py + 2, 16, 1, '#6d6f73');
+        if (x % 2 === 0) R(ctx, px + 7, py, 2, 4, '#55575b');
         R(ctx, px, py + 5, 16, 11, P.conc);
         R(ctx, px, py + 5, 16, 1, P.concSh);
         if (x % 4 === 0) R(ctx, px + 7, py + 13, 2, 3, P.concDk);
@@ -871,13 +919,33 @@
   // 屋外の小物
   function drawExt(ctx, map, x, y, px, py, ch) {
     switch (ch) {
+      case 'R': { // トタン屋根の小屋（上から見た屋根）
+        const U = at(map, x, y - 1) === 'R', Dn = at(map, x, y + 1) === 'R';
+        const L = at(map, x - 1, y) === 'R', Rr = at(map, x + 1, y) === 'R';
+        R(ctx, px, py, 16, 16, '#c3c6c2');
+        for (let i = 1; i < 16; i += 3) R(ctx, px + i, py, 1, 16, '#a6aaa6');
+        if (rnd(x, y, 3) < 0.35) R(ctx, px + ((rnd(x, y, 4) * 12) | 0), py + ((rnd(x, y, 5) * 12) | 0), 3, 2, '#a8775a');
+        if (!U) R(ctx, px, py, 16, 2, '#dadcd8');
+        if (!Dn) { R(ctx, px, py + 11, 16, 5, '#5f625e'); R(ctx, px, py + 11, 16, 1, '#8f928e'); }
+        if (!L) R(ctx, px, py, 1, 16, '#8f928e');
+        if (!Rr) R(ctx, px + 15, py, 1, 16, '#7f827e');
+        break;
+      }
+      case 'f': { // 歩道との境のフェンス
+        R(ctx, px, py + 14, 16, 2, 'rgba(0,0,0,0.12)');
+        R(ctx, px, py + 5, 16, 1, '#5b6066');
+        R(ctx, px, py + 13, 16, 1, '#5b6066');
+        for (let i = 1; i < 16; i += 2) R(ctx, px + i, py + 6, 1, 7, 'rgba(91,96,102,0.45)');
+        R(ctx, px, py + 4, 2, 11, '#4b5056');
+        break;
+      }
       case 'o': {
         const fc = ['#c84a3a', '#3a6ab8', '#e0c040', '#5a8a4a', '#d8d4cc', '#2a2a2a'][(rnd(x, y, 3) * 6) | 0];
         R(ctx, px + 1, py + 13, 14, 2, 'rgba(0,0,0,0.18)');
         R(ctx, px + 1, py + 7, 6, 6, P.ink);
-        R(ctx, px + 2, py + 8, 4, 4, P.grassB);
+        R(ctx, px + 2, py + 8, 4, 4, '#b3aea3');
         R(ctx, px + 9, py + 7, 6, 6, P.ink);
-        R(ctx, px + 10, py + 8, 4, 4, P.grassB);
+        R(ctx, px + 10, py + 8, 4, 4, '#b3aea3');
         R(ctx, px + 4, py + 9, 8, 1, fc);
         R(ctx, px + 7, py + 5, 1, 5, fc);
         R(ctx, px + 5, py + 4, 4, 1, P.ink);
@@ -925,8 +993,56 @@
     }
   }
 
+  // 停まっている車（横向き 3x2 マス／後ろ向き 2x2 マス）
+  function drawCarSide(ctx, px, py, body, wagon) {
+    const dk = mix(body, '#000000', 0.35), hi = mix(body, '#ffffff', 0.22);
+    R(ctx, px + 3, py + 27, 42, 4, 'rgba(0,0,0,0.22)');
+    R(ctx, px + 2, py + 15, 44, 11, body);
+    R(ctx, px + 2, py + 15, 44, 1, hi);
+    R(ctx, px + 2, py + 24, 44, 2, dk);
+    const c0 = px + (wagon ? 7 : 11), c1 = px + (wagon ? 44 : 37);
+    R(ctx, c0, py + 5, c1 - c0, 10, body);
+    R(ctx, c0 + 1, py + 4, c1 - c0 - 2, 2, hi);
+    R(ctx, c0 + 2, py + 7, c1 - c0 - 4, 7, '#6f8498');
+    R(ctx, c0 + 2, py + 7, c1 - c0 - 4, 2, '#e9ae80');
+    const mid = Math.round((c0 + c1) / 2);
+    R(ctx, mid, py + 7, 2, 7, body);
+    if (wagon) R(ctx, c1 - 11, py + 7, 2, 7, body);
+    R(ctx, mid, py + 15, 1, 9, dk);
+    R(ctx, mid - 6, py + 18, 3, 1, hi);
+    R(ctx, mid + 4, py + 18, 3, 1, hi);
+    R(ctx, px + 2, py + 17, 2, 3, '#f3e9c0');
+    R(ctx, px + 44, py + 17, 2, 3, '#d8433a');
+    for (const wx of [px + 7, px + 32]) {
+      R(ctx, wx, py + 22, 9, 8, '#1c1a1e');
+      R(ctx, wx + 1, py + 21, 7, 1, '#1c1a1e');
+      R(ctx, wx + 3, py + 24, 3, 3, '#8d9196');
+    }
+  }
+  function drawCarRear(ctx, px, py, body, kei) {
+    const dk = mix(body, '#000000', 0.3), hi = mix(body, '#ffffff', 0.3);
+    R(ctx, px + 3, py + 28, 26, 4, 'rgba(0,0,0,0.22)');
+    R(ctx, px + 7, py + 3, 18, 3, hi);
+    R(ctx, px + 6, py + 5, 20, 2, body);
+    R(ctx, px + 7, py + 7, 18, 8, '#6f8498');
+    R(ctx, px + 7, py + 7, 18, 2, '#e9ae80');
+    R(ctx, px + 4, py + 15, 24, 11, body);
+    R(ctx, px + 4, py + 15, 24, 1, hi);
+    R(ctx, px + 4, py + 24, 24, 2, dk);
+    R(ctx, px + 5, py + 17, 4, 3, '#d8433a');
+    R(ctx, px + 23, py + 17, 4, 3, '#d8433a');
+    R(ctx, px + 12, py + 19, 8, 4, kei ? '#f0d040' : '#f3f0e6');
+    R(ctx, px + 13, py + 21, 6, 1, kei ? P.ink : '#3f7a52');
+    R(ctx, px + 5, py + 26, 5, 4, '#1c1a1e');
+    R(ctx, px + 22, py + 26, 5, 4, '#1c1a1e');
+  }
+
   // ── 屋外の背の高いもの（人物と前後関係を判定して描く） ──────────
   function drawTallExt(ctx, ch, x, y, px, py, t) {
+    if (ch === '1') return drawCarSide(ctx, px, py, '#2a3550', false);
+    if (ch === '2') return drawCarSide(ctx, px, py, '#25252b', true);
+    if (ch === '3') return drawCarRear(ctx, px, py, '#c4352d', false);
+    if (ch === '4') return drawCarRear(ctx, px, py, '#e6e3dc', true);
     if (ch === 'T') { // 桜
       R(ctx, px - 5, py + 13, 26, 3, 'rgba(70,40,60,0.18)');
       R(ctx, px + 6, py - 2, 4, 17, P.trunk);
@@ -988,10 +1104,18 @@
         const px = x * TS, py = y * TS;
         if (map.kind === 'ext') {
           if (ch === '@' || ch === 'E') continue;
-          if (ch === ';' || ch === '^') { drawFloor(ctx, ch === ';' ? ';road' : '^', x, y, px, py); continue; }
-          if (FLOOR.has(ch)) { drawFloor(ctx, ch, x, y, px, py); continue; }
-          drawFloor(ctx, ch === 't' || ch === 'h' ? '"' : baseFloor(map, x, y), x, y, px, py);
-          if ('TLGg'.includes(ch)) { tall.push({ ch, x, y }); continue; }
+          const fl = EXT_FLOOR[ch];
+          if (fl) {
+            drawFloor(ctx, fl, x, y, px, py);
+            if (ch === '~') anim.push({ ch, x, y });
+            continue;
+          }
+          drawFloor(ctx, 'Tth'.includes(ch) ? '"' : 'pave', x, y, px, py);
+          if ('TLGg'.includes(ch)) { tall.push({ ch, x, y, h: 1 }); continue; }
+          if ('1234'.includes(ch)) {
+            if (at(map, x - 1, y) !== ch && at(map, x, y - 1) !== ch) tall.push({ ch, x, y, h: 2 });
+            continue;
+          }
           if (ch === 'v') drawFurniture(ctx, map, x, y, px, py, ch);
           else if (ch !== 't') drawExt(ctx, map, x, y, px, py, ch);
           continue;
@@ -1073,23 +1197,21 @@
     R(ctx, ox, oy, Math.max(1, u / 8), rh, P.concHi);
     R(ctx, ox + W - Math.max(1, u / 8), oy, Math.max(1, u / 8), rh, P.concSh);
     if (big) for (let i = 3; i < n; i += 3) R(ctx, ox + i * u, oy + 3, 1, rh - 8, '#7f8078');
-    // 塔屋（階段室）
+    // 塔屋（階段室）：航空写真では屋上のほぼ中央・北寄り（x20〜25）
     const ph = Math.round(rh * 0.55);
-    R(ctx, ox + u * 0.5, oy + 1, u * 5, ph, P.concHi);
-    R(ctx, ox + u * 0.5, oy + 1 + ph, u * 5, rh - ph - Math.max(2, u / 4), P.conc);
+    const hx = ox + u * 20, hw = u * 6;
+    R(ctx, hx, oy + 1, hw, ph, P.concHi);
+    R(ctx, hx, oy + 1 + ph, hw, rh - ph - Math.max(2, u / 4), P.conc);
     if (big) {
-      R(ctx, ox + u * 2.4, oy + 1 + ph + 2, u * 0.9, rh - ph - 7, '#7a8088');
-      R(ctx, ox + u * 0.5, oy + 1 + ph, u * 5, 1, P.concSh);
+      R(ctx, hx + u * 2.6, oy + 1 + ph + 2, u * 0.9, rh - ph - 7, '#7a8088');
+      R(ctx, hx, oy + 1 + ph, hw, 1, P.concSh);
     }
-    // 高架水槽
-    const tx = ox + u * 32, tw = u * 3;
-    R(ctx, tx, oy + Math.round(rh * 0.08), tw, Math.round(rh * 0.45), '#b9c5ca');
-    R(ctx, tx, oy + Math.round(rh * 0.08), tw, Math.max(1, u / 8), '#d6e0e3');
-    if (big) {
-      for (let i = 1; i < 3; i++) R(ctx, tx + i * u, oy + 4, 1, Math.round(rh * 0.45) - 4, '#9eacb2');
-      R(ctx, tx + 2, oy + Math.round(rh * 0.53), 2, Math.round(rh * 0.3), '#4e575c');
-      R(ctx, tx + tw - 4, oy + Math.round(rh * 0.53), 2, Math.round(rh * 0.3), '#4e575c');
-    }
+    // 高架水槽（塔屋の上）
+    const tw = u * 3, th = Math.max(3, Math.round(rh * 0.42));
+    const tx = hx + u * 1.5, ty = oy + 1 - Math.round(th * 0.6);
+    R(ctx, tx, ty, tw, th, '#b9c5ca');
+    R(ctx, tx, ty, tw, Math.max(1, u / 8), '#d6e0e3');
+    if (big) for (let i = 1; i < 3; i++) R(ctx, tx + i * u, ty + 3, 1, th - 4, '#9eacb2');
     // アンテナ
     if (big) {
       R(ctx, ox + u * 12.5, oy - 6, 1, rh * 0.6 + 6, P.metalXd);
@@ -1146,14 +1268,17 @@
     ctx.fillStyle = g;
     ctx.fillRect(ox, oy, W, H);
     // 入口の看板（外光の上に描く）
+    // 玄関わきの壁の看板
     const ent = cols[2].indexOf('E');
     if (ent >= 0 && big) {
+      let e2 = ent;
+      while (cols[2][e2 + 1] === 'E') e2++;
       const sign = signBitmap();
-      const sw = 50, sh = 20;
-      const sx = Math.round(ox + ent * u + (3 * u - sw) / 2), sy = Math.round(oy + rh + fh * 2 - sh - 3);
-      R(ctx, sx - 1, sy - 1, sw + 2, sh + 2, '#4f3420');
-      R(ctx, sx, sy, sw, sh, '#efe6cf');
-      ctx.drawImage(sign, sx + Math.round((sw - sign.width) / 2), sy);
+      const sw = 3 * u, sh = 18;
+      const sx = Math.round(ox + (e2 + 1) * u), sy = Math.round(oy + rh + fh * 2 + (fh - sh) / 2 + 1);
+      R(ctx, sx, sy - 1, sw, sh + 2, '#4f3420');
+      R(ctx, sx + 1, sy, sw - 2, sh, '#efe6cf');
+      ctx.drawImage(sign, sx + Math.round((sw - sign.width) / 2), sy - 1);
     }
   }
 
@@ -1197,8 +1322,9 @@
     const dh = y + fh - dt;
     // ひさし
     const ch = Math.max(2, Math.round(fh / 9));
-    R(ctx, x - u * 0.5, dt - ch - 1, w + u, ch, P.concHi);
-    R(ctx, x - u * 0.5, dt - 1, w + u, 1, P.concDk);
+    const oh = Math.max(1, Math.round(u * 0.2));
+    R(ctx, x - oh, dt - ch - 1, w + oh * 2, ch, P.concHi);
+    R(ctx, x - oh, dt - 1, w + oh * 2, 1, P.concDk);
     // 玄関ドア
     R(ctx, x, dt, w, dh, P.alu);
     const panes = big ? 4 : 2;
@@ -1215,8 +1341,7 @@
       // 中の明かり
       R(ctx, x + 4, dt + dh - 6, w - 8, 3, 'rgba(255,214,140,0.35)');
       // 玄関灯
-      R(ctx, x - u * 0.3, dt + 2, 3, 3, '#fff1c0');
-      R(ctx, x + w + u * 0.3 - 3, dt + 2, 3, 3, '#fff1c0');
+      R(ctx, x - Math.round(u * 0.4), dt + 2, 3, 3, '#fff1c0');
       // ステップ
       R(ctx, x - 2, y + fh - 2, w + 4, 2, P.concHi);
     }
@@ -1521,6 +1646,9 @@
         const c = ['#7fa9b8', '#9fc0a0', '#b8a0c8'][k];
         R(ctx, px + 4, py + 4, 6, 5, c);
         R(ctx, px + 4, py + 4 + (Math.floor(t / 90) % 5), 6, 1, 'rgba(255,255,255,0.35)');
+      } else if (a.ch === '~') {
+        const k = Math.floor(t / 600 + a.x * 1.7 + a.y * 3) % 6;
+        if (k < 2) R(ctx, px + 2 + ((a.x * 5) % 9), py + 4 + k * 6, 4, 1, '#3f6f84');
       } else if (a.ch === 'O') {
         const k = Math.floor(t / 400 + a.x * 3 + a.y) % 4;
         R(ctx, px + 3 + k * 2, py + 5 + (k % 2) * 4, 3, 1, P.waterHi);
@@ -1624,19 +1752,41 @@
     const bw = 42 * u;
     const bx = Math.round((w - bw) / 2), by = h - 12 - (rh + fh * 3);
     drawFacade(ctx, bx, by, { u, roofH: rh, floorH: fh, lit: 0.35 });
-    // 前庭と桜
-    R(ctx, 0, h - 12, w, 12, '#2f3f2a');
-    R(ctx, 0, h - 12, w, 1, '#4f6a3a');
-    R(ctx, bx + 9 * u - 2, h - 12, 3 * u + 4, 12, '#a8936e');
-    for (const [cx, s] of [[bx - 10, 1], [bx + bw + 8, 2], [bx + bw * 0.62, 3]]) {
-      const x = Math.round(cx), yb = h - 10;
+    // 前の駐車スペース・フェンス・歩道・道路（航空写真より）
+    const gy = h - 12;
+    R(ctx, 0, gy, w, 5, '#6d6268');
+    R(ctx, 0, gy + 5, w, 1, '#3a3038');
+    R(ctx, 0, gy + 6, w, 2, '#7d7275');
+    R(ctx, 0, gy + 8, w, h - gy - 8, '#3b3440');
+    for (let x = 3; x < w; x += 11) R(ctx, x, gy + 10, 5, 1, '#d8cfc0');
+    R(ctx, bx + 22 * u, gy, 3 * u, 6, '#8d817b');
+    const side = (x, col) => {
+      R(ctx, x, gy - 3, 15, 4, col);
+      R(ctx, x + 3, gy - 6, 9, 3, col);
+      R(ctx, x + 4, gy - 5, 7, 2, '#e9ae80');
+      R(ctx, x + 2, gy + 1, 3, 2, '#1c1a1e');
+      R(ctx, x + 10, gy + 1, 3, 2, '#1c1a1e');
+    };
+    const rear = (x, col) => {
+      R(ctx, x, gy - 5, 7, 6, col);
+      R(ctx, x + 1, gy - 4, 5, 2, '#6f8498');
+      R(ctx, x, gy - 2, 1, 1, '#d8433a');
+      R(ctx, x + 6, gy - 2, 1, 1, '#d8433a');
+    };
+    side(bx + 27 * u, '#2a3550');
+    side(bx + 33 * u, '#25252b');
+    rear(bx + 38 * u, '#c4352d');
+    rear(bx - 10, '#e6e3dc');
+    // 西のはしの桜
+    {
+      const x = Math.round(bx - 22), yb = gy + 2, s2 = 1;
       R(ctx, x - 1, yb - 12, 3, 12, P.trunkDk);
       disc(ctx, x, yb - 19, 10, P.sakD);
       disc(ctx, x - 6, yb - 16, 5, P.sakD);
       disc(ctx, x + 6, yb - 16, 5, P.sakD);
       disc(ctx, x - 1, yb - 21, 8, P.sakB);
       disc(ctx, x - 3, yb - 24, 4, P.sakA);
-      for (let i = 0; i < 7; i++) R(ctx, x - 8 + ((rnd(i, s, 2) * 16) | 0), yb - 27 + ((rnd(i, s, 3) * 14) | 0), 1, 1, P.sakC);
+      for (let i = 0; i < 7; i++) R(ctx, x - 8 + ((rnd(i, s2, 2) * 16) | 0), yb - 27 + ((rnd(i, s2, 3) * 14) | 0), 1, 1, P.sakC);
     }
     // 電柱と電線
     const pole = w - 18;
