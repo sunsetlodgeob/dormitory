@@ -28,7 +28,7 @@
     sheet: '#f1eee4', sheetSh: '#d6d1c2',
     alu: '#cfd5d9', aluDk: '#9aa3a9',
     glassA: '#f2b07e', glassB: '#f9d9a6', glassHi: '#fff1d6', glassNight: '#7f8fb5',
-    door: '#a26f40', doorDk: '#7d5330', doorFrame: '#5c3c22', plate: '#f4f1e8',
+    door: '#86b8c0', doorDk: '#6a9aa4', doorFrame: '#4f6a74', plate: '#f4f1e8',
     felt: '#3f7a52', feltDk: '#2f6040', ivory: '#efe8d2',
     futonA: '#c9483c', futonB: '#e07a4a', mikan: '#f39a2a',
     tvBody: '#5b5550', tvDk: '#3b3633', screen: '#7fa9b8',
@@ -41,7 +41,7 @@
     leafA: '#3f6b3a', leafB: '#52864a', leafC: '#2e5130', leafHi: '#6a9c58',
     sakA: '#f7ccd8', sakB: '#eaa2b8', sakC: '#fde8ef', sakD: '#d98aa3',
     trunk: '#5b3b2a', trunkDk: '#3f281d',
-    conc: '#c9c2b4', concHi: '#dbd5c9', concSh: '#aaa294', concDk: '#8c8578', concXd: '#6f685d',
+    conc: '#d6d2c6', concHi: '#e7e3d9', concSh: '#b4afa3', concDk: '#959083', concXd: '#77726a',
     hedgeA: '#4f7f3f', hedgeB: '#416d34', hedgeHi: '#6a9a52',
   };
   D.PAL = P;
@@ -81,8 +81,8 @@
   D.art = { canvas, R, rnd, mix, disc };
 
   // ── マップ参照 ──────────────────────────────────
-  const WALL = new Set('#wBAeMYQnH'.split(''));
-  const FLOOR = new Set('.,=_~;-%":^'.split(''));
+  const WALL = new Set('#wBAeMYQnH0'.split(''));
+  const FLOOR = new Set('.,=_~;-%":<*`&'.split(''));
   function at(map, x, y) {
     if (y < 0 || y >= map.h || x < 0 || x >= map.w) return ' ';
     return map.rows[y][x];
@@ -108,26 +108,33 @@
   D.mapUtil = { at, isWall, isOpen, labelAt };
 
   // ── 床 ────────────────────────────────────────
+  // 居室の寄木：8x8 のブロックを縦横交互に
+  function parquet(ctx, x, y, px, py) {
+    for (let j = 0; j < 2; j++)
+      for (let i = 0; i < 2; i++) {
+        const bx = px + i * 8, by = py + j * 8;
+        const vert = (x * 2 + i + y * 2 + j) & 1;
+        R(ctx, bx, by, 8, 8, vert ? '#b47c46' : '#ac7541');
+        for (let k = 1; k < 4; k++) {
+          if (vert) R(ctx, bx + k * 2, by, 1, 8, '#a06b39');
+          else R(ctx, bx, by + k * 2, 8, 1, '#a06b39');
+        }
+        R(ctx, bx, by, 8, 1, '#8e5f33');
+        R(ctx, bx, by, 1, 8, '#8e5f33');
+        if (rnd(x * 2 + i, y * 2 + j, 3) < 0.3) R(ctx, bx + 2, by + 3, 2, 1, '#c2895a');
+      }
+  }
   function drawFloor(ctx, ch, x, y, px, py) {
     switch (ch) {
-      case '.': { // Pタイルの廊下
-        for (let j = 0; j < 2; j++)
-          for (let i = 0; i < 2; i++) R(ctx, px + i * 8, py + j * 8, 8, 8, (x * 2 + i + y * 2 + j) & 1 ? P.ptA : P.ptB);
-        R(ctx, px, py, 16, 1, P.ptLn);
-        R(ctx, px, py, 1, 16, P.ptLn);
-        if (rnd(x, y, 3) < 0.25) R(ctx, px + 3 + ((rnd(x, y, 4) * 9) | 0), py + 4 + ((rnd(x, y, 5) * 8) | 0), 2, 1, P.ptLn);
+      case '.': { // 廊下の青いリノリウム
+        R(ctx, px, py, 16, 16, (x + y) & 1 ? '#5d7287' : '#586d82');
+        R(ctx, px, py, 16, 1, '#50647a');
+        if (rnd(x, y, 3) < 0.35) R(ctx, px + 2 + ((rnd(x, y, 4) * 10) | 0), py + 3 + ((rnd(x, y, 5) * 10) | 0), 3, 1, '#6b8197');
+        if (rnd(x, y, 6) < 0.25) R(ctx, px + ((rnd(x, y, 7) * 15) | 0), py + ((rnd(x, y, 8) * 15) | 0), 1, 1, '#465a6e');
         break;
       }
-      case ',': { // フローリング
-        R(ctx, px, py, 16, 16, P.woodA);
-        for (let r = 0; r < 4; r++) {
-          const yy = py + r * 4;
-          if ((r + x) & 1) R(ctx, px, yy, 16, 3, P.woodB);
-          R(ctx, px, yy + 3, 16, 1, P.woodSeam);
-          const sx = (rnd(x, y * 4 + r, 1) * 14) | 0;
-          R(ctx, px + sx, yy, 1, 3, P.woodSeam);
-          R(ctx, px + ((sx + 6) % 14), yy + 1, 3, 1, P.woodHi);
-        }
+      case ',': { // 居室の寄木（パーケット）
+        parquet(ctx, x, y, px, py);
         break;
       }
       case '=': { // 畳（半畳を市松に）
@@ -139,12 +146,13 @@
         else R(ctx, px, py, 16, 1, P.heri);
         break;
       }
-      case '_': { // 土間（人研ぎ風）
-        R(ctx, px, py, 16, 16, P.doma);
-        for (let i = 0; i < 14; i++) {
-          const rx = (rnd(x, y, i) * 16) | 0, ry = (rnd(x, y, i + 40) * 16) | 0;
-          R(ctx, px + rx, py + ry, 1, 1, i & 1 ? P.domaA : P.domaB);
-        }
+      case '_': { // 玄関のタイル
+        R(ctx, px, py, 16, 16, '#d6cfbf');
+        R(ctx, px, py, 16, 1, '#b8b0a0');
+        R(ctx, px, py + 8, 16, 1, '#b8b0a0');
+        R(ctx, px, py, 1, 16, '#b8b0a0');
+        R(ctx, px + 8, py, 1, 16, '#b8b0a0');
+        if (rnd(x, y, 3) < 0.3) R(ctx, px + 2 + ((rnd(x, y, 4) * 10) | 0), py + 2 + ((rnd(x, y, 5) * 10) | 0), 2, 1, '#c4bcab');
         break;
       }
       case '~': { // 浴室タイル
@@ -163,9 +171,41 @@
         R(ctx, px, py, 16, 1, P.washLn);
         break;
       }
-      case '-': { // 食堂・台所の床
+      case '-': { // 厨房・脱衣所などの床
         for (let j = 0; j < 2; j++)
-          for (let i = 0; i < 2; i++) R(ctx, px + i * 8, py + j * 8, 8, 8, (i + j) & 1 ? P.kitA : P.kitB);
+          for (let i = 0; i < 2; i++) R(ctx, px + i * 8, py + j * 8, 8, 8, (i + j) & 1 ? '#bdb9ae' : '#b3afa4');
+        break;
+      }
+      case '<': { // 食堂のオレンジ色の床
+        R(ctx, px, py, 16, 16, '#c8843f');
+        for (let i = 0; i < 10; i++) R(ctx, px + ((rnd(x, y, i) * 16) | 0), py + ((rnd(x, y, i + 20) * 16) | 0), 1, 1, i & 1 ? '#b57434' : '#d6955a');
+        if (x % 2 === 0) R(ctx, px, py, 1, 16, '#b97a3a');
+        if (y % 2 === 0) R(ctx, px, py, 16, 1, '#b97a3a');
+        break;
+      }
+      case '*': { // ジョイントマット
+        for (let j = 0; j < 2; j++)
+          for (let i = 0; i < 2; i++) {
+            const dark = (x * 2 + i + y * 2 + j) & 1;
+            R(ctx, px + i * 8, py + j * 8, 8, 8, dark ? '#2b2b30' : '#e7e3d8');
+            R(ctx, px + i * 8 + 3, py + j * 8, 2, 1, dark ? '#e7e3d8' : '#2b2b30');
+            R(ctx, px + i * 8, py + j * 8 + 3, 1, 2, dark ? '#e7e3d8' : '#2b2b30');
+          }
+        break;
+      }
+      case '`': { // はがれた床
+        parquet(ctx, x, y, px, py);
+        R(ctx, px + 3, py + 2, 9, 6, '#a29e95');
+        R(ctx, px + 5, py + 8, 7, 5, '#a29e95');
+        R(ctx, px + 4, py + 4, 2, 1, '#8c887f');
+        R(ctx, px + 8, py + 10, 3, 1, '#8c887f');
+        break;
+      }
+      case '&': { // 段ボールでふさいだ床
+        parquet(ctx, x, y, px, py);
+        R(ctx, px + 1, py + 2, 14, 11, '#c49a62');
+        R(ctx, px + 1, py + 2, 14, 1, '#d6ae78');
+        R(ctx, px + 1, py + 7, 14, 2, '#e0cfa2');
         break;
       }
       case '%': { // 屋上の防水シート
@@ -250,10 +290,12 @@
 
   // ── 壁 ────────────────────────────────────────
   function faceStyle(map, x, y) {
-    const name = labelAt(map, x, y + 1) || '';
+    const name = labelAt(map, x, y + 1) || (map.kind === 'in' ? '廊下' : '');
     if (name === '浴室') return 'bath';
     if (name === 'トイレ' || name.indexOf('洗面所') === 0 || name === '脱衣所') return 'tile';
-    if (name === '厨房' || name === '補食室') return 'kitchen';
+    if (name === '厨房') return 'kitchen';
+    if (name === '食堂') return 'yellow';
+    if (name === '廊下' || name === '玄関' || name === '階段') return 'speckle';
     return 'plain';
   }
   function wallFaceBase(ctx, map, x, y, px, py) {
@@ -266,9 +308,12 @@
       for (let j = 6; j < 16; j += 4) R(ctx, px, py + j, 16, 1, P.tileWallLn);
       return st;
     }
-    R(ctx, px, py + 3, 16, 10, P.plaster);
-    R(ctx, px, py + 3, 16, 1, P.plasterSh);
-    R(ctx, px, py + 4, 16, 2, P.plasterHi);
+    // 食堂は黄色い壁、廊下・玄関は粒の入った壁（写真 1025・0730 など）
+    const base = st === 'yellow' ? '#e5cf88' : st === 'speckle' ? '#d6c8aa' : '#ebe5d6';
+    R(ctx, px, py + 3, 16, 10, base);
+    R(ctx, px, py + 3, 16, 1, mix(base, '#000000', 0.12));
+    R(ctx, px, py + 4, 16, 2, mix(base, '#ffffff', 0.25));
+    if (st === 'speckle') for (let i = 0; i < 12; i++) R(ctx, px + ((rnd(x, y, i) * 16) | 0), py + 5 + ((rnd(x, y, i + 30) * 8) | 0), 1, 1, i % 3 ? '#a8987a' : '#f3ead6');
     if (st === 'tile' || st === 'kitchen') {
       R(ctx, px, py + 9, 16, 7, st === 'tile' ? P.tileWhite : P.tileWall);
       for (let i = 0; i < 16; i += 4) R(ctx, px + i, py + 9, 1, 7, st === 'tile' ? P.tileWhiteLn : P.tileWallLn);
@@ -295,6 +340,10 @@
     R(ctx, px + x0 + 4, py + 4, 1, 1, P.glassHi);
     R(ctx, px + x0, py + 12, x1 - x0, 1, P.aluDk);
     const cc = CURTAINS[(rnd((x / 5) | 0, y, 7) * CURTAINS.length) | 0];
+    if (faceStyle(map, x, y) === 'yellow') { // 食堂の大きな窓：カーテンなし、細かい桟
+      R(ctx, px + 8, py + 4, 1, 7, P.aluDk);
+      return;
+    }
     if (!lw) {
       R(ctx, px + 2, py + 4, 3, 7, cc);
       R(ctx, px + 3, py + 4, 1, 7, mix(cc, '#000000', 0.18));
@@ -332,16 +381,17 @@
       R(ctx, px + 1, py, 1, 16, P.woodDk);
       R(ctx, px + 14, py, 1, 16, P.woodDk);
       R(ctx, px + 4, py + 3, 8, 1, P.woodHi || P.woodA);
-    } else if (ch === 'H') {
+    } else if (ch === 'H' || ch === '0') {
       R(ctx, px, py, 16, 16, P.concHi);
       R(ctx, px, py + 14, 16, 2, P.concSh);
-      if (at(map, x - 1, y) === 'H' || at(map, x + 1, y) === 'H') {
-        R(ctx, px, py + 7, 16, 1, '#6d6f73');
-        if (x % 2 === 0) R(ctx, px + 7, py + 5, 2, 5, '#55575b');
+      if ('H0'.includes(at(map, x - 1, y)) || 'H0'.includes(at(map, x + 1, y))) {
+        R(ctx, px, py + 7, 16, 1, '#8a4b3a');
+        if (x % 2 === 0) R(ctx, px + 7, py + 5, 2, 5, '#6e3a2c');
       } else {
-        R(ctx, px + 7, py, 1, 16, '#6d6f73');
-        if (y % 2 === 0) R(ctx, px + 5, py + 7, 5, 2, '#55575b');
+        R(ctx, px + 7, py, 1, 16, '#8a4b3a');
+        if (y % 2 === 0) R(ctx, px + 5, py + 7, 5, 2, '#6e3a2c');
       }
+      if (ch === '0') futon(ctx, x, y, px, py + 3, 12);
     }
   }
 
@@ -371,6 +421,20 @@
     wallFaceBase(ctx, map, x, y, px, py);
     switch (ch) {
       case 'B': { // 掲示板
+        const room = labelAt(map, x, y + 1) || '';
+        if (room === '食堂') { // 部屋割り表
+          R(ctx, px + 2, py + 4, 12, 9, '#f4f1e8');
+          for (let j = 0; j < 4; j++) R(ctx, px + 3, py + 5 + j * 2, 10, 1, '#c8c2b4');
+          for (let i = 0; i < 3; i++) R(ctx, px + 5 + i * 3, py + 5, 1, 7, '#c8c2b4');
+          break;
+        }
+        if (room === '管理人室') {
+          R(ctx, px + 1, py + 4, 14, 9, '#7a5a3a');
+          R(ctx, px + 2, py + 5, 12, 7, '#3f6a4a');
+          R(ctx, px + 3, py + 6, 4, 4, '#cfe3f0');
+          R(ctx, px + 8, py + 6, 4, 3, P.white);
+          break;
+        }
         const l = at(map, x - 1, y) === 'B', r = at(map, x + 1, y) === 'B';
         const x0 = l ? 0 : 1, x1 = r ? 16 : 15;
         R(ctx, px + x0, py + 4, x1 - x0, 9, P.woodDk);
@@ -424,25 +488,29 @@
         R(ctx, px + 8, py + 7, 1, 1, '#d8433a');
         break;
       }
-      case 'n': {
+      case 'n': { // 管理人室の小窓とマイク
         R(ctx, px + 1, py + 4, 14, 7, P.aluDk);
         R(ctx, px + 2, py + 5, 12, 5, '#cfe3ea');
         R(ctx, px + 8, py + 5, 1, 5, P.aluDk);
         R(ctx, px, py + 11, 16, 2, P.woodLt);
+        R(ctx, px + 4, py + 7, 3, 2, '#4a4a52');
+        R(ctx, px + 5, py + 9, 1, 2, '#3a3a40');
         break;
       }
-      case 'H': { // 屋上の手すり壁（北側は内側の面が見える）
+      case 'H':
+      case '0': { // 屋上の手すり壁（北側は内側の面が見える）
         R(ctx, px, py, 16, 5, P.concHi);
-        R(ctx, px, py + 2, 16, 1, '#6d6f73');
-        if (x % 2 === 0) R(ctx, px + 7, py, 2, 4, '#55575b');
+        R(ctx, px, py + 2, 16, 1, '#8a4b3a');
+        if (x % 2 === 0) R(ctx, px + 7, py, 2, 4, '#6e3a2c');
         R(ctx, px, py + 5, 16, 11, P.conc);
         R(ctx, px, py + 5, 16, 1, P.concSh);
         if (x % 4 === 0) R(ctx, px + 7, py + 13, 2, 3, P.concDk);
+        if (ch === '0') futon(ctx, x, y, px, py + 1, 12);
         break;
       }
     }
     // 表札（ドアの左隣）
-    if (ch === '#' && at(map, x + 1, y) === '+') {
+    if (ch === '#' && '+/'.includes(at(map, x + 1, y))) {
       const num = roomNumberFor(map, x + 1, y);
       if (num) {
         R(ctx, px + 1, py + 5, 15, 9, P.doorFrame);
@@ -453,41 +521,44 @@
   }
 
   // ── ドア・階段 ───────────────────────────────────
+  const DOORISH = new Set(['+', '/', '$', 'N']);
+  // 縦の壁（左右に部屋がある壁）についたドアか
+  function doorVertical(map, x, y) {
+    const up = at(map, x, y - 1), dn = at(map, x, y + 1);
+    return (isWall(up) || DOORISH.has(up)) && (isWall(dn) || DOORISH.has(dn));
+  }
   function drawDoor(ctx, map, x, y, px, py, ch, open) {
-    const vertical = isWall(at(map, x, y - 1)) && isWall(at(map, x, y + 1));
-    if (vertical) {
+    if (ch === '/') open = true;
+    const up = at(map, x, y - 1), dn = at(map, x, y + 1);
+    if (doorVertical(map, x, y)) { // 縦の壁のドア（上から見る）
       drawFloor(ctx, baseFloor(map, x, y), x, y, px, py);
-      R(ctx, px, py, 16, 2, P.doorFrame);
-      R(ctx, px, py + 14, 16, 2, P.doorFrame);
-      if (!open) R(ctx, px + 1, py + 2, 2, 12, P.door);
+      const t = isWall(up) ? 2 : 0, b = isWall(dn) ? 2 : 0;
+      if (t) R(ctx, px + 5, py, 6, 2, P.wallTop);
+      if (b) R(ctx, px + 5, py + 14, 6, 2, P.wallTop);
+      if (!open) {
+        R(ctx, px + 6, py + t, 4, 16 - t - b, P.door);
+        R(ctx, px + 6, py + t, 1, 16 - t - b, P.doorDk);
+        if (ch === '$') R(ctx, px + 7, py + 7, 2, 2, '#3a3a40');
+      }
       return;
     }
     R(ctx, px, py, 16, 3, P.wallTop);
     R(ctx, px, py + 2, 16, 1, P.wallTopHi);
     R(ctx, px + 1, py + 3, 14, 13, P.doorFrame);
-    if (ch === 'N') {
+    if (open) { // 開けっぱなし
       R(ctx, px + 2, py + 4, 12, 12, '#2a221e');
-      if (!open) {
-        R(ctx, px + 2, py + 4, 12, 8, P.noren);
-        R(ctx, px + 4, py + 4, 1, 8, P.norenDk);
-        R(ctx, px + 2, py + 4, 12, 1, P.norenDk);
-        // 「ゆ」
-        const yu = ['010000', '111110', '101001', '101001', '011110', '001000', '010000'];
-        yu.forEach((row, j) => { for (let i = 0; i < 6; i++) if (row[i] === '1') R(ctx, px + 5 + i, py + 4 + j, 1, 1, P.white); });
-      }
-      return;
-    }
-    if (open) {
-      R(ctx, px + 2, py + 4, 12, 12, '#2a221e');
-      R(ctx, px + 2, py + 4, 2, 12, P.doorDk);
+      R(ctx, px + 2, py + 4, 3, 12, P.door);
+      R(ctx, px + 2, py + 4, 1, 12, P.doorDk);
       return;
     }
     R(ctx, px + 2, py + 4, 12, 12, P.door);
-    R(ctx, px + 3, py + 5, 10, 4, P.doorDk);
-    R(ctx, px + 4, py + 6, 8, 2, P.door);
-    R(ctx, px + 3, py + 11, 10, 4, P.doorDk);
-    R(ctx, px + 4, py + 12, 8, 2, P.door);
-    R(ctx, px + 11, py + 9, 2, 2, '#e3c25a');
+    R(ctx, px + 2, py + 4, 12, 1, mix(P.door, '#ffffff', 0.3));
+    R(ctx, px + 4, py + 6, 8, 3, P.doorDk);
+    R(ctx, px + 5, py + 7, 6, 1, P.door);
+    R(ctx, px + 4, py + 11, 8, 3, P.doorDk);
+    R(ctx, px + 5, py + 12, 6, 1, P.door);
+    R(ctx, px + 11, py + 9, 2, 2, '#e1e5e7');
+    if (ch === '$') R(ctx, px + 11, py + 11, 2, 1, '#3a3a40');
   }
 
   function drawExitDoor(ctx, map, x, y, px, py) {
@@ -530,219 +601,550 @@
 
   // ── 家具 ───────────────────────────────────────
   const BLANKETS = ['#4f6fa8', '#b8503f', '#5f8a4a', '#d0883a', '#7a5a9a', '#3f8a8a', '#a84a6a'];
-  function blanket(x, y) {
-    return BLANKETS[(rnd((x / 5) | 0, (y / 8) | 0, x % 5) * BLANKETS.length) | 0];
+  function blanket(x, y, s) {
+    return BLANKETS[(rnd((x / 5) | 0, (y / 8) | 0, (x % 5) + (s || 0) * 7) * BLANKETS.length) | 0];
+  }
+  // 屋上の手すりに干した布団
+  function futon(ctx, x, y, px, py, h) {
+    const c = ['#d9606a', '#5a86c8', '#e8b440', '#6aa060'][(rnd((x / 3) | 0, y, 21) * 4) | 0];
+    const hh = h || 9;
+    R(ctx, px, py, 16, hh, c);
+    R(ctx, px, py, 16, 1, '#a8644e');
+    R(ctx, px, py + 1, 16, 1, mix(c, '#ffffff', 0.35));
+    R(ctx, px, py + hh - 1, 16, 1, mix(c, '#000000', 0.25));
+    for (let i = 0; i < 4; i++) R(ctx, px + 1 + i * 4 + (y & 1) * 2, py + 3 + (i & 1) * 4, 2, 2, mix(c, '#ffffff', 0.55));
+  }
+
+  // 2 マス以上の家具は、全体の絵をそのマスで切り抜いて描く
+  function clipTile(ctx, px, py, fn) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(px, py, 16, 16);
+    ctx.clip();
+    fn();
+    ctx.restore();
+  }
+  // 同じ文字が上下に続くとき、そのかたまりの何マス目か
+  function stackPos(map, x, y, ch) {
+    let top = y;
+    while (at(map, x, top - 1) === ch) top--;
+    let bot = y;
+    while (at(map, x, bot + 1) === ch) bot++;
+    return { top, n: bot - top + 1, i: y - top };
+  }
+  function runPos(map, x, y, ch) {
+    let l = x;
+    while (at(map, l - 1, y) === ch) l--;
+    let r = x;
+    while (at(map, r + 1, y) === ch) r++;
+    return { left: l, n: r - l + 1, i: x - l };
+  }
+
+  // 2段ベッド：上の段を上から見て、手前の面に下の段とはしごが見える
+  function bunkBed(ctx, map, x, y, px, py) {
+    const s = stackPos(map, x, y, 'b');
+    const bx = px, by = py - s.i * 16, H = s.n * 16;
+    const north = y < map.h / 2; // 北の並びは窓が上＝枕が上
+    const wallL = isWall(at(map, x - 1, s.top));
+    const c1 = blanket(x, y, 0), c2 = blanket(x, y, 1);
+    const front = H - 12; // 手前の面の上端
+    clipTile(ctx, px, py, () => {
+      R(ctx, bx + 1, by + H - 2, 15, 2, 'rgba(0,0,0,0.18)');
+      // 上の段（天面）
+      R(ctx, bx + 1, by, 14, front, P.woodDk);
+      R(ctx, bx + 2, by + 1, 12, front - 2, P.sheet);
+      const pillowY = north ? by + 2 : by + front - 7;
+      R(ctx, bx + 3, pillowY, 10, 4, P.white);
+      R(ctx, bx + 3, pillowY + 3, 10, 1, P.sheetSh);
+      const b0 = north ? by + 8 : by + 1, b1 = north ? by + front - 1 : by + front - 9;
+      R(ctx, bx + 2, b0, 12, b1 - b0, c1);
+      R(ctx, bx + 2, north ? b0 : b1 - 1, 12, 1, mix(c1, '#ffffff', 0.35));
+      R(ctx, bx + 4, b0 + 2, 1, Math.max(1, b1 - b0 - 5), mix(c1, '#ffffff', 0.15));
+      // 柵（壁と反対側）
+      const gx = wallL ? bx + 13 : bx + 2;
+      R(ctx, gx, by + 1, 1, front - 8, P.woodLt);
+      R(ctx, gx, by + 1, 1, 1, P.woodXd);
+      R(ctx, gx, by + front - 8, 1, 1, P.woodXd);
+      // 手前の面：柱、下の段のすき間、下の段の布団
+      R(ctx, bx + 1, by + front, 14, 12, P.woodDk);
+      R(ctx, bx + 1, by + front, 14, 2, P.wood);
+      R(ctx, bx + 3, by + front + 2, 10, 7, '#2a221e');
+      R(ctx, bx + 3, by + front + 6, 10, 3, c2);
+      R(ctx, bx + 3, by + front + 6, 10, 1, mix(c2, '#ffffff', 0.3));
+      // 2段目の裏のステッカー
+      R(ctx, bx + 4, by + front + 2, 2, 1, '#f0d040');
+      R(ctx, bx + 8, by + front + 2, 1, 1, '#e05a7a');
+      R(ctx, bx + 10, by + front + 3, 2, 1, '#6ac0e0');
+      R(ctx, bx + 1, by + front + 9, 14, 2, P.wood);
+      R(ctx, bx + 1, by + H - 1, 14, 1, P.woodXd);
+      // はしご（少しだけ斜め）
+      const lx = wallL ? bx + 10 : bx + 2;
+      const d = wallL ? 1 : -1;
+      for (let j = 0; j < 14; j++) {
+        const o = j > 9 ? d : 0;
+        R(ctx, lx + o, by + front - 4 + j, 1, 1, P.woodLt);
+        R(ctx, lx + 3 + o, by + front - 4 + j, 1, 1, P.woodLt);
+      }
+      for (let j = 0; j < 4; j++) R(ctx, lx + (j > 2 ? d : 0), by + front - 2 + j * 3, 4, 1, P.woodHi || P.woodLt);
+    });
+  }
+
+  // 机（2 マスで 1 台）
+  function desk(ctx, map, x, y, px, py) {
+    const room = labelAt(map, x, y) || '';
+    const r = runPos(map, x, y, 'd');
+    const left = r.i === 0;
+    if (room === '勉強部屋') { // 学校のような机
+      R(ctx, px + (left ? 1 : 0), py + 3, left ? 15 : 15, 8, '#d9b98a');
+      R(ctx, px + (left ? 1 : 0), py + 3, 15, 1, '#e8cfa6');
+      R(ctx, px + (left ? 1 : 0), py + 11, 15, 2, '#9a9ea2');
+      R(ctx, px + (left ? 2 : 13), py + 13, 1, 3, P.metalXd);
+      if (rnd(x, y, 3) < 0.5) { R(ctx, px + 5, py + 5, 6, 4, P.white); R(ctx, px + 6, py + 6, 4, 1, '#9a9488'); }
+      return;
+    }
+    const wallUp = isWall(at(map, x, y - 1));
+    // 天板
+    R(ctx, px + (left ? 1 : 0), py + 2, left ? 15 : 15, 10, P.woodLt);
+    R(ctx, px + (left ? 1 : 0), py + 2, 15, 1, '#c18d55');
+    R(ctx, px + (left ? 1 : 0), py + 12, 15, 3, P.wood);
+    R(ctx, px + (left ? 1 : 0), py + 15, 15, 1, P.woodXd);
+    if (left) { R(ctx, px + 1, py + 2, 1, 14, P.woodDk); R(ctx, px + 6, py + 13, 4, 1, P.woodXd); }
+    else R(ctx, px + 14, py + 2, 1, 14, P.woodDk);
+    if (wallUp) { // 窓ぎわの机：奥に棚
+      R(ctx, px + (left ? 1 : 0), py, 15, 4, P.wood);
+      for (let i = 0; i < 6; i++) R(ctx, px + 2 + i * 2, py + 1, 1, 2, ['#c94a3a', '#3f6aa8', '#e0c05a', '#5d8a4a', '#f3f0e6'][(rnd(x, y, i) * 5) | 0]);
+    }
+    const k = (rnd(x, y, 1) * 4) | 0;
+    if (left) {
+      if (k === 0) { R(ctx, px + 4, py + 6, 6, 5, P.white); R(ctx, px + 5, py + 7, 4, 1, '#9a9488'); R(ctx, px + 5, py + 9, 4, 1, '#9a9488'); }
+      else if (k === 1) { R(ctx, px + 4, py + 5, 8, 6, '#3a3a40'); R(ctx, px + 5, py + 6, 6, 4, '#7fa9b8'); }
+      else { const bc = ['#3f6aa8', '#d8603a', '#5d8a4a', '#c9a23a'][(rnd(x, y, 2) * 4) | 0]; R(ctx, px + 4, py + 6, 7, 2, bc); R(ctx, px + 4, py + 8, 7, 2, mix(bc, '#ffffff', 0.3)); }
+    } else {
+      R(ctx, px + 9, py + 5, 3, 2, '#e8e2c8');
+      R(ctx, px + 10, py + 7, 1, 3, P.metalDk);
+      R(ctx, px + 9, py + 10, 3, 1, P.metalXd);
+      if (k === 2) { R(ctx, px + 3, py + 7, 3, 3, '#f3f0e6'); R(ctx, px + 4, py + 8, 1, 1, '#8a5a3a'); }
+    }
+  }
+
+  // イス：机・テーブルのある側を向く
+  function chair(ctx, map, x, y, px, py) {
+    const room = labelAt(map, x, y) || '';
+    const deskUp = 'dtj'.includes(at(map, x, y - 1));
+    const col = room === '食堂' ? '#4a7ab8' : room === '勉強部屋' ? '#c9a46a' : '#3a3a42';
+    const dk = mix(col, '#000000', 0.3), hi = mix(col, '#ffffff', 0.2);
+    if (deskUp) { // 机が上：座面が上、背もたれが下
+      R(ctx, px + 4, py + 1, 8, 6, col);
+      R(ctx, px + 4, py + 1, 8, 1, hi);
+      R(ctx, px + 4, py + 7, 8, 5, dk);
+      R(ctx, px + 4, py + 7, 8, 1, col);
+      R(ctx, px + 4, py + 12, 1, 3, P.metalXd);
+      R(ctx, px + 11, py + 12, 1, 3, P.metalXd);
+    } else { // 机が下（または無し）：背もたれが上
+      R(ctx, px + 4, py + 2, 8, 4, dk);
+      R(ctx, px + 4, py + 2, 8, 1, col);
+      R(ctx, px + 4, py + 6, 8, 6, col);
+      R(ctx, px + 4, py + 6, 8, 1, hi);
+      R(ctx, px + 4, py + 12, 1, 3, P.metalXd);
+      R(ctx, px + 11, py + 12, 1, 3, P.metalXd);
+    }
+  }
+
+  // 本棚（中身はマンガ）
+  function bookRows(ctx, x, y, bx, by, w, rows, pitch) {
+    const cols = ['#c94a3a', '#3f6aa8', '#e0c05a', '#5d8a4a', '#f3f0e6', '#8a5aa0', '#e07a4a', '#2f2f36'];
+    for (let s = 0; s < rows; s++) {
+      let cx = bx, i = 0;
+      while (cx < bx + w) {
+        const bw = 1 + ((rnd(x, y * 7 + s, i) * 2) | 0);
+        const bh = pitch - 2 + ((rnd(x, y * 7 + s, i + 30) * 2) | 0);
+        R(ctx, cx, by + s * pitch + (pitch - bh), Math.min(bw, bx + w - cx), bh, cols[(rnd(x, y + s, i + 60) * cols.length) | 0]);
+        cx += bw;
+        i++;
+      }
+    }
   }
 
   function drawFurniture(ctx, map, x, y, px, py, ch) {
     const nb = (dx, dy) => at(map, x + dx, y + dy);
+    const room = labelAt(map, x, y) || '';
+    const roof = map.kind === 'roof';
     switch (ch) {
-      case 'b': {
-        const up = nb(0, -1) === 'b';
-        const col = blanket(x, y);
-        if (!up) {
-          R(ctx, px + 1, py + 1, 14, 15, P.woodDk);
-          R(ctx, px + 1, py + 1, 14, 2, P.woodXd);
-          R(ctx, px + 2, py + 3, 12, 13, P.sheet);
-          R(ctx, px + 3, py + 4, 10, 5, P.white);
-          R(ctx, px + 3, py + 8, 10, 1, P.sheetSh);
-          R(ctx, px + 2, py + 11, 12, 5, col);
-          R(ctx, px + 2, py + 11, 12, 1, P.sheet);
-        } else {
-          R(ctx, px + 1, py, 14, 14, P.woodDk);
-          R(ctx, px + 2, py, 12, 12, col);
-          R(ctx, px + 2, py + 11, 12, 1, mix(col, '#000000', 0.25));
-          R(ctx, px + 4, py + 3, 1, 6, mix(col, '#ffffff', 0.15));
-          R(ctx, px + 1, py + 12, 14, 3, P.wood);
-          R(ctx, px + 1, py + 15, 14, 1, P.woodXd);
-        }
-        break;
-      }
+      case 'b': return bunkBed(ctx, map, x, y, px, py);
       case 'd': {
-        R(ctx, px + 1, py + 2, 14, 10, P.woodLt);
-        R(ctx, px + 1, py + 2, 14, 1, P.woodHi || '#c18d55');
-        R(ctx, px + 1, py + 12, 14, 3, P.wood);
-        R(ctx, px + 6, py + 13, 4, 1, P.woodXd);
-        R(ctx, px + 1, py + 15, 14, 1, P.woodXd);
-        const k = (rnd(x, y, 1) * 3) | 0;
-        const bc = ['#3f6aa8', '#d8603a', '#5d8a4a', '#c9a23a'][(rnd(x, y, 2) * 4) | 0];
-        if (k === 0) { R(ctx, px + 3, py + 4, 5, 6, P.white); R(ctx, px + 4, py + 5, 3, 1, '#9a9488'); R(ctx, px + 4, py + 7, 3, 1, '#9a9488'); }
-        else { R(ctx, px + 3, py + 5, 6, 2, bc); R(ctx, px + 3, py + 7, 6, 2, mix(bc, '#ffffff', 0.3)); }
-        R(ctx, px + 11, py + 3, 3, 2, '#e8e2c8');
-        R(ctx, px + 12, py + 5, 1, 4, P.metalDk);
-        R(ctx, px + 11, py + 9, 3, 1, P.metalXd);
-        break;
-      }
-      case 'c': {
-        const deskAbove = 'dt'.includes(nb(0, -1));
-        if (labelAt(map, x, y) === '食堂') {
-          R(ctx, px + 4, py + 5, 8, 7, P.woodLt);
-          R(ctx, px + 4, py + 5, 8, 1, '#c99460');
-          R(ctx, px + 4, deskAbove ? py + 11 : py + 3, 8, 2, P.wood);
-          R(ctx, px + 4, py + 12, 1, 2, P.woodDk);
-          R(ctx, px + 11, py + 12, 1, 2, P.woodDk);
+        if (room === '宿直室') { // 小さな机
+          R(ctx, px + 1, py + 3, 14, 9, P.woodLt);
+          R(ctx, px + 1, py + 3, 14, 1, '#c18d55');
+          R(ctx, px + 1, py + 12, 14, 3, P.wood);
+          R(ctx, px + 4, py + 5, 5, 5, P.white);
           break;
         }
-        R(ctx, px + 4, py + 5, 8, 7, '#4a5a6a');
-        R(ctx, px + 5, py + 6, 6, 5, '#5c6e80');
-        if (deskAbove) R(ctx, px + 4, py + 11, 8, 3, '#3a4654');
-        else R(ctx, px + 4, py + 3, 8, 3, '#3a4654');
-        R(ctx, px + 7, py + 12, 2, 2, P.metalXd);
-        break;
+        return desk(ctx, map, x, y, px, py);
       }
+      case 'c': return chair(ctx, map, x, y, px, py);
       case 'K': {
-        const l = nb(-1, 0) === 'K', r = nb(1, 0) === 'K';
-        const x0 = l ? 0 : 1, x1 = r ? 16 : 15;
-        R(ctx, px + x0, py + 1, x1 - x0, 3, '#bfa27a');
-        R(ctx, px + x0, py + 4, x1 - x0, 12, '#d6bd92');
-        R(ctx, px + x0, py + 4, x1 - x0, 1, '#a88a62');
-        if (!l) R(ctx, px + x0, py + 1, 1, 15, '#a88a62');
-        if (!r) R(ctx, px + x1 - 1, py + 1, 1, 15, '#a88a62');
-        R(ctx, px + 8, py + 5, 1, 11, '#a88a62');
+        if (room === '食堂') { // 食器棚。上に優勝トロフィーが 3 つ
+          const s = stackPos(map, x, y, 'K');
+          clipTile(ctx, px, py, () => {
+            const by = py - s.i * 16, H = s.n * 16;
+            R(ctx, px + 1, by + 6, 14, H - 6, '#9aa3aa');
+            R(ctx, px + 1, by + 6, 14, 2, '#c3cbd0');
+            R(ctx, px + 2, by + 9, 12, 12, '#cfe0e6');
+            R(ctx, px + 8, by + 9, 1, 12, '#9aa3aa');
+            R(ctx, px + 2, by + 15, 12, 1, '#9aa3aa');
+            for (let i = 0; i < 4; i++) R(ctx, px + 3 + i * 3, by + 12, 2, 3, i & 1 ? P.white : '#e8d8b0');
+            R(ctx, px + 2, by + 22, 12, H - 24, '#868f96');
+            R(ctx, px + 8, by + 22, 1, H - 24, '#6f777d');
+            R(ctx, px + 6, by + 25, 1, 2, P.metalLt);
+            R(ctx, px + 9, by + 25, 1, 2, P.metalLt);
+            R(ctx, px + 1, by + H - 1, 14, 1, '#5f666b');
+            // トロフィー
+            for (let i = 0; i < 3; i++) {
+              const tx = px + 2 + i * 4 + (i === 1 ? 1 : 0), ty = by + (i === 1 ? 0 : 1);
+              R(ctx, tx, ty + 1, 4, 3, '#e8c040');
+              R(ctx, tx, ty + 1, 4, 1, '#f8e08a');
+              R(ctx, tx + 1, ty + 4, 2, 2, '#c89a2a');
+              R(ctx, tx, ty + 6, 4, 1, '#7a5a3a');
+            }
+          });
+          break;
+        }
+        // スチールのロッカー
+        R(ctx, px + 2, py + 1, 12, 15, '#a9b1b6');
+        R(ctx, px + 2, py + 1, 12, 2, '#cdd4d8');
+        R(ctx, px + 8, py + 3, 1, 13, '#8a9297');
+        R(ctx, px + 4, py + 5, 3, 1, '#7a8287');
+        R(ctx, px + 10, py + 5, 3, 1, '#7a8287');
         R(ctx, px + 6, py + 9, 1, 2, P.metalXd);
         R(ctx, px + 10, py + 9, 1, 2, P.metalXd);
+        R(ctx, px + 2, py + 15, 12, 1, '#6d7378');
         break;
       }
       case 'k': {
-        R(ctx, px + 1, py + 1, 14, 15, P.woodDk);
-        R(ctx, px + 2, py + 2, 12, 13, P.woodXd);
-        for (let s = 0; s < 3; s++) {
-          let bx = px + 2;
-          let i = 0;
-          while (bx < px + 14) {
-            const w = 1 + ((rnd(x, y * 7 + s, i) * 2) | 0);
-            const h = 3 + ((rnd(x, y * 7 + s, i + 30) * 2) | 0);
-            const cols = ['#c94a3a', '#3f6aa8', '#e0c05a', '#5d8a4a', '#f3f0e6', '#8a5aa0', '#e07a4a'];
-            R(ctx, bx, py + 2 + s * 4 + (4 - h), Math.min(w, px + 14 - bx), h, cols[(rnd(x, y + s, i + 60) * cols.length) | 0]);
-            bx += w;
-            i++;
-          }
-          R(ctx, px + 2, py + 6 + s * 4 - 1, 12, 1, P.woodDk);
+        if (room === '食堂') { // 机の上の水色の本棚。卒業生のマンガ
+          const s = stackPos(map, x, y, 'k');
+          R(ctx, px + 1, py, 15, 16, '#9ccbd6');
+          R(ctx, px + 1, py, 1, 16, '#7fb0bd');
+          if (s.i === 0) R(ctx, px + 1, py, 15, 2, '#bfe0e8');
+          R(ctx, px + 3, py + (s.i === 0 ? 2 : 0), 12, s.i === 0 ? 14 : 16, '#5f8f9a');
+          bookRows(ctx, x, y, px + 3, py + (s.i === 0 ? 3 : 1), 12, 3, 5);
+          for (let j = 0; j < 3; j++) R(ctx, px + 3, py + (s.i === 0 ? 7 : 5) + j * 5, 12, 1, '#9ccbd6');
+          if (s.i === s.n - 1) R(ctx, px + 1, py + 15, 15, 1, '#5f8f9a');
+          break;
         }
+        if (room === '厨房' || room === '物置') { // 金属の棚
+          R(ctx, px + 1, py + 1, 14, 15, '#8a9297');
+          R(ctx, px + 2, py + 2, 12, 13, '#5f666b');
+          for (let j = 0; j < 3; j++) {
+            R(ctx, px + 2, py + 6 + j * 4, 12, 1, P.metal);
+            const c = room === '物置' ? '#c49a62' : ['#f3f0e6', '#d0d4d8', '#e8c070'][(rnd(x, y, j) * 3) | 0];
+            R(ctx, px + 3 + ((rnd(x, y, j + 4) * 3) | 0), py + 3 + j * 4, 5, 3, c);
+            if (rnd(x, y, j + 8) < 0.6) R(ctx, px + 9, py + 3 + j * 4, 4, 3, mix(c, '#000000', 0.15));
+          }
+          break;
+        }
+        if (room === '管理人室') { // ファイルの棚
+          R(ctx, px + 1, py + 1, 14, 15, '#a9b1b6');
+          R(ctx, px + 2, py + 2, 12, 13, '#7a8287');
+          for (let j = 0; j < 3; j++) {
+            for (let i = 0; i < 5; i++) R(ctx, px + 3 + i * 2, py + 3 + j * 4, 2, 3, ['#3f6aa8', '#d8d4c8', '#5d8a4a'][(i + j) % 3]);
+            R(ctx, px + 2, py + 6 + j * 4, 12, 1, '#a9b1b6');
+          }
+          break;
+        }
+        // ベッドのわきの本棚（マンガ）
+        R(ctx, px + 1, py + 1, 14, 15, P.woodDk);
+        R(ctx, px + 1, py + 1, 14, 2, P.wood);
+        R(ctx, px + 2, py + 3, 12, 12, P.woodXd);
+        bookRows(ctx, x, y, px + 2, py + 3, 12, 3, 4);
+        for (let j = 0; j < 3; j++) R(ctx, px + 2, py + 6 + j * 4, 12, 1, P.woodDk);
         break;
       }
       case 't': {
         const L = nb(-1, 0) === 't', Rr = nb(1, 0) === 't', U = nb(0, -1) === 't', Dn = nb(0, 1) === 't';
+        const steel = room === '厨房';
+        const top = steel ? '#c9d0d4' : '#b8b4aa', edge = steel ? '#9aa3a9' : '#8f8b82', hi = steel ? '#e4e9eb' : '#d0ccc2';
         const x0 = L ? 0 : 1, x1 = Rr ? 16 : 15, y0 = U ? 0 : 2, y1 = Dn ? 16 : 12;
-        R(ctx, px + x0, py + y0, x1 - x0, y1 - y0, P.woodLt);
-        if (!U) R(ctx, px + x0, py + y0, x1 - x0, 1, '#c99460');
-        if (!L) R(ctx, px + x0, py + y0, 1, y1 - y0, P.wood);
-        if (!Rr) R(ctx, px + x1 - 1, py + y0, 1, y1 - y0, P.wood);
+        R(ctx, px + x0, py + y0, x1 - x0, y1 - y0, top);
+        if (!U) R(ctx, px + x0, py + y0, x1 - x0, 1, hi);
+        if (!L) R(ctx, px + x0, py + y0, 1, y1 - y0, edge);
+        if (!Rr) R(ctx, px + x1 - 1, py + y0, 1, y1 - y0, edge);
         if (!Dn) {
-          R(ctx, px + x0, py + y1, x1 - x0, 2, P.wood);
-          R(ctx, px + x0, py + y1 + 2, x1 - x0, 1, P.woodXd);
+          R(ctx, px + x0, py + y1, x1 - x0, 2, edge);
+          if (!L) R(ctx, px + x0 + 1, py + y1 + 2, 1, 2, P.metalXd);
+          if (!Rr) R(ctx, px + x1 - 2, py + y1 + 2, 1, 2, P.metalXd);
         }
         const r0 = rnd(x, y, 5);
-        if (r0 < 0.3) { R(ctx, px + 6, py + 5, 2, 4, '#3a2a20'); R(ctx, px + 9, py + 5, 2, 4, '#a8402a'); }
-        else if (r0 < 0.55) { R(ctx, px + 5, py + 5, 6, 4, P.white); R(ctx, px + 6, py + 6, 4, 2, '#e8c070'); }
+        if (steel) {
+          if (r0 < 0.3) { R(ctx, px + 4, py + 4, 7, 5, '#e8e4dc'); R(ctx, px + 5, py + 5, 5, 3, '#d8d0c0'); }
+        } else if (r0 < 0.25) { R(ctx, px + 6, py + 5, 2, 4, '#3a2a20'); R(ctx, px + 9, py + 5, 2, 4, '#a8402a'); }
+        else if (r0 < 0.5) { R(ctx, px + 5, py + 5, 6, 4, P.white); R(ctx, px + 6, py + 6, 4, 2, '#e8c070'); }
+        else if (r0 < 0.62) { R(ctx, px + 5, py + 4, 5, 6, '#f3f0e6'); R(ctx, px + 6, py + 5, 3, 1, '#9a9488'); }
         break;
       }
-      case 'j': {
-        R(ctx, px + 1, py + 1, 14, 14, P.woodDk);
-        R(ctx, px + 2, py + 2, 12, 12, P.felt);
-        R(ctx, px + 3, py + 3, 10, 1, P.ivory);
-        R(ctx, px + 3, py + 12, 10, 1, P.ivory);
-        R(ctx, px + 3, py + 4, 1, 8, P.ivory);
-        R(ctx, px + 12, py + 4, 1, 8, P.ivory);
-        R(ctx, px + 6, py + 6, 1, 1, P.ivory); R(ctx, px + 8, py + 7, 1, 1, P.ivory);
-        R(ctx, px + 7, py + 9, 1, 1, P.ivory); R(ctx, px + 9, py + 6, 1, 1, P.ivory);
-        R(ctx, px + 1, py + 15, 14, 1, P.woodXd);
+      case 'j': { // 正方形のテーブル（2x2）と麻雀牌
+        const L = nb(-1, 0) === 'j', U = nb(0, -1) === 'j';
+        const x0 = L ? 0 : 1, x1 = L ? 15 : 16, y0 = U ? 0 : 2, y1 = U ? 13 : 16;
+        R(ctx, px + x0, py + y0, x1 - x0, y1 - y0, '#b8b4aa');
+        R(ctx, px + x0 + (L ? 0 : 1), py + y0 + (U ? 0 : 1), x1 - x0 - 1, y1 - y0 - 1, P.felt);
+        if (!U) R(ctx, px + x0, py + y0, x1 - x0, 1, '#d0ccc2');
+        if (U) { R(ctx, px + x0, py + 13, x1 - x0, 2, '#8f8b82'); R(ctx, px + (L ? 13 : 1), py + 15, 1, 1, P.metalXd); }
+        // 牌の列
+        if (!U) R(ctx, px + (L ? 0 : 4), py + 4, 12, 2, P.ivory);
+        else R(ctx, px + (L ? 0 : 4), py + 9, 12, 2, P.ivory);
+        if (!L) R(ctx, px + 3, py + (U ? 0 : 6), 2, 10, P.ivory);
+        else R(ctx, px + 11, py + (U ? 0 : 6), 2, 10, P.ivory);
+        if (!L && !U) { R(ctx, px + 9, py + 10, 2, 3, P.ivory); R(ctx, px + 12, py + 11, 2, 2, '#d8433a'); }
         break;
       }
-      case 'x': {
-        const L = nb(-1, 0) === 'x', Rr = nb(1, 0) === 'x';
-        const x0 = L ? 0 : 1, x1 = Rr ? 16 : 15;
-        R(ctx, px + x0, py + 1, x1 - x0, 14, P.futonA);
-        for (let i = x0; i < x1; i += 3) R(ctx, px + i, py + 2 + (i % 2) * 6, 1, 1, P.futonB);
-        R(ctx, px + x0, py + 14, x1 - x0, 2, '#9a3a30');
-        R(ctx, px + (L ? 0 : 3), py + 3, (x1 - x0) - (L ? 0 : 2) - (Rr ? 0 : 2), 8, P.woodLt);
-        R(ctx, px + (L ? 0 : 3), py + 10, (x1 - x0) - (L ? 0 : 2) - (Rr ? 0 : 2), 1, P.wood);
-        if (L && Rr) {
-          R(ctx, px + 6, py + 5, 3, 3, P.mikan);
-          R(ctx, px + 9, py + 6, 3, 3, P.mikan);
-          R(ctx, px + 7, py + 5, 1, 1, '#ffd08a');
-          R(ctx, px + 7, py + 4, 1, 1, '#4a7a3a');
+      case 'x': { // ボイラー（2x2）
+        const L = nb(-1, 0) === 'x', U = nb(0, -1) === 'x';
+        clipTile(ctx, px, py, () => {
+          const bx = px - (L ? 16 : 0), by = py - (U ? 16 : 0);
+          R(ctx, bx + 2, by + 4, 28, 26, '#8a8f86');
+          R(ctx, bx + 2, by + 4, 28, 3, '#b0b5ac');
+          R(ctx, bx + 4, by + 9, 24, 14, '#9da39a');
+          R(ctx, bx + 6, by + 12, 6, 6, '#3a3a40');
+          R(ctx, bx + 7, by + 13, 4, 4, '#e08a3a');
+          R(ctx, bx + 18, by + 12, 6, 2, P.white);
+          R(ctx, bx + 18, by + 15, 6, 1, '#6a6f66');
+          R(ctx, bx + 24, by + 0, 3, 6, P.metalDk);
+          R(ctx, bx + 2, by + 28, 28, 2, '#5f645b');
+        });
+        break;
+      }
+      case 'T': { // テレビ（食堂は台の下に電子レンジ）
+        R(ctx, px + 1, py + 9, 14, 7, P.woodDk);
+        R(ctx, px + 1, py + 9, 14, 1, P.wood);
+        if (room === '食堂') {
+          R(ctx, px + 3, py + 11, 10, 4, '#e9e5da');
+          R(ctx, px + 4, py + 12, 6, 2, '#3a3a40');
+          R(ctx, px + 11, py + 12, 1, 2, P.metalXd);
         }
-        break;
-      }
-      case 'T': {
-        R(ctx, px + 1, py + 11, 14, 5, P.woodDk);
-        R(ctx, px + 1, py + 11, 14, 1, P.wood);
-        R(ctx, px + 2, py + 2, 12, 10, P.tvBody);
-        R(ctx, px + 2, py + 2, 12, 1, '#6f6964');
-        R(ctx, px + 3, py + 3, 8, 7, P.tvDk);
-        R(ctx, px + 4, py + 4, 6, 5, P.screen);
+        R(ctx, px + 2, py, 12, 10, P.tvBody);
+        R(ctx, px + 2, py, 12, 1, '#6f6964');
+        R(ctx, px + 3, py + 1, 8, 7, P.tvDk);
+        R(ctx, px + 4, py + 2, 6, 5, P.screen);
+        R(ctx, px + 12, py + 2, 1, 1, P.metal);
         R(ctx, px + 12, py + 4, 1, 1, P.metal);
-        R(ctx, px + 12, py + 6, 1, 1, P.metal);
-        R(ctx, px + 12, py + 8, 1, 2, P.metalXd);
         break;
       }
-      case 'F': {
-        R(ctx, px + 2, py + 1, 12, 15, P.white);
-        R(ctx, px + 2, py + 1, 12, 1, P.metalLt);
-        R(ctx, px + 2, py + 6, 12, 1, P.whiteSh);
-        R(ctx, px + 13, py + 1, 1, 15, P.whiteSh);
-        R(ctx, px + 4, py + 3, 1, 2, P.metalDk);
-        R(ctx, px + 4, py + 8, 1, 4, P.metalDk);
+      case 'F': { // 冷蔵庫
+        if (room === '厨房') { // 業務用（ステンレス）
+          const s = stackPos(map, x, y, 'F');
+          const r = runPos(map, x, y, 'F');
+          if (s.n > 1) {
+            clipTile(ctx, px, py, () => {
+              const by = py - s.i * 16, H = s.n * 16;
+              R(ctx, px + 1, by + 1, 14, H - 1, '#b9c0c4');
+              R(ctx, px + 1, by + 1, 14, 2, '#dfe4e6');
+              R(ctx, px + 1, by + H / 2, 14, 1, '#8f979c');
+              R(ctx, px + 3, by + 6, 1, 6, P.metalXd);
+              R(ctx, px + 3, by + H / 2 + 4, 1, 6, P.metalXd);
+              R(ctx, px + 1, by + H - 1, 14, 1, '#6d7378');
+            });
+          } else {
+            R(ctx, px + (r.i ? 0 : 1), py + 2, r.i ? 15 : 15, 14, '#b9c0c4');
+            R(ctx, px + (r.i ? 0 : 1), py + 2, 15, 2, '#dfe4e6');
+            R(ctx, px + (r.i ? 0 : 1), py + 9, 15, 1, '#8f979c');
+            R(ctx, px + (r.i ? 12 : 3), py + 5, 1, 3, P.metalXd);
+            R(ctx, px + (r.i ? 0 : 1), py + 15, 15, 1, '#6d7378');
+          }
+          break;
+        }
+        const big = room === '食堂';
+        R(ctx, px + 2, py + (big ? 0 : 3), 12, big ? 16 : 13, P.white);
+        R(ctx, px + 2, py + (big ? 0 : 3), 12, 1, P.metalLt);
+        R(ctx, px + 2, py + (big ? 6 : 8), 12, 1, P.whiteSh);
+        R(ctx, px + 13, py + (big ? 0 : 3), 1, big ? 16 : 13, P.whiteSh);
+        R(ctx, px + 4, py + (big ? 2 : 5), 1, 2, P.metalDk);
+        R(ctx, px + 4, py + (big ? 8 : 10), 1, 3, P.metalDk);
         R(ctx, px + 2, py + 15, 12, 1, P.metalXd);
+        if (!big) { R(ctx, px + 8, py + 4, 3, 2, '#e05a4a'); R(ctx, px + 9, py + 10, 2, 2, '#f0d040'); }
         break;
       }
-      case 's': {
-        R(ctx, px, py + 1, 16, 15, P.metal);
-        R(ctx, px, py + 1, 16, 1, P.metalLt);
+      case 'v': { // コカ・コーラの自販機
+        R(ctx, px + 1, py, 14, 16, '#c8332e');
+        R(ctx, px + 1, py, 14, 1, '#e05a4a');
+        R(ctx, px + 2, py + 2, 12, 5, '#f3efe4');
+        for (let i = 0; i < 6; i++) R(ctx, px + 3 + i * 2, py + 3, 1, 3, ['#c8332e', '#2f2f36', '#e0b030', '#4aa04a', '#c8332e', '#3a6ad8'][i]);
+        R(ctx, px + 3, py + 8, 6, 1, P.white);
+        R(ctx, px + 3, py + 9, 4, 1, P.white);
+        R(ctx, px + 11, py + 8, 2, 3, '#3a302b');
+        R(ctx, px + 3, py + 12, 10, 3, '#3a302b');
+        R(ctx, px + 1, py + 15, 14, 1, '#7a1f1c');
+        break;
+      }
+      case 'D': { // ダイドーの自販機（当たり付き）
+        R(ctx, px + 1, py, 14, 16, '#e9edf0');
+        R(ctx, px + 1, py, 14, 1, P.white);
+        R(ctx, px + 1, py + 1, 14, 2, '#2f5fb0');
+        R(ctx, px + 2, py + 4, 12, 4, '#cfe0e6');
+        for (let i = 0; i < 6; i++) R(ctx, px + 3 + i * 2, py + 5, 1, 2, ['#8a5a3a', '#e0b030', '#4aa04a', '#d8603a', '#3a6ad8', '#8a5a3a'][i]);
+        R(ctx, px + 3, py + 9, 6, 2, '#2a3a2a');
+        R(ctx, px + 4, py + 9, 1, 2, '#7ae07a');
+        R(ctx, px + 6, py + 9, 1, 2, '#7ae07a');
+        R(ctx, px + 11, py + 9, 2, 3, '#5a5f66');
+        R(ctx, px + 3, py + 12, 10, 3, '#3a3a40');
+        R(ctx, px + 1, py + 15, 14, 1, '#8a9297');
+        break;
+      }
+      case 'y': { // 食事を置いておくケース
+        const s = stackPos(map, x, y, 'y');
+        R(ctx, px + 1, py, 14, 16, '#9a9ea2');
+        if (s.i === 0) R(ctx, px + 1, py, 14, 2, '#c3c7ca');
+        R(ctx, px + 2, py + (s.i === 0 ? 2 : 0), 12, s.i === 0 ? 14 : 15, '#d8e6ea');
+        for (let j = 0; j < 3; j++) {
+          const yy = py + (s.i === 0 ? 3 : 1) + j * 5;
+          R(ctx, px + 2, yy + 3, 12, 1, '#9a9ea2');
+          if (rnd(x, y, j) < 0.7) { R(ctx, px + 3, yy + 1, 5, 2, '#e8b070'); R(ctx, px + 9, yy + 1, 3, 2, P.white); }
+        }
+        if (s.i === s.n - 1) R(ctx, px + 1, py + 15, 14, 1, '#6d7378');
+        break;
+      }
+      case 'f': { // 炊飯器・電気ポット・味噌汁の保温機
+        const s = stackPos(map, x, y, 'f');
+        R(ctx, px + 1, py, 14, 16, '#b8b4aa');
+        R(ctx, px + 1, py, 1, 16, '#8f8b82');
+        if (s.i === 0) {
+          R(ctx, px + 1, py, 14, 1, '#d0ccc2');
+          R(ctx, px + 3, py + 2, 9, 7, P.white);
+          R(ctx, px + 4, py + 1, 7, 2, '#e8e4dc');
+          R(ctx, px + 5, py + 6, 3, 1, '#e05a4a');
+          R(ctx, px + 4, py + 10, 5, 5, '#d8d4cc');
+          R(ctx, px + 5, py + 9, 3, 1, '#5a5f66');
+          R(ctx, px + 10, py + 11, 3, 3, '#3a6ad8');
+        } else {
+          R(ctx, px + 3, py + 2, 10, 9, '#c9d0d4');
+          R(ctx, px + 3, py + 2, 10, 1, '#e4e9eb');
+          R(ctx, px + 5, py + 4, 6, 2, '#8a5a3a');
+          R(ctx, px + 4, py + 12, 8, 2, '#8f979c');
+        }
+        if (s.i === s.n - 1) R(ctx, px + 1, py + 15, 14, 1, '#6d7378');
+        break;
+      }
+      case 'r': { // 電子レンジとトースター
+        R(ctx, px + 1, py + 5, 14, 11, '#b8b4aa');
+        R(ctx, px + 1, py + 15, 14, 1, '#6d7378');
+        R(ctx, px + 2, py, 12, 7, '#e9e5da');
+        R(ctx, px + 2, py, 12, 1, P.white);
+        R(ctx, px + 3, py + 2, 7, 4, '#3a3a40');
+        R(ctx, px + 11, py + 2, 2, 1, '#5a5f66');
+        R(ctx, px + 4, py + 9, 7, 5, '#d0d4d8');
+        R(ctx, px + 5, py + 9, 2, 1, '#3a3a40');
+        R(ctx, px + 8, py + 9, 2, 1, '#3a3a40');
+        break;
+      }
+      case 'J': { // 電話の机
+        R(ctx, px + 1, py + 4, 14, 8, P.woodLt);
+        R(ctx, px + 1, py + 4, 14, 1, '#c18d55');
+        R(ctx, px + 1, py + 12, 14, 3, P.wood);
+        R(ctx, px + 4, py + 5, 8, 5, '#e8e2d0');
+        R(ctx, px + 4, py + 5, 8, 2, '#3a3a40');
+        R(ctx, px + 5, py + 8, 6, 1, '#9a9488');
+        R(ctx, px + 12, py + 6, 2, 3, P.white);
+        break;
+      }
+      case 'R': { // 食事表（玄関の、食堂の入口わき）
+        R(ctx, px + 1, py + 1, 11, 14, '#7a5a3a');
+        R(ctx, px + 2, py + 2, 9, 12, P.white);
+        for (let j = 0; j < 5; j++) R(ctx, px + 2, py + 4 + j * 2, 9, 1, '#b8c0c8');
+        R(ctx, px + 4, py + 2, 1, 12, '#b8c0c8');
+        for (let i = 0; i < 6; i++) if (rnd(x, y, i) < 0.6) R(ctx, px + 5 + i, py + 5 + ((rnd(x, y, i + 9) * 4) | 0) * 2, 1, 1, i & 1 ? '#d8433a' : '#3a5ab8');
+        R(ctx, px + 1, py + 15, 11, 1, 'rgba(0,0,0,0.2)');
+        break;
+      }
+      case 's': { // 流し
+        if (room === '厨房') {
+          const r = runPos(map, x, y, 's');
+          R(ctx, px, py + 1, 16, 15, '#c9d0d4');
+          R(ctx, px, py + 1, 16, 1, '#e4e9eb');
+          R(ctx, px + (r.i ? 0 : 2), py + 4, r.i ? 14 : 14, 8, '#9aa3a9');
+          R(ctx, px + (r.i ? 0 : 3), py + 5, 13, 6, '#b9c0c4');
+          if (r.i === 0) R(ctx, px + 2, py + 1, 1, 15, '#9aa3a9');
+          R(ctx, px + 8, py + 2, 2, 3, P.metalXd);
+          R(ctx, px, py + 13, 16, 3, '#9aa3a9');
+          break;
+        }
+        R(ctx, px + 1, py + 1, 14, 15, P.metal);
+        R(ctx, px + 1, py + 1, 14, 1, P.metalLt);
         R(ctx, px + 3, py + 4, 10, 7, P.metalDk);
         R(ctx, px + 4, py + 5, 8, 5, '#b9c0c4');
         R(ctx, px + 7, py + 2, 2, 3, P.metalXd);
-        R(ctx, px, py + 13, 16, 3, P.metalDk);
-        R(ctx, px + 5, py + 6, 3, 2, P.white);
+        R(ctx, px + 1, py + 13, 14, 3, P.metalDk);
+        if (rnd(x, y, 2) < 0.5) R(ctx, px + 5, py + 6, 3, 2, P.white);
         break;
       }
-      case 'o': {
-        R(ctx, px, py + 1, 16, 15, P.metal);
-        R(ctx, px, py + 1, 16, 1, P.metalLt);
-        R(ctx, px + 2, py + 3, 5, 5, P.ink);
-        R(ctx, px + 9, py + 3, 5, 5, P.ink);
-        R(ctx, px + 3, py + 4, 3, 3, '#5a5450');
-        R(ctx, px + 10, py + 4, 3, 3, '#5a5450');
-        R(ctx, px + 9, py + 2, 5, 5, '#d0d4d8');
-        R(ctx, px + 10, py + 3, 3, 3, '#e8ecee');
-        R(ctx, px + 13, py + 3, 2, 1, P.metalXd);
-        R(ctx, px, py + 10, 16, 6, P.metalDk);
-        R(ctx, px + 3, py + 12, 2, 2, P.ink);
-        R(ctx, px + 11, py + 12, 2, 2, P.ink);
+      case 'o': { // コンロ
+        if (room === '厨房') {
+          const r = runPos(map, x, y, 'o');
+          R(ctx, px, py + 1, 16, 15, '#8a9297');
+          R(ctx, px, py + 1, 16, 1, '#b0b8bd');
+          R(ctx, px + 3, py + 3, 10, 8, '#2f2f36');
+          disc(ctx, px + 8, py + 7, 3, '#5a5f66');
+          R(ctx, px + 7, py + 6, 3, 3, '#2f2f36');
+          if (r.i === 1) { R(ctx, px + 3, py + 1, 10, 9, '#9aa3a9'); R(ctx, px + 4, py + 1, 8, 2, '#c9d0d4'); }
+          R(ctx, px, py + 12, 16, 4, '#6d7378');
+          R(ctx, px + 4, py + 13, 2, 2, P.ink);
+          R(ctx, px + 10, py + 13, 2, 2, P.ink);
+          break;
+        }
+        R(ctx, px + 1, py + 2, 14, 14, P.metal);
+        R(ctx, px + 1, py + 2, 14, 1, P.metalLt);
+        R(ctx, px + 2, py + 4, 5, 5, P.ink);
+        R(ctx, px + 9, py + 4, 5, 5, P.ink);
+        R(ctx, px + 3, py + 5, 3, 3, '#5a5450');
+        R(ctx, px + 10, py + 5, 3, 3, '#5a5450');
+        R(ctx, px + 9, py + 3, 5, 4, '#d0d4d8');
+        R(ctx, px + 1, py + 11, 14, 5, P.metalDk);
+        R(ctx, px + 4, py + 13, 2, 2, P.ink);
+        R(ctx, px + 10, py + 13, 2, 2, P.ink);
+        break;
+      }
+      case 'i': { // 掃除用の流し
+        R(ctx, px + 2, py + 4, 12, 12, '#d8dcd6');
+        R(ctx, px + 2, py + 4, 12, 1, P.white);
+        R(ctx, px + 4, py + 6, 8, 6, '#a9b1ae');
+        R(ctx, px + 7, py + 2, 2, 4, P.metalXd);
+        R(ctx, px + 2, py + 14, 12, 2, '#a9b1ae');
+        R(ctx, px + 12, py + 1, 2, 9, '#4a8ad0');
         break;
       }
       case 'L': {
+        if (roof) { // 屋上の外灯
+          R(ctx, px + 4, py + 13, 8, 3, 'rgba(0,0,0,0.18)');
+          R(ctx, px + 7, py + 3, 2, 12, '#5a5f66');
+          R(ctx, px + 5, py, 6, 4, '#3f444a');
+          R(ctx, px + 6, py + 3, 4, 2, '#fff1c0');
+          R(ctx, px + 6, py + 13, 4, 2, '#4a4f55');
+          break;
+        }
+        if (room === '食堂') { // 小さな手洗い
+          R(ctx, px + 3, py + 1, 10, 9, P.white);
+          R(ctx, px + 4, py + 3, 8, 5, '#cfe0e6');
+          R(ctx, px + 7, py + 1, 2, 3, P.metalDk);
+          R(ctx, px + 3, py + 10, 10, 2, P.whiteSh);
+          R(ctx, px + 7, py + 12, 2, 4, P.metalDk);
+          break;
+        }
+        // 洗面台
         R(ctx, px + 1, py + 1, 14, 15, '#c8c2b0');
         R(ctx, px + 2, py + 2, 12, 8, P.white);
         R(ctx, px + 4, py + 4, 8, 5, '#cfe0e6');
         R(ctx, px + 7, py + 1, 2, 3, P.metalDk);
         R(ctx, px + 1, py + 11, 14, 5, '#b2ab98');
-        R(ctx, px + 12, py + 11, 2, 3, ['#e0604a', '#4a8ad0', '#5aa05a'][(rnd(x, y, 1) * 3) | 0]);
+        for (let i = 0; i < 3; i++) R(ctx, px + 3 + i * 2, py + 12, 1, 3, ['#e0604a', '#4a8ad0', '#5aa05a', '#f0d040'][(rnd(x, y, i) * 4) | 0]);
         break;
       }
-      case 'W': {
-        R(ctx, px + 1, py + 1, 14, 15, P.white);
-        R(ctx, px + 1, py + 1, 14, 2, '#9ec0d8');
-        R(ctx, px + 2, py + 4, 7, 7, P.whiteSh);
-        R(ctx, px + 3, py + 5, 5, 5, '#c9d6dc');
-        R(ctx, px + 10, py + 4, 4, 5, P.whiteSh);
-        R(ctx, px + 1, py + 13, 14, 3, P.whiteSh);
-        R(ctx, px + 3, py + 1, 1, 1, P.ink);
-        R(ctx, px + 6, py + 1, 1, 1, P.ink);
-        break;
-      }
-      case 'C': {
-        const l = nb(-1, 0) === 'C', r = nb(1, 0) === 'C';
+      case 'C': { // トイレの個室
         R(ctx, px, py, 16, 16, '#cbd3cf');
         R(ctx, px + 4, py + 2, 8, 6, P.white);
         R(ctx, px + 6, py + 3, 4, 4, '#dfe8ec');
         R(ctx, px + 2, py + 9, 12, 7, '#9ab8c6');
         R(ctx, px + 2, py + 9, 12, 1, '#7a98a6');
         R(ctx, px + 11, py + 12, 2, 1, (x + y) % 3 ? '#5aa05a' : '#d8433a');
-        if (!l) R(ctx, px, py, 2, 16, '#a9b3ae');
+        if (nb(-1, 0) !== 'C') R(ctx, px, py, 2, 16, '#a9b3ae');
         R(ctx, px + 14, py, 2, 16, '#a9b3ae');
-        if (r) R(ctx, px + 15, py, 1, 16, '#8f9a95');
         break;
       }
       case 'u': {
@@ -750,6 +1152,7 @@
         R(ctx, px + 5, py + 2, 6, 6, '#dfe8ec');
         R(ctx, px + 4, py + 9, 8, 1, P.whiteSh);
         R(ctx, px + 7, py, 2, 1, P.metalDk);
+        R(ctx, px + 14, py, 1, 10, '#a9b3ae');
         break;
       }
       case 'O': {
@@ -762,13 +1165,21 @@
         if (!Dn) R(ctx, px, py + 13, 16, 3, '#b6cbd3');
         break;
       }
-      case 'h': {
-        R(ctx, px + 6, py, 4, 3, P.metalDk);
-        R(ctx, px + 7, py + 3, 2, 1, P.metalXd);
-        R(ctx, px + 3, py + 8, 6, 5, '#e8c22a');
-        R(ctx, px + 4, py + 9, 4, 3, '#f6d85a');
-        R(ctx, px + 10, py + 9, 4, 4, '#e88aa0');
-        R(ctx, px + 10, py + 13, 4, 1, '#c96a80');
+      case 'h': { // シャワー（壁についている向きで描く）
+        const wallUp = isWall(nb(0, -1)), wallR = isWall(nb(1, 0));
+        if (wallUp && !(wallR && !isWall(nb(-1, 0)) && nb(-1, 0) !== 'h')) {
+          R(ctx, px + 6, py, 4, 3, P.metalDk);
+          R(ctx, px + 7, py + 3, 2, 1, P.metalXd);
+          R(ctx, px + 3, py + 9, 5, 4, '#e8c22a');
+          R(ctx, px + 4, py + 10, 3, 2, '#f6d85a');
+          R(ctx, px + 10, py + 9, 4, 4, '#e88aa0');
+        } else {
+          R(ctx, px + 13, py + 6, 3, 4, P.metalDk);
+          R(ctx, px + 12, py + 7, 1, 2, P.metalXd);
+          R(ctx, px + 5, py + 4, 5, 4, '#e8c22a');
+          R(ctx, px + 6, py + 5, 3, 2, '#f6d85a');
+          R(ctx, px + 5, py + 10, 4, 4, '#e88aa0');
+        }
         break;
       }
       case 'l': {
@@ -780,57 +1191,82 @@
         }
         break;
       }
-      case 'g': {
-        const L = nb(-1, 0) === 'g', Rr = nb(1, 0) === 'g', U = nb(0, -1) === 'g', Dn = nb(0, 1) === 'g';
-        R(ctx, px, py, 16, 16, '#8f6a42');
-        if (!U) R(ctx, px, py, 16, 2, '#b08654');
-        for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) {
-          const ox = px + 1 + i * 8 - (L ? 1 : 0) + (i ? 0 : 0), oy = py + (U ? 1 : 3) + j * 7;
-          R(ctx, ox, oy, 6, 5, '#a87c4c');
-          R(ctx, ox + 1, oy + 1, 3, 1, P.plate);
-          R(ctx, ox + 4, oy + 3, 1, 1, P.metalXd);
+      case 'g': { // 下駄箱（クリーム色の小さな扉がずらり）
+        const s = stackPos(map, x, y, 'g');
+        R(ctx, px + 2, py, 14, 16, '#e3dcc4');
+        R(ctx, px + 2, py, 1, 16, '#b8b098');
+        if (s.i === 0) R(ctx, px + 2, py, 14, 2, '#f2ecd8');
+        for (let j = 0; j < 3; j++) for (let i = 0; i < 2; i++) {
+          const ox = px + 4 + i * 6, oy = py + (s.i === 0 ? 3 : 1) + j * 5;
+          R(ctx, ox, oy, 5, 4, '#d4ccb2');
+          R(ctx, ox + 1, oy + 1, 2, 1, P.white);
+          R(ctx, ox + 4, oy + 2, 1, 1, P.metalXd);
         }
-        if (!L) R(ctx, px, py, 1, 16, '#6a4c2c');
-        if (!Rr) R(ctx, px + 15, py, 1, 16, '#6a4c2c');
-        if (!Dn) R(ctx, px, py + 15, 16, 1, '#5a3f24');
+        if (s.i === s.n - 1) R(ctx, px + 2, py + 15, 14, 1, '#9a9278');
         break;
       }
-      case 'm': {
-        R(ctx, px + 1, py + 1, 14, 14, P.metalDk);
-        for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) {
-          R(ctx, px + 2 + i * 4, py + 2 + j * 4, 3, 3, P.metal);
-          R(ctx, px + 2 + i * 4, py + 3 + j * 4, 3, 1, P.metalXd);
+      case 'm': { // 郵便受け（木の棚の上に灰色の小箱）
+        const s = stackPos(map, x, y, 'm');
+        if (s.i === 0) {
+          R(ctx, px + 2, py, 14, 16, '#8a9297');
+          R(ctx, px + 2, py, 14, 2, '#b0b8bd');
+          for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) {
+            R(ctx, px + 3 + i * 4, py + 3 + j * 4, 3, 3, '#a9b1b6');
+            R(ctx, px + 3 + i * 4, py + 4 + j * 4, 3, 1, '#5f666b');
+          }
+        } else {
+          R(ctx, px + 2, py, 14, 16, P.wood);
+          R(ctx, px + 2, py, 1, 16, P.woodDk);
+          R(ctx, px + 8, py, 1, 16, P.woodDk);
+          R(ctx, px + 6, py + 6, 1, 2, P.woodXd);
+          R(ctx, px + 10, py + 6, 1, 2, P.woodXd);
+          if (s.i === s.n - 1) R(ctx, px + 2, py + 15, 14, 1, P.woodXd);
         }
-        R(ctx, px + 6, py + 6, 3, 1, P.white);
-        R(ctx, px + 1, py + 15, 14, 1, P.metalXd);
         break;
       }
-      case 'p': {
-        R(ctx, px + 2, py + 6, 12, 9, P.woodLt);
-        R(ctx, px + 2, py + 14, 12, 2, P.wood);
-        R(ctx, px + 4, py + 4, 8, 7, P.pink);
-        R(ctx, px + 4, py + 4, 8, 1, '#f8b0c4');
-        R(ctx, px + 4, py + 3, 8, 2, P.pinkDk);
-        R(ctx, px + 6, py + 7, 4, 3, '#f8d0dc');
-        R(ctx, px + 7, py + 8, 2, 1, P.pinkDk);
+      case 'S': { // 布団
+        const L = nb(-1, 0) === 'S';
+        R(ctx, px + (L ? 0 : 1), py + 1, 15, 14, P.sheet);
+        R(ctx, px + (L ? 0 : 2), py + 2, 14, 12, '#d0883a');
+        R(ctx, px + (L ? 0 : 2), py + 2, 14, 1, '#e0a05a');
+        for (let i = 0; i < 4; i++) R(ctx, px + 2 + i * 4, py + 5 + (i & 1) * 4, 2, 2, '#b86e2a');
+        if (!L) { R(ctx, px + 2, py + 3, 4, 10, P.white); R(ctx, px + 2, py + 12, 4, 1, P.sheetSh); }
+        R(ctx, px + (L ? 0 : 1), py + 15, 15, 1, P.sheetSh);
         break;
       }
-      case 'v': {
-        R(ctx, px + 1, py - 6, 14, 22, '#c8332e');
-        R(ctx, px + 1, py - 6, 14, 2, '#e05a4a');
-        R(ctx, px + 2, py - 3, 12, 8, '#f3efe4');
-        for (let i = 0; i < 5; i++) {
-          R(ctx, px + 3 + i * 2, py - 2, 1, 3, ['#3a6ad8', '#e0b030', '#4aa04a', '#d8603a', '#8a5a3a'][i]);
-          R(ctx, px + 3 + i * 2, py + 2, 1, 2, ['#e0b030', '#3a6ad8', '#d8603a', '#4aa04a', '#3a6ad8'][i]);
-        }
-        R(ctx, px + 3, py + 7, 6, 3, P.ink);
-        R(ctx, px + 11, py + 7, 2, 4, '#3a302b');
-        R(ctx, px + 3, py + 12, 10, 3, '#3a302b');
-        R(ctx, px + 1, py + 15, 14, 1, '#7a1f1c');
+      case 'a': { // 黒い革のソファ
+        const L = nb(-1, 0) === 'a', Rr = nb(1, 0) === 'a';
+        const x0 = L ? 0 : 1, x1 = Rr ? 16 : 15;
+        R(ctx, px + x0, py + 2, x1 - x0, 6, '#2b2b30');
+        R(ctx, px + x0, py + 2, x1 - x0, 1, '#4a4a52');
+        R(ctx, px + x0, py + 8, x1 - x0, 6, '#3a3a42');
+        R(ctx, px + x0, py + 8, x1 - x0, 1, '#5a5a64');
+        if (!L) R(ctx, px + 1, py + 4, 3, 11, '#2b2b30');
+        if (!Rr) R(ctx, px + 12, py + 4, 3, 11, '#2b2b30');
+        if (L) R(ctx, px, py + 9, 1, 4, '#26262b');
+        R(ctx, px + x0, py + 14, x1 - x0, 1, '#1c1c20');
+        R(ctx, px + (L ? 4 : 6), py + 4, 2, 1, '#6a6a74');
+        break;
+      }
+      case 'q': { // 白い丸テーブルとランプ
+        disc(ctx, px + 8, py + 9, 6, '#d9d4c6');
+        disc(ctx, px + 8, py + 8, 6, P.white);
+        R(ctx, px + 7, py + 13, 2, 3, '#b8b2a2');
+        R(ctx, px + 7, py + 4, 2, 4, '#c9a46a');
+        R(ctx, px + 5, py, 6, 4, '#f6e3a8');
+        R(ctx, px + 5, py, 6, 1, '#fff4d0');
+        break;
+      }
+      case 'W': {
+        R(ctx, px + 3, py + 2, 10, 6, P.white);
+        R(ctx, px + 3, py + 2, 10, 1, '#ffffff');
+        R(ctx, px + 4, py + 8, 8, 4, '#e8e4d8');
+        R(ctx, px + 4, py + 12, 1, 3, '#b8b2a2');
+        R(ctx, px + 11, py + 12, 1, 3, '#b8b2a2');
         break;
       }
       case 'P': {
-        if (map.kind === 'roof') {
+        if (roof) {
           R(ctx, px + 1, py + 7, 14, 8, '#9a6a44');
           R(ctx, px + 1, py + 7, 14, 1, '#b8845a');
           for (let i = 0; i < 3; i++) {
@@ -845,7 +1281,6 @@
         R(ctx, px + 3, py + 3, 4, 7, P.leafB);
         R(ctx, px + 9, py + 2, 4, 8, P.leafA);
         R(ctx, px + 6, py + 1, 4, 9, P.leafHi);
-        R(ctx, px + 7, py + 4, 2, 6, P.leafC);
         break;
       }
       case 'G': {
@@ -874,18 +1309,27 @@
         }
         break;
       }
-      // 屋上
-      case 'Z': {
-        const L = nb(-1, 0) === 'Z', Rr = nb(1, 0) === 'Z', U = nb(0, -1) === 'Z', Dn = nb(0, 1) === 'Z';
-        R(ctx, px, py, 16, 16, '#b7c3c8');
-        for (let i = 0; i < 16; i += 5) R(ctx, px + i, py, 1, 16, '#9eacb2');
-        R(ctx, px, py + 8, 16, 1, '#9eacb2');
-        if (!U) R(ctx, px, py, 16, 2, '#d3dde1');
-        if (!Dn) { R(ctx, px, py + 11, 16, 5, '#5f6a70'); R(ctx, px + 2, py + 11, 2, 5, '#3e464b'); R(ctx, px + 12, py + 11, 2, 5, '#3e464b'); }
-        if (!L) R(ctx, px, py, 1, 16, '#7f8d93');
-        if (!Rr) R(ctx, px + 15, py, 1, 16, '#7f8d93');
+      case 'Z': { // 灯油のポリタンク・ドラム缶
+        const k = rnd(x, y, 1);
+        if (k < 0.35) {
+          R(ctx, px + 3, py + 2, 10, 13, '#5f6a70');
+          R(ctx, px + 3, py + 2, 10, 2, '#8a969c');
+          R(ctx, px + 3, py + 7, 10, 1, '#4a545a');
+          R(ctx, px + 3, py + 11, 10, 1, '#4a545a');
+          R(ctx, px + 9, py + 2, 2, 1, '#3a3a40');
+        } else {
+          for (let i = 0; i < 2; i++) {
+            const c = rnd(x, y, i + 3) < 0.6 ? '#c8332e' : '#2f5fb0';
+            R(ctx, px + 1 + i * 7, py + 5, 6, 10, c);
+            R(ctx, px + 1 + i * 7, py + 5, 6, 1, mix(c, '#ffffff', 0.3));
+            R(ctx, px + 2 + i * 7, py + 3, 2, 2, c);
+            R(ctx, px + 2 + i * 7, py + 2, 2, 1, '#f0d040');
+            R(ctx, px + 1 + i * 7, py + 14, 6, 1, mix(c, '#000000', 0.3));
+          }
+        }
         break;
       }
+      // 屋上
       case '|': {
         const L = nb(-1, 0) === '|', Rr = nb(1, 0) === '|';
         R(ctx, px, py + 3, 16, 1, P.metalDk);
@@ -913,6 +1357,18 @@
         R(ctx, px + 12, py + 12, 2, 3, P.metalXd);
         break;
       }
+      case '^': { // バーベキューのコンロ
+        R(ctx, px + 2, py + 13, 12, 3, 'rgba(0,0,0,0.18)');
+        R(ctx, px + 3, py + 9, 1, 6, P.metalXd);
+        R(ctx, px + 12, py + 9, 1, 6, P.metalXd);
+        R(ctx, px + 1, py + 4, 14, 6, '#3a3a40');
+        R(ctx, px + 1, py + 4, 14, 1, '#5a5f66');
+        for (let i = 0; i < 6; i++) R(ctx, px + 2 + i * 2, py + 5, 1, 4, '#8a8f96');
+        R(ctx, px + 3, py + 6, 3, 2, '#c8603a');
+        R(ctx, px + 8, py + 5, 4, 2, '#e8a050');
+        R(ctx, px + 9, py + 7, 3, 1, '#f0d040');
+        break;
+      }
     }
   }
 
@@ -931,12 +1387,33 @@
         if (!Rr) R(ctx, px + 15, py, 1, 16, '#7f827e');
         break;
       }
-      case 'f': { // 歩道との境のフェンス
+      case 'f': { // 歩道との境の金網フェンス
         R(ctx, px, py + 14, 16, 2, 'rgba(0,0,0,0.12)');
-        R(ctx, px, py + 5, 16, 1, '#5b6066');
+        for (let j = 0; j < 8; j++)
+          for (let i = 0; i < 16; i += 4) R(ctx, px + i + (j & 1) * 2, py + 5 + j, 1, 1, 'rgba(70,78,84,0.75)');
+        R(ctx, px, py + 4, 16, 1, '#5b6066');
         R(ctx, px, py + 13, 16, 1, '#5b6066');
-        for (let i = 1; i < 16; i += 2) R(ctx, px + i, py + 6, 1, 7, 'rgba(91,96,102,0.45)');
-        R(ctx, px, py + 4, 2, 11, '#4b5056');
+        if (x % 2 === 0) R(ctx, px, py + 3, 2, 12, '#4b5056');
+        break;
+      }
+      case '{': { // 玄関前の階段
+        R(ctx, px, py, 16, 16, P.concHi);
+        for (let j = 0; j < 3; j++) {
+          R(ctx, px, py + 2 + j * 5, 16, 1, P.concSh);
+          R(ctx, px, py + 3 + j * 5, 16, 1, P.conc);
+        }
+        break;
+      }
+      case '}': { // 玄関前の茶色い手すり（低いブロック塀の上）
+        const L = at(map, x - 1, y) === '}', Rr = at(map, x + 1, y) === '}';
+        R(ctx, px, py + 6, 16, 9, P.conc);
+        R(ctx, px, py + 6, 16, 2, P.concHi);
+        R(ctx, px, py + 14, 16, 2, 'rgba(0,0,0,0.15)');
+        R(ctx, px, py + 1, 16, 2, '#8a4b3a');
+        R(ctx, px, py + 1, 16, 1, '#a8644e');
+        if (!L) R(ctx, px + 1, py + 1, 2, 6, '#6e3a2c');
+        if (!Rr) R(ctx, px + 13, py + 1, 2, 6, '#6e3a2c');
+        if (L && Rr) R(ctx, px + 7, py + 1, 2, 6, '#6e3a2c');
         break;
       }
       case 'o': {
@@ -1120,13 +1597,15 @@
           else if (ch !== 't') drawExt(ctx, map, x, y, px, py, ch);
           continue;
         }
+        if (ch === ' ') continue; // 建物の外
         if (isWall(ch)) {
-          if (isOpen(at(map, x, y + 1)) && !(ch === 'H' && y > 0)) wallFace(ctx, map, x, y, px, py, ch);
+          const below = at(map, x, y + 1);
+          if (isOpen(below) && !((ch === 'H' || ch === '0') && y > 0) && !(DOORISH.has(below) && doorVertical(map, x, y + 1))) wallFace(ctx, map, x, y, px, py, ch);
           else wallTop(ctx, map, x, y, px, py, ch);
           continue;
         }
         if (FLOOR.has(ch)) { drawFloor(ctx, ch, x, y, px, py); continue; }
-        if (ch === '+' || ch === 'N') { drawDoor(ctx, map, x, y, px, py, ch, false); continue; }
+        if (DOORISH.has(ch)) { drawDoor(ctx, map, x, y, px, py, ch, false); continue; }
         if (ch === 'E') { drawExitDoor(ctx, map, x, y, px, py); continue; }
         if (ch === 'U' || ch === 'V') { drawStairs(ctx, map, x, y, px, py, ch); continue; }
         drawFloor(ctx, baseFloor(map, x, y), x, y, px, py);
@@ -1187,30 +1666,32 @@
   function drawFacade(ctx, ox, oy, o) {
     const u = o.u, rh = o.roofH, fh = o.floorH;
     const cols = facadeColumns();
-    const n = cols[0].length;
+    const n = cols[0].length; // 2・3階の幅（56 列）
+    const extra = cols[2].length - n; // 1階だけ東に張り出した灯油庫
     const W = n * u, H = rh + fh * 3;
     const big = u >= 8;
     const lit = o.lit || 0;
+    const t1 = Math.max(1, Math.round(u / 8));
     // 屋根
     R(ctx, ox, oy, W, rh, '#8d8e86');
-    R(ctx, ox, oy, W, Math.max(1, u / 8), P.concHi);
-    R(ctx, ox, oy, Math.max(1, u / 8), rh, P.concHi);
-    R(ctx, ox + W - Math.max(1, u / 8), oy, Math.max(1, u / 8), rh, P.concSh);
+    R(ctx, ox, oy, W, t1, P.concHi);
+    R(ctx, ox, oy, t1, rh, P.concHi);
+    R(ctx, ox + W - t1, oy, t1, rh, P.concSh);
     if (big) for (let i = 3; i < n; i += 3) R(ctx, ox + i * u, oy + 3, 1, rh - 8, '#7f8078');
-    // 塔屋（階段室）：航空写真では屋上のほぼ中央・北寄り（x20〜25）
+    // 塔屋（階段室）：屋上マップの x25〜30
     const ph = Math.round(rh * 0.55);
-    const hx = ox + u * 20, hw = u * 6;
-    R(ctx, hx, oy + 1, hw, ph, P.concHi);
-    R(ctx, hx, oy + 1 + ph, hw, rh - ph - Math.max(2, u / 4), P.conc);
+    const hx = ox + u * 25, hw = u * 6;
+    R(ctx, hx, oy + 1, hw, ph, FACADE.hi);
+    R(ctx, hx, oy + 1 + ph, hw, rh - ph - Math.max(2, u / 4), FACADE.wall);
     if (big) {
-      R(ctx, hx + u * 2.6, oy + 1 + ph + 2, u * 0.9, rh - ph - 7, '#7a8088');
-      R(ctx, hx, oy + 1 + ph, hw, 1, P.concSh);
+      R(ctx, hx + u * 3, oy + 1 + ph + 2, u * 0.9, rh - ph - 7, P.door);
+      R(ctx, hx, oy + 1 + ph, hw, 1, FACADE.sh);
     }
     // 高架水槽（塔屋の上）
     const tw = u * 3, th = Math.max(3, Math.round(rh * 0.42));
     const tx = hx + u * 1.5, ty = oy + 1 - Math.round(th * 0.6);
     R(ctx, tx, ty, tw, th, '#b9c5ca');
-    R(ctx, tx, ty, tw, Math.max(1, u / 8), '#d6e0e3');
+    R(ctx, tx, ty, tw, t1, '#d6e0e3');
     if (big) for (let i = 1; i < 3; i++) R(ctx, tx + i * u, ty + 3, 1, th - 4, '#9eacb2');
     // アンテナ
     if (big) {
@@ -1220,32 +1701,56 @@
       R(ctx, ox + u * 12.5, oy - 4, 1, 5, P.ink);
       R(ctx, ox + u * 12, oy - 3, u, 1, P.ink);
     }
-    // 手すり壁の正面
+    // 手すり壁の正面と、その上の茶色い手すり
     const pr = Math.max(2, Math.round(u / 4));
-    R(ctx, ox, oy + rh - pr, W, pr, P.concHi);
+    R(ctx, ox, oy + rh - pr, W, pr, FACADE.hi);
+    if (big) {
+      R(ctx, ox, oy + rh - pr - 7, W, 1, '#8a4b3a');
+      R(ctx, ox, oy + rh - pr - 3, W, 1, '#8a4b3a');
+      for (let i = 0; i < W; i += 8) R(ctx, ox + i, oy + rh - pr - 7, 1, 7, '#6e3a2c');
+    }
     // 各階
     for (let f = 0; f < 3; f++) {
       const fy = oy + rh + f * fh;
-      R(ctx, ox, fy, W, fh, P.conc);
+      R(ctx, ox, fy, W, fh, FACADE.wall);
       // 床スラブの線
       const sl = Math.max(1, Math.round(fh / 12));
-      R(ctx, ox, fy, W, sl, P.concHi);
-      R(ctx, ox, fy + sl, W, 1, P.concSh);
+      R(ctx, ox, fy, W, sl, FACADE.hi);
+      R(ctx, ox, fy + sl, W, 1, FACADE.sh);
       const row = cols[f];
+      if (f === 2) drawFacadeTiles(ctx, ox, fy, row, u, fh, big);
       let x = 0;
       while (x < n) {
         const ch = row[x];
         if (ch !== 'w' && ch !== 'E') { x++; continue; }
         let x2 = x;
         while (x2 + 1 < n && row[x2 + 1] === ch) x2++;
-        if (ch === 'w') drawFacadeWindow(ctx, ox + x * u, fy, (x2 - x + 1) * u, fh, u, big, f, x, lit);
-        else drawFacadeEntrance(ctx, ox + x * u, fy, (x2 - x + 1) * u, fh, u, big);
+        const wx = ox + x * u, ww = (x2 - x + 1) * u;
+        if (ch === 'E') drawFacadeEntrance(ctx, wx, fy, ww, fh, u, big);
+        else if (row[x - 1] === 'E' || row[x2 + 1] === 'E') drawFacadeSidelight(ctx, wx, fy, ww, fh, u, big);
+        else if (f === 2 && x2 - x >= 4) drawFacadeBay(ctx, wx, fy, ww, fh, u, big, lit);
+        else drawFacadeWindow(ctx, wx, fy, ww, fh, u, big, f, x, lit);
         x = x2 + 1;
       }
     }
+    // 1階の東の平屋（灯油庫）
+    if (extra > 0) {
+      const ax = ox + W, aw = extra * u, ay = oy + rh + fh * 2;
+      const ar = Math.max(2, Math.round(fh / 2));
+      R(ctx, ax, ay - ar, aw, ar, '#8d8e86');
+      R(ctx, ax, ay - ar, aw, t1, P.concHi);
+      R(ctx, ax, ay, aw, fh, FACADE.wall);
+      R(ctx, ax, ay, aw, Math.max(1, Math.round(fh / 12)), FACADE.hi);
+      R(ctx, ax, ay - ar, t1, ar + fh, FACADE.sh);
+      if (big) { // 鉄の扉
+        R(ctx, ax + aw - u * 2, ay + Math.round(fh * 0.3), u, fh - Math.round(fh * 0.3), '#8a9297');
+        R(ctx, ax + aw - u * 2 + 2, ay + Math.round(fh * 0.3) + 2, u - 4, 1, '#b0b8bd');
+      }
+    }
+    const WA = W + Math.max(0, extra) * u;
     // 雨だれのしみ
     if (big) {
-      ctx.fillStyle = 'rgba(70,60,52,0.10)';
+      ctx.fillStyle = 'rgba(70,60,52,0.08)';
       for (let i = 0; i < 40; i++) {
         const sx = ox + ((rnd(i, 3, 9) * W) | 0);
         const sy = oy + rh + ((rnd(i, 4, 9) * fh * 2.5) | 0);
@@ -1253,33 +1758,78 @@
       }
     }
     // 雨どい
-    for (const c of [5.5, 20.5, 35.5]) {
-      R(ctx, ox + c * u, oy + rh - pr, Math.max(1, u / 8), fh * 3 + pr, P.concDk);
-      if (big) R(ctx, ox + c * u + 1, oy + rh - pr, 1, fh * 3 + pr, '#9a9388');
+    for (const c of [5.5, 20.5, 35.5, 50.5]) {
+      R(ctx, ox + c * u, oy + rh - pr, t1, fh * 3 + pr, P.concDk);
+      if (big) R(ctx, ox + c * u + 1, oy + rh - pr, 1, fh * 3 + pr, '#a8a091');
     }
     // 基礎
     const bs = Math.max(1, Math.round(fh / 10));
-    R(ctx, ox, oy + H - bs, W, bs, P.concDk);
+    R(ctx, ox, oy + H - bs, WA, bs, P.concDk);
     // 夕日（西＝左）からの光
-    const g = ctx.createLinearGradient(ox, 0, ox + W, 0);
+    const g = ctx.createLinearGradient(ox, 0, ox + WA, 0);
     g.addColorStop(0, 'rgba(255,170,90,0.20)');
     g.addColorStop(0.6, 'rgba(255,170,90,0.05)');
     g.addColorStop(1, 'rgba(60,40,90,0.10)');
     ctx.fillStyle = g;
     ctx.fillRect(ox, oy, W, H);
-    // 入口の看板（外光の上に描く）
-    // 玄関わきの壁の看板
+    if (extra > 0) ctx.fillRect(ox + W, oy + rh + fh * 2 - Math.max(2, Math.round(fh / 2)), WA - W, fh + Math.max(2, Math.round(fh / 2)));
+    // 玄関の左の壁の看板（位置は仮）
     const ent = cols[2].indexOf('E');
     if (ent >= 0 && big) {
-      let e2 = ent;
-      while (cols[2][e2 + 1] === 'E') e2++;
       const sign = signBitmap();
       const sw = 3 * u, sh = 18;
-      const sx = Math.round(ox + (e2 + 1) * u), sy = Math.round(oy + rh + fh * 2 + (fh - sh) / 2 + 1);
+      const sx = Math.round(ox + (ent - 4) * u), sy = Math.round(oy + rh + fh * 2 + (fh - sh) / 2 + 1);
       R(ctx, sx, sy - 1, sw, sh + 2, '#4f3420');
       R(ctx, sx + 1, sy, sw - 2, sh, '#efe6cf');
       ctx.drawImage(sign, sx + Math.round((sw - sign.width) / 2), sy - 1);
     }
+  }
+  const FACADE = { wall: '#e6dfcc', hi: '#f0ebdd', sh: '#cbc2ab' };
+
+  // 玄関まわりの壁のタイル（1階の x21〜29）
+  function drawFacadeTiles(ctx, ox, fy, row, u, fh, big) {
+    const ent = row.indexOf('E');
+    if (ent < 0) return;
+    const x0 = ox + (ent - 6) * u, x1 = ox + (ent + 3) * u;
+    const top = fy + Math.round(fh * 0.16);
+    R(ctx, x0, top, x1 - x0, fy + fh - top, '#b9a58a');
+    if (!big) return;
+    for (let y = top; y < fy + fh; y += 3)
+      for (let x = x0 + ((y / 3) & 1); x < x1; x += 3) R(ctx, x, y, 2, 2, rnd(x, y, 5) < 0.3 ? '#a8937a' : rnd(x, y, 6) < 0.2 ? '#cbb89c' : '#bca98d');
+    R(ctx, x0, top, x1 - x0, 1, '#8f7c63');
+  }
+  // 玄関の両わきのガラス
+  function drawFacadeSidelight(ctx, x, y, w, fh, u, big) {
+    const dt = y + Math.round(fh * 0.3);
+    const dh = y + fh - dt;
+    R(ctx, x, dt, w, dh, P.alu);
+    for (let j = 0; j < dh - 2; j++) R(ctx, x + 1, dt + 1 + j, w - 2, 1, mix('#4a5868', '#7a8a9a', j / dh));
+    if (big) {
+      R(ctx, x + 3, dt + 3, 1, 4, '#9fb2c4');
+      R(ctx, x + 1, dt + Math.round(dh * 0.55), w - 2, 1, P.alu);
+    }
+  }
+  // 食堂の道路側：窓が少し張り出して、バルコニーのように見える
+  function drawFacadeBay(ctx, x, y, w, fh, u, big, lit) {
+    const bx = x - u, bw = w + u * 2;
+    const top = y + Math.round(fh * 0.14);
+    const sill = y + Math.round(fh * 0.62);
+    // 張り出しの屋根（ひさし）と影
+    R(ctx, bx - 1, top - Math.max(2, Math.round(fh / 10)), bw + 2, Math.max(2, Math.round(fh / 10)), FACADE.hi);
+    R(ctx, bx - 1, top, bw + 2, 1, P.concDk);
+    // 大きな窓
+    R(ctx, x, top + 1, w, sill - top - 1, P.alu);
+    const gh = sill - top - 3;
+    for (let j = 0; j < gh; j++) R(ctx, x + 1, top + 2 + j, w - 2, 1, lit ? mix('#ffd68a', '#ffb860', j / gh) : mix(P.glassA, P.glassB, j / Math.max(1, gh - 1)));
+    const panes = Math.max(2, Math.round(w / (u * 2)));
+    for (let i = 1; i < panes; i++) R(ctx, Math.round(x + (w * i) / panes), top + 1, 1, sill - top - 1, P.aluDk);
+    if (big) { R(ctx, x + 4, top + 3, 1, 1, P.glassHi); R(ctx, x + 3, top + 4, 1, 1, P.glassHi); }
+    // バルコニーのような腰壁と手すり
+    R(ctx, bx, sill, bw, y + fh - sill, FACADE.hi);
+    R(ctx, bx, sill, bw, Math.max(1, Math.round(fh / 16)), '#8a4b3a');
+    R(ctx, bx + bw - Math.max(1, Math.round(u / 4)), top, Math.max(1, Math.round(u / 4)), y + fh - top, FACADE.sh);
+    R(ctx, bx, y + fh - Math.max(1, Math.round(fh / 10)), bw, Math.max(1, Math.round(fh / 10)), P.concDk);
+    if (big) for (let i = bx + 4; i < bx + bw - 4; i += 6) R(ctx, i, sill + 3, 1, y + fh - sill - 6, FACADE.sh);
   }
 
   function drawFacadeWindow(ctx, x, y, w, fh, u, big, floor, col, lit) {
@@ -1747,9 +2297,9 @@
     drawHills(ctx, w, horizon + 4, '#40244c', 8, 2.1);
     R(ctx, 0, horizon + 4, w, h, '#2f1d38');
     // 寮
-    const u = w >= 200 ? 4 : 3;
-    const fh = 13, rh = 7;
-    const bw = 42 * u;
+    const u = Math.max(2, Math.min(4, Math.floor((w - 16) / 61)));
+    const fh = 5 + u * 2, rh = 3 + u;
+    const bw = 61 * u;
     const bx = Math.round((w - bw) / 2), by = h - 12 - (rh + fh * 3);
     drawFacade(ctx, bx, by, { u, roofH: rh, floorH: fh, lit: 0.35 });
     // 前の駐車スペース・フェンス・歩道・道路（航空写真より）
@@ -1759,7 +2309,7 @@
     R(ctx, 0, gy + 6, w, 2, '#7d7275');
     R(ctx, 0, gy + 8, w, h - gy - 8, '#3b3440');
     for (let x = 3; x < w; x += 11) R(ctx, x, gy + 10, 5, 1, '#d8cfc0');
-    R(ctx, bx + 22 * u, gy, 3 * u, 6, '#8d817b');
+    R(ctx, bx + 27 * u, gy, 2 * u, 6, '#8d817b');
     const side = (x, col) => {
       R(ctx, x, gy - 3, 15, 4, col);
       R(ctx, x + 3, gy - 6, 9, 3, col);
@@ -1773,10 +2323,10 @@
       R(ctx, x, gy - 2, 1, 1, '#d8433a');
       R(ctx, x + 6, gy - 2, 1, 1, '#d8433a');
     };
-    side(bx + 27 * u, '#2a3550');
-    side(bx + 33 * u, '#25252b');
-    rear(bx + 38 * u, '#c4352d');
-    rear(bx - 10, '#e6e3dc');
+    side(bx + 36 * u, '#2a3550');
+    side(bx + 43 * u, '#25252b');
+    rear(bx + 51 * u, '#c4352d');
+    rear(bx - 3 * u - 2, '#e6e3dc');
     // 西のはしの桜
     {
       const x = Math.round(bx - 22), yb = gy + 2, s2 = 1;

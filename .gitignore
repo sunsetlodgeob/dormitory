@@ -1,2 +1,5 @@
 dist/
 __pycache__/
+# 寮の写真は人物が写っているため公開リポジトリに入れない（CLAUDE.md 参照）
+docs/dorm/photos/
+docs/dorm/source/

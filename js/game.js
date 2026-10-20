@@ -29,17 +29,19 @@
     m.h = m.rows.length;
     m.w = m.rows[0].length;
   }
-  const FLOOR_IN = new Set('.,=_~;-%'.split(''));
-  const WALK_EXT = new Set('".:-;^ZE'.split(''));
+  const FLOOR_IN = new Set('.,=_~;-%<*`&'.split(''));
+  const WALK_EXT = new Set('".:-;^ZE{'.split(''));
+  // 通れるドア（$ はカギのかかったドア）
+  const DOORS = '+/N';
   function walkable(map, x, y) {
     const ch = at(map, x, y);
     if (map.kind === 'ext') return WALK_EXT.has(ch);
-    return FLOOR_IN.has(ch) || '+NEUV'.includes(ch);
+    return FLOOR_IN.has(ch) || DOORS.includes(ch) || 'EUV'.includes(ch);
   }
   function placeName(map, x, y) {
     let n = labelAt(map, x, y);
     const ch = at(map, x, y);
-    if (!n && (ch === '+' || ch === 'N')) n = labelAt(map, x, y + 1) || labelAt(map, x, y - 1) || labelAt(map, x + 1, y) || labelAt(map, x - 1, y);
+    if (!n && DOORS.includes(ch)) n = labelAt(map, x, y + 1) || labelAt(map, x, y - 1) || labelAt(map, x + 1, y) || labelAt(map, x - 1, y);
     if (n) return n;
     return map.kind === 'in' ? '廊下' : map.name;
   }
@@ -327,7 +329,6 @@
   function examineTile(x, y, ch) {
     const place = placeName(S.map, S.p.x, S.p.y);
     const special = WORLD.examineAt[S.mapId + ':' + x + ',' + y];
-    if (special === 'board') return say(WORLD.board);
     if (Array.isArray(special)) return say(special);
     if (ch === 'O') {
       return say([{ t: '大きな湯船だ。ひと風呂浴びていく？', choices: ['はい', 'いいえ'], on: (i) => {
@@ -335,17 +336,35 @@
       } }]);
     }
     if (ch === 'v') {
-      return say([{ t: '自動販売機だ。何か買う？', choices: ['買う', 'やめる'], on: (i) => {
-        if (i === 0) say(['ガコン！ ' + ['缶コーヒー', 'あったか〜いお茶', 'コーラ', 'スポーツドリンク'][(Math.random() * 4) | 0] + 'を買った。']);
+      return say([{ t: 'コカ・コーラの自販機だ。何か買う？', choices: ['買う', 'やめる'], on: (i) => {
+        if (i === 0) say(['ガコン！ ' + ['コカ・コーラ', 'ジョージア', 'アクエリアス', '爽健美茶'][(Math.random() * 4) | 0] + 'を買った。']);
       } }]);
     }
-    if (ch === 'p') {
-      return say([{ t: 'ピンク電話だ。実家に電話してみる？', choices: ['かける', 'やめる'], on: (i) => {
-        if (i === 0) say(['…「元気でやってるよ」とだけ伝えて、電話を切った。']);
-      } }]);
+    if (ch === 'D') return dydo();
+    if (ch === 'w') {
+      if (y < 7) return say(['窓の外に、川が見える。']);
+      if (y > 8) return say(['窓の外は道路だ。']);
+      return say(['窓から、外の光が入ってくる。']);
     }
     const lines = WORLD.examine[ch + '@' + place] || WORLD.examine[ch];
     if (lines) say(lines);
+  }
+  // ダイドーの自販機：数字がそろうと、もう 1 本えらべる
+  function dydo() {
+    const drinks = ['缶コーヒー', 'お茶', 'スポーツドリンク', 'オレンジジュース'];
+    say([{ t: 'ダイドーの自販機だ。当たり付き。何か買う？', choices: ['買う', 'やめる'], on: (i) => {
+      if (i !== 0) return;
+      const first = drinks[(Math.random() * drinks.length) | 0];
+      if (Math.random() < 0.3) {
+        say(['ガコン！ ' + first + 'を買った。', 'ピピピピ……「7777」！', { t: '当たりだ！ 10秒以内に、もう1本えらべる！', choices: drinks.slice(0, 3), on: (j) => {
+          sfx('jingle');
+          say(['ガコン！ ' + drinks[j] + 'も、もらった。']);
+        } }]);
+      } else {
+        const n = 7770 + 1 + ((Math.random() * 8) | 0);
+        say(['ガコン！ ' + first + 'を買った。', 'ピピピピ……「' + n + '」。おしい！']);
+      }
+    } }]);
   }
   function talk(n) {
     if (!n.pose) n.dir = n.cat ? (S.p.x > n.x ? 'right' : S.p.x < n.x ? 'left' : n.dir) : OPP[S.p.dir];
