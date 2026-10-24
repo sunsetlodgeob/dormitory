@@ -14,7 +14,7 @@
     const n = 4 + ((year * 7) % 4);
     for (let i = 0; i < n; i++) {
       members.push({
-        name: FAMILY[(k * 5 + i) % FAMILY.length] + ' ' + GIVEN[(k + i * 3) % GIVEN.length],
+        name: FAMILY[k % FAMILY.length] + ' ' + GIVEN[Math.floor(k / FAMILY.length) % GIVEN.length],
         entryYear: year,
         gradYear: year + 4 + (i % 3 === 0 ? 1 : 0),
       });
