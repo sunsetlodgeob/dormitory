@@ -1,0 +1,19 @@
+/*
+ * 夕照寮OB会サイト ― 設定
+ * 空のままでも動きます（そのときは js/site/sample.js のサンプルデータを表示）。
+ * 値の調べ方は docs/site/SETUP.md を見てください。
+ */
+window.OB_CONFIG = {
+  // Apps Script の Web アプリの URL（https://script.google.com/macros/s/……/exec）
+  GAS_URL: '',
+  // 年表を見るときの Google ログイン用のクライアント ID（……apps.googleusercontent.com）
+  GOOGLE_CLIENT_ID: '',
+  // 写真館（Google フォトの共有アルバムなど）の URL
+  ALBUM_URL: '',
+  // 事件（年表）を投稿するフォームの URL
+  FORM_TIMELINE_URL: '',
+  // 名簿・部屋割りを登録するフォームの URL
+  FORM_MEMBER_URL: '',
+  // OB会の連絡先メールアドレス（名簿から外してほしいとき等）
+  CONTACT_EMAIL: '',
+};
