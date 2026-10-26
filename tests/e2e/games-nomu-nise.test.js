@@ -162,8 +162,9 @@ async function niseDesktop(open) {
   await waitScene(page, 'intro');
   await page.waitForTimeout(300);
   await shot(page, 'nise-intro');
-  const def = await page.evaluate(() => { const d = OTK.get('nise'); return { time: d.time, howto: d.howto, goal: d.goal }; });
+  const def = await page.evaluate(() => { const d = OTK.get('nise'); return { time: d.time, howto: d.howto, goal: d.goal, note: d.note }; });
   check(def.time === null, '時間制限なし（1 人ずつの持ち時間だけ）');
+  check(def.howto.some((l) => /ニセ一年（3年生）/.test(l)) && !/OB/.test(def.howto.join('') + def.note), 'ニセ一年は、一年のふりをした 3年生（OB ではない）');
 
   // 7 人のうち 1 人だけニセ一年。だれか・セリフ・顔は種ごとにかわる
   const runs = await page.evaluate(() => {
@@ -182,8 +183,15 @@ async function niseDesktop(open) {
   check(runs.every((r) => !r.people[0].fake), '1 人目はいつも本物（くらべる手がかり）');
   const pools = runs[0].pools;
   const tellText = (p) => pools.FAKE_TALK.includes(p.talk) || pools.FAKE_OFFER.includes(p.offer);
-  check(runs.every((r) => r.people.every((p) => (p.fake ? tellText(p) && ['beard', 'gray', 'wrinkle'].includes(p.deco) : !tellText(p) && ['beard', 'gray', 'wrinkle'].indexOf(p.deco) < 0))),
-    'ぼろ（古いセリフ・ひげ／白髪／しわ）があるのはニセ一年だけ');
+  check(pools.TELLS.join() === 'stubble,kuma,jersey' && pools.HERRING_LOOKS.join() === 'glasses,bandage', '見た目のぼろは 3年生らしいもの（青ひげ・くま・寮のジャージ）。ひっかけは、めがね・ばんそうこう');
+  check(runs.every((r) => r.people.every((p) => (p.fake ? tellText(p) && pools.TELLS.includes(p.deco) : !tellText(p) && !pools.TELLS.includes(p.deco)))),
+    'ぼろ（寮にくわしすぎるセリフ・青ひげ／くま／寮のジャージ）があるのはニセ一年だけ');
+  check(new Set(runs.map((r) => r.people.find((p) => p.fake).deco)).size === 3, '見た目のぼろも、毎回ちがう');
+  // OB のころのぼろ（古いことば・昔の物）は、もう出ない。正体は 3年生
+  const allText = Object.keys(pools).filter((k) => !/LOOKS|TELLS/.test(k)).map((k) => [].concat(pools[k]).join('\n')).join('\n');
+  check(!/OB|ナウい|チョベリグ|昭和|テレカ|カセット|ポケベル|ワープロ|昔話|腰が|若いもん|よっこいしょ/.test(allText), 'OB のぼろ（古いことば・昔の物・年よりくさい話）は出ない');
+  check(pools.REVEAL.concat(pools.FAKE_ACCEPT, pools.FAKE_TIMEOUT).every((t) => /3年/.test(t)), '正体がばれると「じつは3年」');
+  check(pools.FAKE_TALK.some((t) => /去年/.test(t)) && pools.FAKE_TALK.some((t) => /寮長|先輩/.test(t)) && pools.FAKE_OFFER.some((t) => /過去問/.test(t)), '3年生のぼろ：去年を知っている・先輩や寮長になれなれしい・過去問を持っている など');
   check(runs.some((r) => r.people.some((p) => !p.fake && pools.HERRING.includes(p.talk))) && runs.some((r) => r.people.some((p) => !p.fake && p.deco)), '本物にも、ひっかけ（怪しく聞こえるセリフ・めがねなど）がいる');
   check(runs.every((r) => r.people.every((p) => /^一年[A-G]$/.test(p.label))), '名前は出さない（一年A〜G）');
   // セリフがウインドウ（3 行・1 行 14 文字）に入る
@@ -205,6 +213,9 @@ async function niseDesktop(open) {
   await shot(page, 'nise-talk');
   const w = await playNise(page, push, smart);
   check(w.res === 'win' && w.hearts === 3 && w.reveal, 'ニセ一年だけ断るとクリア（' + (w.fakeAt + 1) + '人目がニセ一年）');
+  check(/3年生/.test(w.msg) && w.name === '3年生（ニセ一年）', '正体は 3年生（' + String(w.msg).replace(/\n/g, '') + '）');
+  await page.waitForTimeout(500);
+  await shot(page, 'nise-reveal');
   check(w.friends === w.fakeAt, 'ほかの一年の申し出は受けた（友だち ' + w.friends + '人）');
   await finish(page, 'win', 'nise-win');
 
@@ -213,6 +224,7 @@ async function niseDesktop(open) {
   await waitScene(page, 'play');
   const a = await playNise(page, push, () => 'a');
   check(a.res === 'lose' && a.reveal && a.choice === 'accept', 'ニセ一年の申し出を受けると負け');
+  check(/3年生/.test(a.msg) && /先輩/.test(a.line), '3年生（先輩）をこき使ってしまった（' + String(a.msg).replace(/\n/g, '') + '）');
   await finish(page, 'lose', 'nise-lose-fake');
 
   // 負け②：本物を 3 人断る（ニセ一年が 4 人目より後にいる種で）

@@ -178,6 +178,15 @@ async function gakusaiDesktop(open) {
   await page.waitForTimeout(600);
   await shot(page, 'gakusai-intro');
   check(await page.evaluate(() => /フィクション/.test(document.querySelector('footer[data-ob-footer]').textContent)), 'ページの下に「フィクション」の注記がある');
+  // 寮の学祭は、ホストクラブ（お酒は出さない。ジュースとお菓子と出し物）。やきそばの屋台ではない
+  const club = await page.evaluate(() => {
+    const d = OTK.get('gakusai');
+    return { note: d.note, howto: d.howto.join('\n'), kinds: OTK.person.KINDS };
+  });
+  check(/お酒は出さない/.test(club.note) && /ジュース/.test(club.note) && /お菓子/.test(club.note), '説明に「お酒は出さない。ジュースとお菓子。」');
+  check(club.kinds.includes('host') && club.kinds.includes('otokoHost'), '人物の絵に、ホスト（host）と、スーツの男魂くん（otokoHost）がある');
+  const src = fs.readFileSync(path.join(__dirname, '..', '..', 'js', 'otoko', 'games', 'gakusai.js'), 'utf8');
+  check(!/やきそば|焼きそば|ビール|鉄板/.test(src), 'やきそば・ビールケースなどは出てこない');
   await page.keyboard.press('KeyZ');
   await waitScene(page, 'countdown');
   await page.waitForTimeout(300);
@@ -185,7 +194,11 @@ async function gakusaiDesktop(open) {
   await waitScene(page, 'play');
   await page.waitForTimeout(500);
   await shot(page, 'gakusai-start');
-  check((await canvasColors(page)) > 16, '模擬店と通りが描けている');
+  check((await canvasColors(page)) > 16, 'ホストクラブの入り口と通りが描けている');
+  const texts = await page.evaluate(() => OTK.debug.game.texts);
+  check(texts.CLUB === 'ホストクラブ' && texts.CLUB_NAME === '夕照', '看板は「ホストクラブ 夕照」');
+  check(texts.CALL.some((t) => /いらっしゃい/.test(t)) && texts.CALL.some((t) => /ジュース/.test(t)) && texts.CALL.some((t) => /お菓子/.test(t)) && texts.CALL.some((t) => /出し物/.test(t)),
+    '呼びこみは「いらっしゃいませ〜」「ジュース」「お菓子」「出し物」');
   const ctl = keyboardCtl(page);
 
   // ↑↓ で列をえらぶ
@@ -202,6 +215,8 @@ async function gakusaiDesktop(open) {
   const before = await page.evaluate(() => ({ count: OTK.debug.game.count, tried: OTK.debug.game.stats.tried }));
   await ctl.tap('a');
   await waitFor(page, (n) => OTK.debug.game.stats.tried > n, before.tried, 3000);
+  const call = await page.evaluate(() => OTK.debug.game.shout);
+  check(texts.CALL.includes(call), 'A で、男魂くんが呼びこむ（「' + String(call).replace(/\n/g, '') + '」）');
   const asked = await page.evaluate(() => { const g = OTK.debug.game.groups.find((x) => x.state === 'think'); return { kind: g.kind, n: g.n }; });
   await waitFor(page, () => !OTK.debug.game.groups.some((g) => g.state === 'think'), null, 3000);
   const after = await page.evaluate(() => ({ count: OTK.debug.game.count, tried: OTK.debug.game.stats.tried }));
@@ -224,7 +239,7 @@ async function gakusaiDesktop(open) {
   }
   check(r && r.result === 'win', '女子に声をかけ続けると、100 人に届いてクリア');
   const st = await page.evaluate(() => ({ count: OTK.debug.game.count, stats: OTK.debug.game.stats, t: OTK.debug.run.t }));
-  check(st.count >= 100 && /100人達成/.test(r.msg), st.count + ' 人（' + st.t.toFixed(1) + ' 秒、声かけ ' + st.stats.tried + ' 回、来てくれた ' + st.stats.joined + ' 組）');
+  check(st.count >= 100 && /100人達成/.test(r.msg) && /指名/.test(r.msg), st.count + ' 人（' + st.t.toFixed(1) + ' 秒、声かけ ' + st.stats.tried + ' 回、来てくれた ' + st.stats.joined + ' 組）');
   check(seen.half, '50 人をこえたところも通った');
   await setSpeed(page, 1);
   await page.waitForTimeout(700);

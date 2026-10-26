@@ -1,6 +1,8 @@
 /*
- * 11月 学祭「女子100人勧誘」 ― 模擬店の前で、通りかかる女子をさそう
- *  左に寮の模擬店（やきそば）。前の通りを、奥は左から右へ、手前は右から左へ、人のグループが歩いていく。
+ * 11月 学祭「女子100人勧誘」 ― 寮のホストクラブの前で、通りかかる女子をさそう
+ *  寮は毎年、学祭でホストクラブ「夕照」を出す。寮生がスーツでホストになり、中ではジュースとお菓子を出して、出し物をする。
+ *  お酒は出さない、わりと健全なホストクラブ。男魂くんもスーツを着て（はちまきはそのまま）、お立ち台で呼びこみをする。
+ *  左にホストクラブの入り口。前の通りを、奥は左から右へ、手前は右から左へ、人のグループが歩いていく。
  *  2 本ののぼりの間にいるグループに、A で声をかける。来てくれるかは、うんしだい（女子はだいたい 55%）。
  *  来てくれたらグループ全員が数に入る（＋人数）。男子は数えない。とりのおばちゃんが来ると −10 人。
  *  ↑↓ で声をかける列（奥・手前）をえらぶ。スマホは、人をタップしてもさそえる。
@@ -18,9 +20,10 @@
   const STREET_Y = 132; // 通りの奥のはし
   const ZONE_L = 100, ZONE_R = 180; // のぼりの間。ここにいるグループをさそえる
   const ZONE_C = (ZONE_L + ZONE_R) / 2;
-  const ME_X = 80, ME_FEET = 140; // 男魂くんの立つ所（絵の左はしと足もと）。ビールケースに乗っている
-  const CRATE_Y = 152; // ビールケースの下のはし
-  const SHOP = { x: 50, feet: 146 }; // 店に入る人が向かう所
+  const ME_X = 80, ME_FEET = 140; // 男魂くんの立つ所（絵の左はしと足もと）。お立ち台（木の箱）に乗っている
+  const CRATE_Y = 152; // お立ち台の下のはし
+  const DOOR = { x0: 6, x1: 42, y0: 66, y1: 146 }; // ホストクラブの入り口
+  const SHOP = { x: 12, feet: 146 }; // 店に入る人が向かう所（入り口）
   const LANES = [
     { feet: 168, dir: 1, speed: 58 }, // 奥の列：左から右へ
     { feet: 202, dir: -1, speed: 66 }, // 手前の列：右から左へ
@@ -30,7 +33,11 @@
   const COOL = 0.3; // 声をかけたあと、次に声をかけられるまで（秒）
   const THINK = 0.3; // 声をかけてから、返事が来るまで（秒）
   const JOSHI_N = [1, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5]; // 女子のグループの人数（多めに出る）
-  const NO_MSG = ['ムリ〜', 'また今度', 'えー', 'いそいでるので', '…', 'うーん、パス'];
+  const CLUB = 'ホストクラブ'; // 看板の上の段
+  const CLUB_NAME = '夕照'; // 看板の店の名前
+  const CALL = ['いらっしゃい\nませ〜！', 'ジュース\nあるよ！', 'お菓子も\nあるよ！', '出し物も\nあるよ！']; // 男魂くんの呼びこみ
+  const YES_MSG = ['いいよー', 'いく〜！', 'たのしそう', 'ジュース\nほしい！'];
+  const NO_MSG = ['ムリ〜', 'また今度', 'えー', 'いそいでるので', '…', 'うーん、パス', 'ホストは\nちょっと…'];
   const DAN_MSG = ['おれら？', '男でもいい？', 'え、おれ？'];
 
   OTK.register({
@@ -41,7 +48,7 @@
     title: '女子100人勧誘',
     goal: '女子を100人\nさそえ！',
     howto: ['A：のぼりの間の人をさそう', '↑↓：奥か手前かをえらぶ', OBA_NAME + 'は−10人'],
-    note: '来てくれるかは、うんしだい。男子は数えない。',
+    note: 'お酒は出さない。ジュースとお菓子。\n男子は数えない。来るかは運しだい。',
     time: 45,
     timeout: 'lose',
     bgm: 'play',
@@ -57,6 +64,7 @@
       let shout = 0; // 男魂くんが叫んでいる間
       let shoutMsg = '';
       let bump = 0, bumpCol = P.lgreen; // 数の板が弾む
+      let bowT = 0; // 入り口のホストが、おじぎしている間
       let spawned = 0;
       let done = false, doneT = 0;
       let tried = 0, joined = 0, obaIn = 0; // テスト用：声をかけた数・来てくれた女子のグループ・来てしまったおばちゃん
@@ -142,7 +150,7 @@
       function ask(g) {
         cool = COOL;
         shout = 0.45;
-        shoutMsg = api.pick(['よってって！', 'やきそば\nどう？', 'こっちこっち！']);
+        shoutMsg = api.pick(CALL);
         api.sfx('select');
         if (!g) return; // だれもいないのに叫んだ
         g.tried = true;
@@ -156,7 +164,8 @@
           if (api.chance(YES)) {
             g.state = 'join';
             g.t = 0;
-            g.say = api.pick(['いいよー', 'いく〜！', 'おいしそう']);
+            g.say = api.pick(YES_MSG);
+            bowT = 0.9;
             addCount(g.n);
             joined++;
             pop(cx(g), top, '+' + g.n, P.lpink);
@@ -172,7 +181,8 @@
           if (api.chance(OBA_YES)) {
             g.state = 'join';
             g.t = 0;
-            g.say = 'あら〜いいわね〜';
+            g.say = 'あら〜、\nいい男！';
+            bowT = 0.9;
             addCount(-OBA_MINUS);
             obaIn++;
             pop(cx(g), top, '−' + OBA_MINUS, P.red, true);
@@ -190,6 +200,7 @@
           g.state = 'join';
           g.t = 0;
           g.say = api.pick(DAN_MSG);
+          bowT = 0.9;
           pop(cx(g), top, 'ノーカン', P.lgray);
           api.sfx('ng');
         }
@@ -198,7 +209,7 @@
       function finish() {
         done = true;
         api.sfx('fanfare');
-        api.win('100人達成！\n…でも全員、やきそば\nめあてだった。', { wait: 1.8 });
+        api.win('100人達成！\n…でも指名は、\nぜんぶ先輩Aだった。', { wait: 1.8 });
         for (let i = 0; i < 60; i++) confetti.push({ x: api.rnd(0, W), y: api.rnd(-80, 12), vy: api.rnd(30, 70), vx: api.rnd(-12, 12), c: api.pick([P.red, P.yellow, P.lgreen, P.sky, P.pink, P.white]) });
       }
       function feetOf(g) {
@@ -315,62 +326,104 @@
           for (let r = 0; r < 7; r++) g.R(x + Math.floor(r / 2) + (r > 4 ? fl : 0), y + r, 8 - Math.floor(r / 2) * 2, 1, c);
         }
       }
+      // 4 つ角の光（キラッ）
+      function twinkle(g, x, y, col, on) {
+        g.R(x, y - 1, 1, 3, col);
+        g.R(x - 1, y, 3, 1, col);
+        if (on) { g.R(x, y - 3, 1, 2, col); g.R(x, y + 2, 1, 2, col); g.R(x - 3, y, 2, 1, col); g.R(x + 2, y, 2, 1, col); }
+      }
+      // ホストクラブ「夕照」の入り口（お酒は出さない。中はジュースとお菓子と出し物）
       function drawBooth(g) {
-        const x0 = 2, x1 = 96;
-        // 店の中（奥）
-        g.R(x0, 60, x1 - x0, 50, P.xdgray);
-        g.R(x0 + 4, 80, 30, 16, P.cream); // 品書き
-        g.text('大盛', x0 + 19, 82, { size: 12, col: P.dred, align: 'center' });
-        g.R(x1 - 28, 80, 22, 16, P.cream);
-        g.text('名物', x1 - 17, 82, { size: 12, col: P.dred, align: 'center' });
-        // 先輩A（鉄板で焼いている）
-        const sx = 38, sy = 86;
-        const fr = Math.floor(api.time * 4) % 2;
-        g.sprite(api.person('senpai', { dir: 'down', variant: 2, frame: fr }), sx, sy);
-        g.R(sx + 3, sy + 3, 10, 1, P.white); // ねじりはちまき
-        // 柱
-        g.R(x0, 44, 3, 104, P.gray);
-        g.R(x1 - 3, 44, 3, 104, P.gray);
-        // 屋根（赤白のしま）と、波のふち
-        for (let x = x0, i = 0; x < x1; x += 8, i++) g.R(x, 46, 8, 14, i % 2 ? P.white : P.red);
-        for (let x = x0, i = 0; x < x1; x += 8, i++) {
-          const c = i % 2 ? P.white : P.red;
-          g.R(x + 1, 60, 6, 2, c);
-          g.R(x + 2, 62, 4, 1, c);
+        const x0 = 2, x1 = 96, t = api.time, D = DOOR;
+        // 黒いかべと、金のふち
+        g.R(x0, 44, x1 - x0, 104, P.ink);
+        g.R(x0, 44, 2, 104, P.brown);
+        g.R(x1 - 2, 44, 2, 104, P.brown);
+        g.R(x0 + 1, 44, 1, 104, P.yellow);
+        g.R(x1 - 2, 44, 1, 104, P.yellow);
+        // 入り口の中（うす暗い）
+        g.R(D.x0, D.y0, D.x1 - D.x0, D.y1 - D.y0, P.night);
+        g.dither(D.x0, D.y0 + 34, D.x1 - D.x0, D.y1 - D.y0 - 34, P.navy, 0);
+        // ミラーボールの光の粒が、かべを流れる
+        for (let i = 0; i < 10; i++) {
+          const k = (t * 0.22 + i / 10) % 1;
+          const x = D.x0 + 3 + Math.floor(k * (D.x1 - D.x0 - 6));
+          const y = D.y0 + 14 + ((i * 11) % 30);
+          g.R(x, y, 2, 1, [P.pink, P.lsky, P.lyellow][i % 3]);
         }
-        g.R(x0, 45, x1 - x0, 1, P.dred);
-        // 看板「夕照寮」
-        g.R(x0 + 10, 26, x1 - x0 - 20, 20, P.dbrown);
-        g.R(x0 + 12, 28, x1 - x0 - 24, 16, P.cream);
-        g.text('夕照寮', (x0 + x1) / 2, 28, { size: 16, col: P.dred, align: 'center' });
-        // ちょうちん
-        [14, 49, 84].forEach((x, i) => {
-          const sw = Math.round(Math.sin(api.time * 2 + i) * 1);
-          g.R(x, 62, 1, 3, P.ink);
-          g.oval(x + sw, 70, 5, 6, P.red);
-          g.R(x - 4 + sw, 64, 9, 1, P.ink);
-          g.R(x - 4 + sw, 76, 9, 1, P.ink);
-          g.R(x - 1 + sw, 67, 2, 6, P.lorange);
+        // ミラーボール
+        const bx = Math.round((D.x0 + D.x1) / 2), by = D.y0 + 8;
+        g.R(bx, D.y0, 1, 3, P.gray);
+        g.disc(bx, by, 5, P.dgray);
+        g.disc(bx, by, 4, P.gray);
+        for (let yy = -3; yy <= 3; yy += 2) for (let xx = -3; xx <= 3; xx += 2) {
+          if (xx * xx + yy * yy <= 18 && ((((xx + yy) >> 1) + Math.floor(t * 5)) & 1)) g.R(bx + xx, by + yy, 1, 1, P.white);
+        }
+        // 奥のテーブルに、ジュースとお菓子
+        g.R(D.x0 + 18, 124, 16, 2, P.tan);
+        g.R(D.x0 + 18, 126, 16, 1, P.brown);
+        g.R(D.x0 + 20, 127, 1, 5, P.brown);
+        g.R(D.x0 + 31, 127, 1, 5, P.brown);
+        [[D.x0 + 20, P.lorange], [D.x0 + 24, P.violet]].forEach(([x, col]) => {
+          g.R(x, 118, 3, 6, P.lsky);
+          g.R(x, 120, 3, 4, col);
+          g.R(x + 2, 116, 1, 3, P.white); // ストロー
         });
-        // 鉄板と湯気
-        g.R(14, 102, 54, 4, P.xdgray);
-        g.R(16, 101, 50, 1, P.dgray);
-        for (let i = 0; i < 9; i++) g.R(18 + i * 5 + (Math.floor(api.time * 6 + i) % 2), 100, 3, 1, P.brown);
-        for (let i = 0; i < 3; i++) {
-          const k = (api.time * 0.7 + i / 3) % 1;
-          g.dither(22 + i * 14 + Math.sin(api.time * 3 + i) * 2, 96 - k * 26, 6, 4, P.white, Math.floor(api.time * 5) & 1);
+        g.R(D.x0 + 27, 123, 6, 1, P.white); // お皿
+        g.R(D.x0 + 28, 121, 2, 2, P.tan);
+        g.R(D.x0 + 30, 121, 2, 2, P.lorange);
+        g.R(D.x0 + 29, 120, 2, 1, P.cream);
+        // 入り口のホスト（だれかが入ると、おじぎ）
+        const bow = bowT > 0 ? (bowT > 0.75 || bowT < 0.15 ? 1 : 2) : 0;
+        g.shadow(D.x0 + 10, D.y1 - 1, 6);
+        g.sprite(api.person('host', { dir: 'down', variant: 1 }), D.x0 + 2, D.y1 - 25 + bow);
+        // 入り口のカーテン（えんじ。金のひもでとめてある）
+        for (let y = D.y0; y < D.y1; y++) {
+          const k = y - D.y0;
+          const w = k < 34 ? Math.round(8 - k * 0.18) : k < 38 ? 2 : Math.min(5, 2 + ((k - 38) >> 3));
+          g.R(D.x0, y, w, 1, P.dred);
+          g.R(D.x1 - w, y, w, 1, P.dred);
+          if (w > 3) { g.R(D.x0 + 2, y, 1, 1, P.xdred); g.R(D.x1 - 3, y, 1, 1, P.xdred); }
         }
-        // カウンター
-        g.R(x0, 106, x1 - x0, 4, P.tan);
-        g.R(x0, 106, x1 - x0, 1, P.lorange);
-        g.R(x0 + 2, 110, x1 - x0 - 4, 36, P.white);
-        g.R(x0 + 2, 110, x1 - x0 - 4, 2, P.lgray);
-        // 店の名前と「女子半額」の貼り紙（男魂くんにかくれない左寄りに）
-        g.text('やきそば', 40, 113, { size: 16, col: P.red, align: 'center' });
-        g.R(12, 130, 56, 14, P.lpink);
-        g.R(12, 130, 56, 1, P.pink);
-        g.text('女子半額', 40, 131, { size: 12, col: P.rose, align: 'center' });
-        g.R(x0, 146, x1 - x0, 2, P.dgray);
+        g.R(D.x0, D.y0 + 34, 4, 2, P.yellow);
+        g.R(D.x1 - 4, D.y0 + 34, 4, 2, P.yellow);
+        g.R(D.x0, D.y0, D.x1 - D.x0, 2, P.yellow);
+        // 赤いじゅうたん
+        for (let i = 0; i < 10; i++) g.R(D.x0 + 6 - (i >> 1), D.y1 + i, D.x1 - D.x0 - 12 + (i >> 1) * 2, 1, i % 4 === 3 ? P.dred : P.red);
+        // 「No.1」の写真（金のわく）
+        g.R(47, 64, 26, 42, P.brown);
+        g.R(48, 65, 24, 40, P.yellow);
+        g.R(50, 77, 20, 26, P.navy);
+        g.dither(50, 77, 20, 26, P.violet, Math.floor(t * 2) & 1);
+        g.sprite(api.person('host', { dir: 'down', variant: 0 }), 52, 79);
+        g.text('No.1', 60, 65, { size: 12, col: P.xdred, align: 'center' });
+        twinkle(g, 71, 66, P.white, Math.floor(t * 3) % 3 === 0);
+        // 「出し物」のポスター（たて）
+        g.R(76, 66, 16, 46, P.lpink);
+        g.R(76, 66, 16, 1, P.pink);
+        g.R(76, 111, 16, 1, P.pink);
+        vtext(g, '出し物', 84, 68, P.violet);
+        g.text('★', 84, 98, { size: 12, col: P.rose, align: 'center' });
+        // 看板（金のわくに、ネオンの文字）
+        g.R(6, 16, 86, 30, P.brown);
+        g.R(7, 17, 84, 28, P.yellow);
+        g.R(9, 19, 80, 24, P.ink);
+        const neon = Math.floor(t * 2) % 4 ? P.pink : P.lpink;
+        g.text(CLUB, 49, 19, { size: 12, col: neon, align: 'center' });
+        g.text(CLUB_NAME, 49, 28, { size: 16, col: P.lyellow, align: 'center' });
+        twinkle(g, 15, 36, P.lyellow, Math.floor(t * 3) % 3 === 1);
+        twinkle(g, 83, 36, P.lyellow, Math.floor(t * 3) % 3 === 2);
+        // ひさし：むらさきの幕に「ジュース・お菓子」
+        g.R(x0, 46, x1 - x0, 13, P.violet);
+        g.R(x0, 46, x1 - x0, 1, P.yellow);
+        g.text('ジュース･お菓子', 49, 46, { size: 12, col: P.white, align: 'center' });
+        for (let x = x0; x < x1; x += 8) {
+          g.R(x + 1, 59, 6, 2, P.violet);
+          g.R(x + 2, 61, 4, 1, P.violet);
+          g.R(x + 3, 62, 2, 1, P.yellow);
+        }
+        g.R(x0, 146, D.x0 - x0, 2, P.dgray);
+        g.R(D.x1, 146, x1 - D.x1, 2, P.dgray);
       }
       function drawStreet(g) {
         // 石だたみ
@@ -393,9 +446,9 @@
         g.R(x, 84, 2, 72, P.tan);
         g.R(x, 84, 2, 1, P.brown);
         g.R(x + 2, 86, 16, 1, P.tan); // 横のさお
-        g.R(x + 2 + fl, 87, 16, 62, P.white);
-        g.R(x + 3 + fl, 88, 14, 60, P.red);
-        vtext(g, str, x + 10 + fl, 90, P.white);
+        g.R(x + 2 + fl, 87, 16, 62, P.yellow); // 金のふち
+        g.R(x + 3 + fl, 88, 14, 60, P.ink);
+        vtext(g, str, x + 10 + fl, 90, P.lyellow);
         g.oval(x + 1, 156, 5, 2, P.dgray);
       }
       function personKind(g) {
@@ -434,15 +487,17 @@
         }
       }
       function drawMe(g) {
-        // ビールケース
+        // お立ち台（木の箱）
         g.shadow(ME_X + 8, CRATE_Y, 10);
         g.R(ME_X - 1, ME_FEET, 18, CRATE_Y - ME_FEET, P.ink);
-        g.R(ME_X, ME_FEET + 1, 16, CRATE_Y - ME_FEET - 2, P.yellow);
-        g.R(ME_X, ME_FEET + 1, 16, 1, P.lyellow);
-        for (let i = 0; i < 3; i++) g.R(ME_X + 2 + i * 5, ME_FEET + 4, 3, 4, P.orange);
+        g.R(ME_X, ME_FEET + 1, 16, CRATE_Y - ME_FEET - 2, P.tan);
+        g.R(ME_X, ME_FEET + 1, 16, 1, P.lorange);
+        g.R(ME_X, ME_FEET + 6, 16, 1, P.brown);
+        [[1, 3], [14, 3], [1, 8], [14, 8]].forEach(([dx, dy]) => g.R(ME_X + dx, ME_FEET + dy, 1, 1, P.dbrown));
+        // 男魂くん（スーツ。はちまきはそのまま）
         const jump = shout > 0.25 ? -2 : 0;
         const y = ME_FEET - 24 + jump;
-        g.sprite(api.person('otoko', { dir: 'right', frame: shout > 0 ? 1 : 0 }), ME_X, y);
+        g.sprite(api.person('otokoHost', { dir: 'right', frame: shout > 0 ? 1 : 0 }), ME_X, y);
         // メガホン
         const mx = ME_X + 12, my = y + 8;
         g.R(mx, my + 1, 3, 3, P.white);
@@ -531,6 +586,8 @@
         get lane() { return lane; },
         get cool() { return cool; },
         get stats() { return { tried, joined, spawned, oba: obaIn }; },
+        get shout() { return shout > 0 ? shoutMsg : null; }, // テスト用：いまの呼びこみ
+        texts: { CLUB, CLUB_NAME, CALL, YES_MSG, NO_MSG, DAN_MSG }, // テスト用：看板とセリフ
         groups,
         // テスト用：いま A をおしたら声をかける相手
         target() {
@@ -546,6 +603,7 @@
           cool = Math.max(0, cool - dt);
           shout = Math.max(0, shout - dt);
           bump = Math.max(0, bump - dt);
+          bowT = Math.max(0, bowT - dt);
           // 列をえらぶ
           if (inp.pressed('up')) { lane = 0; api.sfx('cursor'); }
           if (inp.pressed('down')) { lane = 1; api.sfx('cursor'); }
@@ -606,7 +664,7 @@
           drawBunting(g);
           drawStreet(g);
           drawBooth(g);
-          drawFlag(g, ZONE_L - 4, 'やきそば');
+          drawFlag(g, ZONE_L - 4, 'ホスト');
           drawFlag(g, ZONE_R - 2, '夕照寮');
           drawPeople(g);
           drawTarget(g);

@@ -3,6 +3,7 @@
  *   OTK.person(kind, { dir, frame, naked, variant }) → canvas（同じ指定なら同じ canvas を返す）
  *   OTK.portrait(kind, { variant, mood }) → 32×32 の顔（会話の場面用）
  * 男魂くんだけ専用の見た目。ほかは共通の絵を色ちがいで使う（あとで描き分けてよい）。
+ * 学祭のホストクラブ用に、ホスト（host）と、ホストのかっこうの男魂くん（otokoHost）もいる。
  * 全裸（naked: true）は「男魂」の札とモザイクで隠す。はっきりした裸は描かない。
  */
 (function () {
@@ -85,6 +86,16 @@
     kanri: () => ({ skin: SKINS[1], hair: HAIR.gray, hs: 'bald', top: 'long', topCol: '#6f7d5c', legCol: '#4a4a52', shoeCol: '#7c5c3c', glasses: true, brows: true }),
     // 寮長（紺のジャージに、赤い「寮長」の腕章）
     ryocho: () => ({ skin: SKINS[1], hair: HAIR.black, hs: 'spiky', top: 'jersey', topCol: '#2f4f8a', legCol: '#2f4f8a', stripe: P.white, shoeCol: '#7c7c7c', brows: true, armband: P.red }),
+    // ホスト（学祭の寮のホストクラブ。お酒は出さない）：黒・紺・白・えんじのスーツに、えりを開けた色シャツ。盛った髪
+    host: (v) => {
+      const [suit, shirt] = at([['#202028', '#f8a8c8'], ['#28306c', '#fcfcfc'], ['#ececf4', '#30304c'], ['#6c1c3c', '#fcfcfc'], ['#3c2c5c', '#c8b8f8']], v);
+      return {
+        skin: at(SKINS, v, 1), hair: at([HAIR.blond, HAIR.tea, HAIR.brown, HAIR.black, '#c8c8d8'], v, 2), hs: 'host',
+        top: 'host', topCol: suit, shirt, legCol: suit, shoeCol: v % 2 ? '#ececf4' : '#141018', brows: true, chain: v % 3 === 0,
+      };
+    },
+    // 男魂くん（学祭のホストのかっこう）：赤いはちまきのまま、黒いスーツ。前を開けて、中は「男」の T シャツ
+    otokoHost: () => ({ skin: P.skin, hair: HAIR.black, hs: 'spiky', hat: 'band', hatCol: P.red, top: 'host', topCol: '#202028', shirt: P.white, open: true, mark: 'otoko', legCol: '#202028', shoeCol: '#141018', brows: true }),
     // 通りすがりの人（会社員・おじいさん・学生など）
     kyaku: (v) => {
       const t = v % 4;
@@ -134,6 +145,19 @@
   // ── 髪 ─────────────────────────────────────────
   function hairFront(p, L) {
     const c = L.hair, s = L.hs;
+    if (s === 'host') {
+      // ホストの盛り髪：上にボリューム、前髪を横に流して、右のサイドは長め
+      p(5, 0, 6, 1, c);
+      p(4, 1, 9, 1, c);
+      p(3, 2, 11, 3, c);
+      p(3, 5, 6, 1, c);
+      p(3, 6, 2, 1, c);
+      p(3, 7, 1, 1, c);
+      p(12, 5, 2, 1, c);
+      p(12, 6, 2, 3, c);
+      p(6, 1, 3, 1, L.hairHi); p(10, 2, 2, 1, L.hairHi); p(4, 3, 1, 2, L.hairHi); p(6, 5, 2, 1, L.hairHi);
+      return;
+    }
     if (s === 'bald') {
       p(3, 5, 1, 3, c);
       p(12, 5, 1, 3, c);
@@ -176,6 +200,15 @@
   }
   function hairBack(p, L) {
     const c = L.hair, s = L.hs;
+    if (s === 'host') {
+      p(5, 0, 6, 1, c);
+      p(4, 1, 9, 1, c);
+      p(3, 2, 11, 7, c);
+      p(4, 9, 9, 1, c);
+      p(5, 10, 6, 1, c);
+      p(6, 1, 3, 1, L.hairHi); p(10, 3, 2, 1, L.hairHi); p(5, 6, 1, 2, L.hairHi);
+      return;
+    }
     if (s === 'bald') {
       p(3, 5, 10, 3, c);
       return;
@@ -202,6 +235,17 @@
   function hairSide(p, L) {
     // 左向き。後ろ（右）に髪が多い
     const c = L.hair, s = L.hs;
+    if (s === 'host') {
+      p(5, 0, 7, 1, c);
+      p(4, 1, 9, 1, c);
+      p(3, 2, 11, 3, c);
+      p(2, 5, 4, 1, c); // 前に流した前髪
+      p(7, 5, 7, 1, c);
+      p(9, 6, 5, 3, c);
+      p(10, 9, 3, 1, c);
+      p(6, 1, 3, 1, L.hairHi); p(4, 3, 2, 1, L.hairHi); p(11, 4, 2, 1, L.hairHi);
+      return;
+    }
     if (s === 'bald') {
       p(8, 5, 4, 3, c);
       return;
@@ -412,6 +456,25 @@
       if (back) p(5, 11, 6, 3, shade(L.topCol, -0.2));
       else { p(4, 11, 8, 1, shade(L.topCol, -0.2)); p(6, 12, 1, 2, P.white); p(9, 12, 1, 2, P.white); p(5, 15, 6, 2, shade(L.topCol, -0.15)); }
     }
+    if (t === 'host') {
+      const lap = shade(L.topCol, L.topCol === '#ececf4' ? -0.25 : 0.25);
+      if (back) p(7, 15, 2, 3, shade(L.topCol, -0.15)); // 背中の切れこみ
+      else if (L.open) {
+        // 前を開けたジャケット（中の T シャツが見える）
+        p(5, 11, 6, 7, L.shirt);
+        p(4, 12, 1, 5, lap); p(11, 12, 1, 5, lap);
+      } else {
+        // えりを開けたシャツ（ネクタイなし）と、ジャケットのえり
+        p(6, 11, 4, 1, L.shirt);
+        p(7, 11, 2, 1, sk);
+        p(6, 12, 4, 2, L.shirt);
+        p(7, 12, 2, 1, sk);
+        p(7, 14, 2, 2, L.shirt);
+        p(5, 12, 1, 2, lap); p(10, 12, 1, 2, lap); p(6, 14, 1, 2, lap); p(9, 14, 1, 2, lap);
+        p(7, 16, 1, 1, lap);
+        if (L.chain) p(7, 12, 2, 1, '#f8d030');
+      }
+    }
     if (t === 'suit' && !back) {
       p(6, 11, 4, 1, P.white); p(6, 12, 1, 2, P.white); p(9, 12, 1, 2, P.white);
       p(7, 12, 2, 4, L.tie || P.red);
@@ -485,6 +548,11 @@
     if (L.top === 'apron') { p(4, 13, 2, 7, L.apronCol); p(10, 12, 1, 1, L.apronCol); }
     if (L.top === 'uniform') p(5, 17, 6, 1, '#141018');
     if (L.top === 'suit') { p(4, 11, 2, 2, P.white); p(4, 12, 1, 3, L.tie || P.red); }
+    if (L.top === 'host') {
+      p(5, 11, 1, L.open ? 6 : 3, L.shirt);
+      if (!L.open) p(5, 11, 1, 1, sk);
+      p(6, 12, 1, 4, shade(L.topCol, L.topCol === '#ececf4' ? -0.25 : 0.25));
+    }
     if (L.mark === 'otoko') { p(5, 12, 1, 3, P.red); }
     if (L.mark === 'tag') p(5, 13, 1, 2, P.white);
     if (L.armband) p(7, 13, 2, 2, L.armband);
@@ -551,6 +619,16 @@
     // 肩
     p(4, 27, 24, 5, L.kind === 'otoko' ? P.white : L.topCol || '#7c7c7c');
     if (L.top === 'suit') { p(13, 27, 6, 5, P.white); p(15, 28, 2, 4, L.tie || P.red); }
+    if (L.top === 'host') {
+      const lap = shade(L.topCol, L.topCol === '#ececf4' ? -0.25 : 0.25);
+      if (L.open) { p(11, 27, 10, 5, L.shirt); p(10, 27, 1, 5, lap); p(21, 27, 1, 5, lap); }
+      else {
+        p(12, 27, 8, 2, L.shirt); p(13, 29, 6, 2, L.shirt); p(14, 31, 4, 1, L.shirt);
+        p(14, 27, 4, 2, L.skinS);
+        p(11, 27, 1, 3, lap); p(20, 27, 1, 3, lap); p(12, 29, 1, 3, lap); p(19, 29, 1, 3, lap);
+        if (L.chain) p(14, 29, 4, 1, '#f8d030');
+      }
+    }
     if (L.top === 'jersey') { p(11, 27, 2, 5, L.stripe); p(19, 27, 2, 5, L.stripe); }
     if (L.top === 'apron') { p(10, 28, 12, 4, L.apronCol); }
     if (L.mark === 'otoko') { p(14, 28, 5, 1, P.red); p(14, 29, 1, 1, P.red); p(16, 29, 1, 1, P.red); p(18, 29, 1, 1, P.red); p(14, 30, 5, 1, P.red); p(15, 31, 3, 1, P.red); }
@@ -579,6 +657,13 @@
       if (s === 'bob') { p(5, 9, 4, 13, hc); p(23, 9, 4, 13, hc); }
       if (s === 'pony') { p(25, 6, 4, 10, hc); }
       if (s === 'mullet') { p(22, 14, 4, 10, hc); }
+      if (s === 'host') {
+        // 盛り髪：上にボリューム、前髪を横に流し、右のサイドは長め
+        p(11, 1, 10, 1, hc); p(9, 2, 14, 1, hc); p(6, 5, 20, 3, hc);
+        p(9, 11, 9, 1, hc); p(9, 12, 5, 1, hc);
+        p(23, 11, 3, 9, hc); p(24, 20, 2, 2, hc);
+        p(13, 1, 4, 1, L.hairHi); p(19, 3, 3, 1, L.hairHi); p(8, 7, 2, 2, L.hairHi); p(11, 11, 4, 1, L.hairHi);
+      }
       if (s !== 'buzz') { p(11, 4, 4, 1, L.hairHi); p(9, 6, 3, 1, L.hairHi); }
     }
     // 帽子

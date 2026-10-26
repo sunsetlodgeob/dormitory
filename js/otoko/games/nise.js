@@ -1,11 +1,13 @@
 /*
  * 4月 新歓「ニセ一年を見抜け」
- *  一年が 7 人、1 人ずつ「お茶つぎますよ」などと声をかけてくる。1 人だけ、一年のふりをした OB（ニセ一年）。
+ *  一年が 7 人、1 人ずつ「お茶つぎますよ」などと声をかけてくる。1 人だけ、一年のふりをした 3年生（ニセ一年）。
+ *  寮では毎年、3年生が 1 人、一年にまぎれこむ。先輩にお茶をつがせたら、たいへん。
  *  - A：受ける　B：断る（1 人 6 秒ほど。だまっていると、受けたことになる）
  *  - ニセ一年を断ればクリア。ニセ一年の申し出を受けるか、本物を 3 人断ると負け
- *  - ニセ一年のぼろ：セリフ（昔の話・古いことば・言いまちがい）と、顔（ひげ・白髪・しわ）
- *  - 本物にも、ちょっと怪しく聞こえる人（二浪・兄が OB など）や、めがね・ばんそうこうの人がいる
- *  だれがニセ一年か、セリフ、顔のぼろは、毎回ランダム。
+ *  - ニセ一年のぼろ：セリフ（寮にくわしすぎる・「去年の新歓」・先輩や寮長になれなれしい・過去問を持っている）と、
+ *    見た目（うっすら青ひげ・目の下のくま・寮のジャージをはおっている）。3年生なので、年は 2 つ上なだけ
+ *  - 本物にも、ちょっと怪しく聞こえる人（二浪・兄が寮にいた・オープンキャンパスで見た など）や、めがね・ばんそうこうの人がいる
+ *  だれがニセ一年か、セリフ、見た目のぼろは、毎回ランダム。
  */
 (function () {
   'use strict';
@@ -30,22 +32,22 @@
   // 本物だけど、ちょっと怪しく聞こえる世間話（ひっかけ）
   const HERRING = [
     '二浪したんで、\nちょっと年上っす。',
-    '兄がここのOBで、\n話は聞いてます。',
+    '兄がこの寮にいたんで、\n話は聞いてます。',
     '緊張して…いや、\n楽しいっす！',
     '老け顔って、よく言われます。',
-    '父に「寮はいいぞ」と\n言われて来ました。',
-    '昭和の歌が好きなんすよ。\n渋いっしょ？',
+    'オープンキャンパスで、\n寮も見学しました！',
+    '先輩の名前、もう\n覚えちゃいました！',
   ];
-  // ニセ一年のぼろ（世間話）
+  // ニセ一年（3年生）のぼろ（世間話）：寮にくわしすぎる・去年を知っている・先輩になれなれしい
   const FAKE_TALK = [
-    '俺らの代は…いや、\nぼくら一年は元気っすね。',
-    'この部屋、きれいになったな…\nいや、なんでもないっす。',
-    '新歓、チョベリグっすね！',
-    '最近の若いもんは…\nいや、ぼくも若いっす。',
-    '昭和…じゃなくて、\n今年入学しました！',
-    'よっこいしょ。\n…あ、一年っす。',
-    '入学は…えーと、\n何年だったかな。',
-    'いやあ、最近は腰がね…\nいや、元気っす！',
+    '去年の新歓より、\n人が多いっすね。',
+    'おれらの代のときは…\nいや、なんでもないっす。',
+    '冷蔵庫のプリン、去年\n食われたんすよね…。',
+    'よう、先輩A！…じゃなくて、\nおつかれさまです！',
+    '寮長のやつ、今年は\nはりきってんな…あっ。',
+    'このコール、1年のときから\n変わってないな…あっ。',
+    '寮の歌なら、3番まで\n歌えますよ！',
+    '食堂のおばちゃん、\n今年も元気そうっすね。',
   ];
   // 申し出
   const OFFER = [
@@ -59,22 +61,27 @@
     'ゴミ、まとめておきますよ。',
     '紙皿、配っておきますね。',
   ];
-  // ニセ一年のぼろ（申し出が古い）
+  // ニセ一年のぼろ（一年なら持っていない・知らないはずのもの）
   const FAKE_OFFER = [
-    'テレカ、貸しましょうか？',
-    'カセット、ダビングしますよ。',
-    'ポケベルの番号、教えますよ。',
-    'ワープロで名札、作りますよ。',
+    'テストの過去問、あげますよ。',
+    '楽勝の授業、教えますよ。',
+    'ぼくの冷蔵庫の段、使います？',
+    '先輩の部屋、案内しますよ。',
+    '風呂のすく時間、教えますよ。',
   ];
   const ACCEPT = ['あざっす！\nまかせてください。', 'よかった！\nこれからよろしく！', 'はい、すぐやります！', 'うれしいっす！\n友だちっすね！'];
   const REFUSE = ['あ…そうっすか…。', 'す、すんません…。', 'じゃあ、また今度…。', 'しつれいしました…。'];
   const GEN_TIMEOUT = '…返事がないけど、\nやっておきますね！';
-  const FAKE_ACCEPT = 'よし！ じゃあ部屋で、\n朝まで昔話を\n聞かせてやろう！';
-  const FAKE_TIMEOUT = 'だまってるなら、OKだな。\n朝まで昔話を\n聞かせてやろう！';
-  const fakeRefused = (years) => '…バレたか！\nじつは' + years + '年前のOBだ。\nやるな、新入生！';
+  // ニセ一年の申し出を受けると、3年生（先輩）をこき使ったことになる
+  const FAKE_ACCEPT = 'ドッキリ大成功〜！\nじつは3年だ。\n先輩をこき使ったな？';
+  const FAKE_TIMEOUT = 'だまってるなら、やるぞ。\n…じつは3年だ。\n先輩をこき使ったな？';
+  const FAKE_NAME = '3年生（ニセ一年）'; // 正体がばれたあとの名札
+  const REVEAL = ['…バレたか！\nじつは3年だ。\nやるな、一年！', 'ちっ、見抜かれたか。\n3年生の、毎年恒例さ。\nやるじゃないか！'];
   const LETTERS = 'ABCDEFG';
 
-  // ── 顔に、ぼろ（ひげ・白髪・しわ）や、ひっかけ（めがね・ばんそうこう）を足す ──────────
+  // ── 顔に、ぼろ（青ひげ・くま・寮のジャージ）や、ひっかけ（めがね・ばんそうこう）を足す ──────────
+  //  reveal：正体がばれたあと（寮のジャージを着た 3年生の姿。名札はなし）
+  const JERSEY = '#283890', JERSEY_HI = '#3c50b8';
   const faces = new Map();
   function hex(d, i) {
     return d[i + 3] ? '#' + ((1 << 24) | (d[i] << 16) | (d[i + 1] << 8) | d[i + 2]).toString(16).slice(1) : null;
@@ -85,10 +92,10 @@
     const ch = (s) => Math.round(((x >> s) & 255) * (1 - t) + ((y >> s) & 255) * t);
     return '#' + ((1 << 24) | (ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).slice(1);
   }
-  function face(api, v, mood, deco) {
+  function face(api, v, mood, deco, reveal) {
     const base = api.portrait('ichinen', { variant: v, mood });
-    if (!deco) return base;
-    const key = v + '|' + mood + '|' + deco;
+    if (!deco && !reveal) return base;
+    const key = v + '|' + mood + '|' + deco + '|' + (reveal ? 1 : 0);
     let c = faces.get(key);
     if (c) return c;
     c = document.createElement('canvas');
@@ -107,19 +114,24 @@
       d[i + 3] = 255;
     };
     const skin = at(12, 19);
-    const hair = at(16, 6);
+    const shirt = at(8, 29);
     const onSkin = (px, py, col) => { if (at(px, py) === skin) put(px, py, col); };
-    if (deco === 'beard') {
-      // うっすら青ひげ（あごと口のまわり）
+    if (deco === 'stubble') {
+      // うっすら青ひげ（あごと口のまわり）。一年より 2 つ上
       const stubble = mix(skin, '#40507c', 0.3);
       for (let py = 20; py <= 23; py++) for (let px = 10; px <= 21; px++) if ((px + py) % 2 === 0) onSkin(px, py, stubble);
-    } else if (deco === 'gray') {
-      // こめかみに白髪。上にも少しだけ
-      for (let py = 7; py <= 15; py++) for (let px = 4; px <= 27; px++) if ((px <= 9 || px >= 22) && at(px, py) === hair && (px + py) % 2 === 0) put(px, py, '#c8c8d0');
-      [[12, 5], [17, 4], [20, 6], [14, 7]].forEach(([px, py]) => { if (at(px, py) === hair) put(px, py, '#c8c8d0'); });
-    } else if (deco === 'wrinkle') {
-      // 目の下のたるみと、ほうれい線
-      [[10, 17], [11, 18], [12, 18], [21, 17], [20, 18], [19, 18], [13, 19], [12, 20], [12, 21], [18, 19], [19, 20], [19, 21]].forEach(([px, py]) => onSkin(px, py, '#c88464'));
+    } else if (deco === 'kuma') {
+      // 目の下のくま（レポートで徹夜つづき）
+      const k1 = mix(skin, '#6c5c9c', 0.45), k2 = mix(skin, '#6c5c9c', 0.25);
+      for (let px = 10; px <= 13; px++) { onSkin(px, 17, k1); onSkin(px + 8, 17, k1); }
+      for (let px = 11; px <= 12; px++) { onSkin(px, 18, k2); onSkin(px + 8, 18, k2); }
+    } else if (deco === 'jersey' && !reveal) {
+      // Tシャツの上に、寮のジャージ（先輩たちと同じ）をはおっている
+      for (let py = 27; py <= 31; py++) for (let px = 4; px <= 27; px++) {
+        if (at(px, py) !== shirt) continue;
+        if (px <= 10 || px >= 21) put(px, py, px === 8 || px === 23 ? '#fcfcfc' : JERSEY);
+      }
+      for (let py = 27; py <= 31; py++) { put(10, py, JERSEY_HI); put(21, py, JERSEY_HI); }
     } else if (deco === 'glasses') {
       const gc = '#3c3c4c';
       for (let i = 0; i < 6; i++) { put(9 + i, 13, gc); put(17 + i, 13, gc); put(9 + i, 17, gc); put(17 + i, 17, gc); }
@@ -133,10 +145,18 @@
       put(20, 18, '#e8d0a8');
       put(21, 19, '#e8d0a8');
     }
+    if (reveal) {
+      // 正体：寮のジャージ（白い線 2 本）を着た 3年生
+      for (let py = 27; py <= 31; py++) for (let px = 4; px <= 27; px++) {
+        if (at(px, py) === shirt) put(px, py, px === 11 || px === 12 || px === 19 || px === 20 ? '#fcfcfc' : px === 15 || px === 16 ? JERSEY_HI : JERSEY);
+      }
+    }
     x.putImageData(img, 0, 0);
     faces.set(key, c);
     return c;
   }
+  const TELLS = ['stubble', 'kuma', 'jersey']; // ニセ一年の見た目のぼろ
+  const HERRING_LOOKS = ['glasses', 'bandage']; // 本物のひっかけ
 
   // ハートのドット（7×6）
   const HEART = ['0110110', '1111111', '1111111', '0111110', '0011100', '0001000'];
@@ -148,8 +168,8 @@
     event: '新歓',
     title: 'ニセ一年を見抜け',
     goal: 'ニセ者を断れ！',
-    howto: ['A：受ける　B：断る', 'ニセ一年（OB）は1人', '本物を3人断ると負け'],
-    note: '言葉づかいや顔を、よく見よう。\nだまっていると、受けたことになる。',
+    howto: ['A：受ける　B：断る', 'ニセ一年（3年生）は1人', '本物を3人断ると負け'],
+    note: '寮にくわしすぎるやつが、あやしい。\nだまっていると、受けたことになる。',
     time: null,
     timeout: 'lose',
     bgm: 'menu',
@@ -172,10 +192,9 @@
         const hTalk = api.shuffle(genuine).slice(0, api.irnd(1, 2)); // 怪しく聞こえる本物
         const hLook = api.shuffle(genuine).slice(0, api.irnd(1, 2)); // めがね・ばんそうこうの本物
         return vars.map((v, i) => {
-          const p = { label: '一年' + LETTERS[i], v, fake: i === fakeAt, mood: api.pick(['normal', 'happy']), deco: null, talk: '', offer: '', years: 0 };
+          const p = { label: '一年' + LETTERS[i], v, fake: i === fakeAt, mood: api.pick(['normal', 'happy']), deco: null, talk: '', offer: '' };
           if (p.fake) {
-            p.deco = api.pick(['beard', 'gray', 'wrinkle']);
-            p.years = api.pick([20, 25, 30, 35]);
+            p.deco = api.pick(TELLS);
             if (api.chance(0.7)) {
               p.talk = api.pick(FAKE_TALK);
               p.offer = offers.pop();
@@ -186,7 +205,7 @@
           } else {
             p.talk = hTalk.includes(i) ? herrings.pop() : talks.pop();
             p.offer = offers.pop();
-            if (hLook.includes(i)) p.deco = api.pick(['glasses', 'bandage']);
+            if (hLook.includes(i)) p.deco = api.pick(HERRING_LOOKS);
           }
           p.text = p.talk + '\n' + p.offer;
           return p;
@@ -228,12 +247,12 @@
             st.line = kind === 'timeout' ? FAKE_TIMEOUT : FAKE_ACCEPT;
             st.mood = 'happy';
             api.sfx('buzzer');
-            api.lose(kind === 'timeout' ? 'だまっていたら、\nニセ一年（OB）に\nつかまった…' : 'ニセ一年はOBだった。\n朝まで 昔話を\n聞かされた…', { wait: 2.4 });
+            api.lose(kind === 'timeout' ? 'だまっていたら、\n3年生の先輩を\nこき使ってしまった…' : 'ニセ一年は3年生！\n先輩をこき使って、\n寮じゅうの笑いもの。', { wait: 2.4 });
           } else {
-            st.line = fakeRefused(p.years);
+            st.line = api.pick(REVEAL);
             st.mood = 'shock';
             api.sfx('fanfare');
-            api.win('ニセ一年（OB）を\n見抜いた！', { wait: 2.4 });
+            api.win('ニセ一年（3年生）を\n見抜いた！', { wait: 2.4 });
           }
         } else if (acc) {
           st.line = kind === 'timeout' ? GEN_TIMEOUT : api.pick(ACCEPT);
@@ -346,9 +365,10 @@
         const mood = st.phase === 'react' || st.phase === 'out' ? st.mood : p.mood;
         const typing = st.phase === 'talk' && st.typed < p.text.length;
         const bob = typing && Math.floor(st.t * 8) % 2 ? 1 : 0;
-        const img = st.reveal && st.puffT < 0.2 ? api.portrait('kyaku', { variant: 1, mood }) : face(api, p.v, mood, p.deco);
+        const shown = st.reveal && st.puffT < 0.2; // 煙のあとは、寮のジャージを着た 3年生の姿
+        const img = face(api, p.v, mood, p.deco, shown);
         g.sprite(img, B.x + 6, B.y + 5 + bob, { scale: 3 });
-        if (!(st.reveal && st.puffT < 0.2)) {
+        if (!shown) {
           // 名札
           g.R(B.x + 6 + 57, B.y + 5 + bob + 84, 12, 8, P.white);
           g.R(B.x + 6 + 57, B.y + 5 + bob + 84, 12, 2, P.red);
@@ -364,7 +384,7 @@
       function drawDialog(g) {
         const p = cur();
         g.box(4, 124, 248, 98);
-        const name = st.reveal ? 'ニセ一年' : p.label;
+        const name = st.reveal ? FAKE_NAME : p.label;
         const nw = g.measure(name, 12) + 14;
         g.box(12, 108, nw, 20, { fill: st.reveal ? P.dred : P.navy });
         g.text(name, 19, 111, { size: 12, col: P.lyellow });
@@ -399,12 +419,12 @@
 
       return {
         people,
-        pools: { TALK, HERRING, FAKE_TALK, OFFER, FAKE_OFFER, ACCEPT, REFUSE, GEN_TIMEOUT, FAKE_ACCEPT, FAKE_TIMEOUT, REVEAL: [fakeRefused(35)] },
+        pools: { TALK, HERRING, FAKE_TALK, OFFER, FAKE_OFFER, ACCEPT, REFUSE, GEN_TIMEOUT, FAKE_ACCEPT, FAKE_TIMEOUT, REVEAL, TELLS, HERRING_LOOKS },
         // テスト用：いまの様子
         get state() {
           return {
             phase: st.phase, idx: st.idx, hearts: st.hearts, friends: st.friends, reveal: st.reveal, choice: st.choice,
-            fakeAt: people.findIndex((p) => p.fake), fake: cur().fake, timeLeft: st.timeT, line: st.line,
+            fakeAt: people.findIndex((p) => p.fake), fake: cur().fake, timeLeft: st.timeT, line: st.line, name: st.reveal ? FAKE_NAME : cur().label,
           };
         },
         update(dt) {
