@@ -4,6 +4,7 @@
  *   SHOTS_DIR=/tmp/shots node tests/e2e/games-conveni-zombie.test.js   … スクリーンショットも撮る（リポジトリの外に）
  *   ONLY=conveni node tests/e2e/games-conveni-zombie.test.js           … 片方だけ
  *   NO_PHONE=1 …スマホの確認をとばす
+ *   PORT=8833 …ポートをかえる（ふだんは ARCH.md の割り当て 8813）
  * ふつうの操作（キーボード・画面のボタン・タップ）で、クリアとしっぱいの両方にたどり着けること、
  * パソコンとスマホの大きさでエラーが出ないことを確かめる。
  * ボットは画面に見えているもの（赤い輪・じゃま物・ゾンビの位置）だけを見て動く。連打は人と同じくらいの速さ。
@@ -102,21 +103,21 @@ async function padCtl(page) {
 
 // ── 全裸コンビニ（conveni） ────────────────────────────────
 const LANES = [64, 96, 128, 160, 192];
-// 赤い輪とじゃま物をよけ、mash 回/秒で A を連打する（0 なら連打しない）
+// 赤い輪とじゃま物をよけ、mash 回/秒で A を連打する（0 なら連打しない）。untilChase なら後半に入ったところで止める
 async function conveniBot(page, ctl, o) {
   o = o || {};
-  const seen = { marker: false, multi: false, switch: false, chase: false, obstacle: false, gate: false, bump: false, maxThrows: 0 };
+  const seen = { marker: false, multi: false, switch: false, chase: false, obstacle: false, gate: false };
   let lastMove = 0, lastMash = 0;
   for (let i = 0; i < 6000; i++) {
     const s = await page.evaluate(() => {
       const g = OTK.debug.game, r = OTK.debug.run;
       return {
-        res: r.result, t: r.t, phase: g.phase, lane: g.me.lane, x: g.me.x, dist: g.dist, goal: g.goal, gap: g.gap, bumps: g.bumps,
+        res: r.result, t: r.t, phase: g.phase, lane: g.me.lane, dist: g.dist, goal: g.goal,
         balls: g.balls.filter((b) => !b.out).map((b) => ({ tx: b.tx, left: b.dur - b.t })),
         obs: g.obs.filter((ob) => !ob.hit).map((ob) => ({ lane: ob.lane, dy: ob.wy - g.dist })),
       };
     });
-    if (s.res) break;
+    if (s.res || (o.untilChase && s.phase === 'chase')) break;
     const danger = new Set();
     if (s.phase === 'balls') s.balls.forEach((b) => danger.add(LANES.indexOf(b.tx)));
     else s.obs.forEach((ob) => { if (ob.dy > -8 && ob.dy < 75) danger.add(ob.lane); });
@@ -145,7 +146,6 @@ async function conveniBot(page, ctl, o) {
     if (s.phase === 'chase') seen.chase = true;
     if (s.phase === 'chase' && s.obs.some((ob) => ob.dy > 20 && ob.dy < 110) && !seen.obstacle) { seen.obstacle = true; await shot(page, label + '-obstacle'); }
     if (s.goal && s.goal - s.dist < 110 && !seen.gate) { seen.gate = true; await shot(page, label + '-gate'); }
-    if (s.bumps > 0) seen.bump = true;
     await page.waitForTimeout(8);
   }
   return seen;
@@ -189,7 +189,9 @@ async function conveniDesktop(open) {
   await waitFor(page, () => OTK.debug.run.result, null, 8000);
   r = await result(page);
   check(r.result === 'lose' && /命中/.test(r.msg), 'よけないとカラーボールが当たる');
-  check(await page.evaluate(() => OTK.debug.game.me.splat), 'ペンキまみれになる');
+  const splat = await page.evaluate(() => ({ on: OTK.debug.game.me.splat, col: OTK.debug.game.me.splatCol[2] }));
+  check(splat.on, 'ペンキまみれになる');
+  check(r.msg.includes(splat.col + '色'), 'ひとことの色が、当たったボールの色（' + splat.col + '）と合う');
   await page.waitForTimeout(500);
   await shot(page, 'conveni-splat');
 
@@ -200,27 +202,32 @@ async function conveniDesktop(open) {
   check(r.result === 'lose' && /おまわりさん/.test(r.msg), '連打しないと、おまわりさんにつかまる');
   await page.waitForTimeout(600);
   await shot(page, 'conveni-caught');
+  const grab = await page.evaluate(() => { const g = OTK.debug.game; return { dx: Math.abs(g.police.x - g.me.x), gap: g.gap }; });
+  check(grab.dx >= 16 && grab.gap < 8, 'つかまると、おまわりさんが男魂くんのとなりに並ぶ');
 
-  // じゃま物にぶつかると転ぶ（よけずに連打だけ。前半は早送りしてボールの所だけよける）
+  // じゃま物にぶつかると転ぶ（前半はよけ、後半は連打しながら、次のじゃま物の列へわざと入る）
   await restart(page, 'conveni', 23);
-  await page.evaluate(() => { OTK.debug.speed = 2; });
-  await waitFor(page, () => OTK.debug.game.phase !== 'balls' || OTK.debug.run.result, null, 20000);
-  await page.evaluate(() => { OTK.debug.speed = 1; });
-  // 前半は当たってしまうかもしれないので、種を選んで後半だけ見る
-  let bumped = false;
-  if (!(await page.evaluate(() => OTK.debug.run.result))) {
-    for (let i = 0; i < 600; i++) {
-      const s = await page.evaluate(() => ({ res: OTK.debug.run.result, bumps: OTK.debug.game.bumps, stumble: OTK.debug.game.me.stumbleT }));
-      if (s.bumps > 0) { bumped = true; if (s.stumble > 0.3) await shot(page, 'conveni-bump'); break; }
-      if (s.res) break;
-      await ctl.tap('a');
-      await page.waitForTimeout(100);
+  await conveniBot(page, ctl, { mash: 7, untilChase: true, label: 'conveni-bumprun' });
+  check(await page.evaluate(() => OTK.debug.game.phase === 'chase' && !OTK.debug.run.result), '前半をよけきると、後半に入る');
+  let bump = null;
+  for (let i = 0; i < 400 && !bump; i++) {
+    const s = await page.evaluate(() => {
+      const g = OTK.debug.game;
+      const next = g.obs.filter((o) => !o.hit && o.wy > g.dist).sort((a, b) => a.wy - b.wy)[0];
+      return { res: OTK.debug.run.result, bumps: g.bumps, lane: g.me.lane, next: next ? next.lane : null };
+    });
+    if (s.bumps > 0) {
+      await page.waitForTimeout(60); // ぶつかった次のコマから、おそくなる
+      bump = await page.evaluate(() => ({ speed: OTK.debug.game.speed, stumble: OTK.debug.game.me.stumbleT }));
+      break;
     }
-  } else {
-    // 早送りで前半に当たったときは、直接後半を見る
-    bumped = null;
+    if (s.res) break;
+    if (s.next != null && s.next !== s.lane) await ctl.tap(s.next < s.lane ? 'left' : 'right');
+    else await ctl.tap('a');
+    await page.waitForTimeout(60);
   }
-  if (bumped !== null) check(bumped, 'じゃま物にぶつかると転ぶ');
+  if (bump && bump.stumble > 0.3) await shot(page, 'conveni-bump');
+  check(bump && bump.stumble > 0 && bump.speed < 30, 'じゃま物にぶつかると転んで、おそくなる');
 
   // 時間切れはしっぱい（自分でとめておく）
   await restart(page, 'conveni', 24);
@@ -408,9 +415,10 @@ async function zombiePhone(open) {
   await page.mouse.move(cv.x + cv.width * 0.95, cv.y + cv.height * 0.5);
   await page.mouse.down();
   await page.waitForTimeout(400);
+  const walking = await page.evaluate(() => OTK.debug.game.me.moving);
   await page.mouse.up();
   const x1 = await page.evaluate(() => OTK.debug.game.me.x);
-  check(x1 > x0 + 10, '画面の右をおすと、右へ歩く');
+  check(x1 > x0 + 10 && walking, '画面の右をおすと、右へ歩く（足も動く）');
   const me = await page.evaluate(() => { const g = OTK.debug.game; return { x: g.me.x - g.camX, y: g.me.y }; });
   await page.touchscreen.tap(cv.x + ((me.x + 14) / 256) * cv.width, cv.y + ((me.y - 12) / 224) * cv.height);
   await page.waitForTimeout(100);
@@ -427,14 +435,51 @@ async function zombiePhone(open) {
   check(errs.length === 0, 'コンソールにエラーがない（スマホ）' + (errs.length ? '\n' + errs.join('\n') : ''));
 }
 
-withSite(PORT, async ({ open }) => {
+// ── いちばん小さいスマホ（幅 360）：はみ出さない・注記が出る・音のボタンで止まらない ─────
+async function smallPhone(browser, base, id) {
+  console.log((id === 'conveni' ? '全裸コンビニ' : '寮ゾンビ') + '（幅 360 のスマホ）');
+  const ctx = await browser.newContext({ viewport: { width: 360, height: 640 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
+  page.on('pageerror', (e) => errors.push('pageerror: ' + e));
+  await page.goto(base + 'game/?play=' + id + '&quick=1&seed=9');
+  await waitScene(page, 'play');
+  await page.waitForTimeout(500);
+  const box = await page.locator('#otk-canvas').boundingBox();
+  const sw = await page.evaluate(() => document.documentElement.scrollWidth);
+  check(sw <= 360 && box.x >= 0 && box.x + box.width <= 360, '横にはみ出さない（画面の幅 ' + Math.round(box.width) + '）');
+  check(/フィクション/.test(await page.locator('footer[data-ob-footer]').textContent()), 'ページの下に注記が出る');
+  const sound = page.locator('#otk-sound');
+  const on0 = await page.evaluate(() => OTK.audio.on);
+  const sb = await sound.boundingBox();
+  await page.touchscreen.tap(sb.x + sb.width / 2, sb.y + sb.height / 2);
+  await page.waitForTimeout(200);
+  const st = await page.evaluate(() => ({ on: OTK.audio.on, aria: document.getElementById('otk-sound').getAttribute('aria-pressed'), scene: OTK.debug.scene, t: OTK.debug.run.t }));
+  check(st.on === !on0 && st.aria === String(st.on) && st.scene === 'play', '音のボタンで、遊んだまま音を切りかえられる');
+  await page.waitForTimeout(400);
+  check((await page.evaluate(() => OTK.debug.run.t)) > st.t + 0.2, 'そのあともゲームが進む');
+  await page.touchscreen.tap(sb.x + sb.width / 2, sb.y + sb.height / 2);
+  await shot(page, id + '-360');
+  const errs = realErrors(errors);
+  check(errs.length === 0, 'コンソールにエラーがない（幅 360）' + (errs.length ? '\n' + errs.join('\n') : ''));
+  await ctx.close();
+}
+
+withSite(PORT, async ({ open, browser, base }) => {
   if (!ONLY || ONLY === 'conveni') {
     await conveniDesktop(open);
-    if (!NO_PHONE) await conveniPhone(open);
+    if (!NO_PHONE) {
+      await conveniPhone(open);
+      await smallPhone(browser, base, 'conveni');
+    }
   }
   if (!ONLY || ONLY === 'zombie') {
     await zombieDesktop(open);
-    if (!NO_PHONE) await zombiePhone(open);
+    if (!NO_PHONE) {
+      await zombiePhone(open);
+      await smallPhone(browser, base, 'zombie');
+    }
   }
   console.log('すべて ok');
 }).catch((e) => {

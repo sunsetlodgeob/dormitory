@@ -36,11 +36,11 @@
   ];
   // 飛んでくる物（dmg：当たったときのぐらぐら）
   const ITEMS = {
-    mame: { name: '豆', dmg: 4, sfx: 'step', word: 'ペチ' },
-    mikan: { name: 'みかん', dmg: 13, sfx: 'splat', word: 'ボコッ' },
-    slipper: { name: 'スリッパ', dmg: 14, sfx: 'punch', word: 'スパーン' },
-    zasshi: { name: '雑誌', dmg: 19, sfx: 'hit', word: 'バサッ' },
-    makura: { name: 'まくら', dmg: 16, sfx: 'punch', word: 'ボフッ' },
+    mame: { name: '豆', dmg: 5, sfx: 'step', word: 'ペチ' },
+    mikan: { name: 'みかん', dmg: 16, sfx: 'splat', word: 'ボコッ' },
+    slipper: { name: 'スリッパ', dmg: 17, sfx: 'punch', word: 'スパーン' },
+    zasshi: { name: '雑誌', dmg: 23, sfx: 'hit', word: 'バサッ' },
+    makura: { name: 'まくら', dmg: 19, sfx: 'punch', word: 'ボフッ' },
   };
   const ITEM_KINDS = ['mame', 'mame', 'mikan', 'mikan', 'slipper', 'zasshi', 'makura'];
   const SHOUTS = ['鬼はー外！', 'えいっ', 'くらえ！', '鬼はー外！'];
@@ -76,7 +76,7 @@
     p(17, 14, 5, 2, skin);
     // 胸の下（かげ）
     p(4, 11, 14, 5, shade(shirt, -0.55));
-    if (m.kind === 'otoko') { p(9, 3, 4, 1, P0().red); p(10, 4, 2, 1, P0().red); } // 背中の「男」の気配
+    if (m.kind === 'otoko') { p(9, 3, 4, 1, OTK.P.red); p(10, 4, 2, 1, OTK.P.red); } // 背中の「男」の気配
     // 頭
     x2.drawImage(src, 0, 0, 16, 11, 3, 3, 16, 11);
     // 鬼のツノ（カチューシャ）
@@ -95,7 +95,6 @@
     kcache.set(key, c);
     return c;
   }
-  const P0 = () => OTK.P;
 
   OTK.register({
     id: 'setsubun',
@@ -104,7 +103,7 @@
     event: '節分',
     title: '節分ピラミッド',
     goal: 'ピラミッドを\n完成させろ！',
-    howto: ['A：ゾーンで次の人をのせる', 'B（おす間）：ふんばる', '警察が来たら↓で中へ！'],
+    howto: ['A：ゾーンで次の人をのせる', 'B：おしている間ふんばる', '警察が来たら↓で中へ！'],
     note: '',
     time: 50,
     timeout: 'lose',
@@ -120,7 +119,7 @@
       let wob = 0; // ぐらぐら（0〜100）
       let bracing = false;
       let state = 'build'; // build・police・collapse・done
-      let act = null; // のぼっている・転がっている人 { type: 'climb'|'tumble', t }
+      let act = null; // のぼっている・転がっている人 { type: 'climb'|'tumble', t, i（何人目か）, lx（転がって落ちる所） }
       // タイミングのゲージ
       const mk = { pos: 0.1, dir: 1 };
       let zone = { c: 0.5, w: 0.22 };
@@ -131,15 +130,15 @@
       let policeDone = false;
       // 投げる人・飛んでいる物・落ちた物
       let throwT = 2.4;
-      const throwers = []; // 予告中・投げたあとの人 { src: 'win'|'left', w, sy, t, fireAt, item, done }
-      const flying = []; // { kind, sx, sy, tx, ty, T, t, h, slot }
+      const throwers = []; // 予告中・投げたあとの人 { src: 'win'|'left', w（窓）, sy, t, fireAt, item, fired, shout, v, kind }
+      const flying = []; // { kind, sx, sy, tx, ty, T, t, h, slot, spin }
       const falling = []; // 当たって落ちていく物
       const litter = []; // 地面に落ちた物
       const pops = []; // 「ボコッ」など
       let bodies = null; // くずれたときの人
       let endT = 0;
       let shakeX = 0; // 当たったときの横ゆれ
-      let stats = { hits: 0, braced: 0, miss: 0, throws: 0 };
+      const stats = { hits: 0, braced: 0, miss: 0, throws: 0 };
 
       function sweep() {
         // マーカーが片道にかかる秒数。上の段ほど速い
@@ -169,8 +168,8 @@
           act = { type: 'climb', t: 0, i: built };
           api.sfx('jump');
         } else {
-          act = { type: 'tumble', t: 0, i: built };
-          wob = Math.min(100, wob + 8);
+          act = { type: 'tumble', t: 0, i: built, lx: Math.min(140, SLOTS[built].x + 44) };
+          wob = Math.min(100, wob + 10);
           stats.miss++;
           api.sfx('ng');
         }
@@ -193,7 +192,7 @@
             act.landed = true;
             api.sfx('damage');
             api.shake(2, 0.2);
-            pop(act.lx != null ? act.lx : 120, GROUND - 24, 'ドテッ', P.lsky);
+            pop(act.lx + 24, GROUND - 44, 'ドテッ', P.lsky);
           }
           if (act.t >= TUMBLE) act = null;
         }
@@ -203,12 +202,13 @@
         endT = 0;
         api.sfx('fanfare');
         api.win('ピラミッド完成！\n…で、これ何の\n行事だっけ？', { wait: 1.8 });
-        throwers.length = 0;
-        flying.length = 0;
+        stopThrows();
       }
       function collapse() {
         state = 'collapse';
         endT = 0;
+        act = null;
+        stopThrows();
         api.sfx('buzzer');
         api.shake(4, 0.5);
         bodies = [];
@@ -229,8 +229,8 @@
         throwers.push(th);
         stats.throws++;
         // だんだん、間がつまる
-        const base = easy ? api.rnd(1.35, 2.2) : api.rnd(1.15, 1.95);
-        throwT = base * (1 - built * 0.025);
+        const base = easy ? api.rnd(1.1, 1.8) : api.rnd(0.9, 1.5);
+        throwT = base * (1 - built * 0.03);
       }
       function fire(th) {
         th.fired = true;
@@ -287,13 +287,17 @@
       function startPolice() {
         police = { s: 'alarm', t: 0, carX: W + 4, copX: W, copDir: 'left', said: '' };
         policeDone = true;
+        state = 'police';
+        bracing = false;
         api.sfx('siren');
         api.bgm(null);
-        // 投げていた人は、あわてて引っこむ
+        stopThrows();
+      }
+      // 投げていた人は、あわてて引っこむ。飛んでいた物は、その場で落ちる
+      function stopThrows() {
         throwers.length = 0;
         flying.forEach((f) => falling.push({ kind: f.kind, x: lerpX(f), y: lerpY(f), vx: 0, vy: 0, spin: f.spin, gy: api.rnd(GROUND - 2, GROUND + 2) }));
         flying.length = 0;
-        act = null;
       }
       function updatePolice(dt) {
         const pc = police;
@@ -330,7 +334,6 @@
             pc.t = 0;
             api.sfx('ok');
           }
-          if (pc.t > T2) pc.carX += 0; // 車はまだいる
         } else if (pc.s === 'back') {
           pc.carX += 160 * dt; // 車が去っていく
           if (pc.t >= 0.8) {
@@ -349,22 +352,33 @@
       const lerpY = (f) => { const k = Math.min(1, f.t / f.T); return api.lerp(f.sy, f.ty, k) - f.h * 4 * k * (1 - k); };
 
       // ── 描く道具 ──
+      // 吹き出し（白地に黒わく）。(x, y) はしっぽの先。o.side なら、しっぽは右に出る
       function bubble(g, x, y, str, o) {
         o = o || {};
         const size = 12;
         const lines = String(str).split('\n');
         const w = Math.max(...lines.map((l) => g.measure(l, size))) + 8, h = lines.length * 13 + 5;
-        const bx = Math.round(Math.max(2, Math.min(W - w - 2, x - w / 2))), by = Math.round(Math.max(13, y - h - 3));
+        const bx = Math.round(o.side ? x - w - 2 : Math.max(2, Math.min(W - w - 2, x - w / 2)));
+        const by = Math.round(Math.max(13, o.side ? y - h / 2 : y - h - 3));
         const fill = o.fill || P.white;
         g.R(bx + 1, by, w - 2, h, P.ink);
         g.R(bx, by + 1, w, h - 2, P.ink);
         g.R(bx + 1, by + 1, w - 2, h - 2, fill);
-        const tx = Math.round(Math.max(bx + 4, Math.min(bx + w - 5, x)));
-        g.R(tx - 2, by + h - 1, 4, 1, fill);
-        g.R(tx - 2, by + h - 1, 1, 2, P.ink);
-        g.R(tx + 1, by + h - 1, 1, 2, P.ink);
-        g.R(tx - 1, by + h, 2, 1, fill);
-        g.R(tx - 1, by + h + 1, 2, 1, P.ink);
+        if (o.side) {
+          const ty = Math.round(Math.max(by + 4, Math.min(by + h - 5, y)));
+          g.R(bx + w - 1, ty - 2, 1, 4, fill);
+          g.R(bx + w - 1, ty - 2, 2, 1, P.ink);
+          g.R(bx + w - 1, ty + 1, 2, 1, P.ink);
+          g.R(bx + w, ty - 1, 1, 2, fill);
+          g.R(bx + w + 1, ty - 1, 1, 2, P.ink);
+        } else {
+          const tx = Math.round(Math.max(bx + 4, Math.min(bx + w - 5, x)));
+          g.R(tx - 2, by + h - 1, 4, 1, fill);
+          g.R(tx - 2, by + h - 1, 1, 2, P.ink);
+          g.R(tx + 1, by + h - 1, 1, 2, P.ink);
+          g.R(tx - 1, by + h, 2, 1, fill);
+          g.R(tx - 1, by + h + 1, 2, 1, P.ink);
+        }
         lines.forEach((l, i) => g.text(l, bx + w / 2, by + 3 + i * 13, { size, col: o.col || P.ink, align: 'center' }));
       }
       function drawItem(g, kind, x, y, spin) {
@@ -405,7 +419,7 @@
         g.disc(36, 31, 9, P.night);
         // 遠くの家なみ
         [[0, 124, 30], [28, 116, 26], [56, 128, 34], [92, 120, 22], [118, 126, 30], [150, 118, 24]].forEach(([x, y, w], i) => {
-          g.R(x, y, w, 150 - y, P.xdgray === undefined ? P.navy : '#1c1838');
+          g.R(x, y, w, 150 - y, '#1c1838');
           if (i % 2) g.R(x + 6, y + 8, 4, 4, P.lyellow);
         });
         // 電柱
@@ -456,9 +470,9 @@
         g.R(d.x + d.w / 2 - 3, d.y - 10, 6, 5, P.lyellow);
         g.R(d.x + d.w / 2 - 4, d.y - 11, 8, 1, P.gray);
         // 表札「夕照寮」
-        g.R(240, 132, 13, 42, P.dbrown);
-        g.R(241, 133, 11, 40, P.cream);
-        ['夕', '照', '寮'].forEach((ch, i) => g.text(ch, 246, 134 + i * 13, { size: 12, col: P.ink, align: 'center' }));
+        g.R(240, 131, 15, 44, P.dbrown);
+        g.R(241, 132, 13, 42, P.cream);
+        ['夕', '照', '寮'].forEach((ch, i) => g.text(ch, 248, 134 + i * 13, { size: 12, col: P.ink, align: 'center' }));
       }
       function drawThrower(g, th, wd) {
         const up = th.t < 0.12 ? th.t / 0.12 : th.fired && th.t > th.fireAt + 0.4 ? Math.max(0, 1 - (th.t - th.fireAt - 0.4) / 0.15) : 1;
@@ -517,15 +531,14 @@
             const x = api.lerp(WAIT.x, s.x + 30, k), y = api.lerp(WAIT.y, s.y - 10, k) - Math.sin(k * Math.PI) * 26;
             g.sprite(img, x, y, { scale: 2 });
           } else {
-            // ひっくり返って、ドテッ
-            const lx = Math.min(140, s.x + 44);
-            act.lx = lx;
+            // ひっくり返って、ドテッ（下のゲージにかくれない高さに）
+            const lx = act.lx;
             g.ctx.save();
-            g.ctx.translate(lx + 24, GROUND - 6);
+            g.ctx.translate(lx + 24, GROUND - 22);
             g.ctx.rotate(-Math.PI / 2);
             g.ctx.drawImage(img, -24, -16, 32, 48);
             g.ctx.restore();
-            if (g.blink(4)) g.text('★', lx + 10, GROUND - 40, { size: 12, col: P.yellow });
+            if (g.blink(4)) g.text('★', lx + 6, GROUND - 46, { size: 12, col: P.yellow });
           }
           return;
         }
@@ -536,7 +549,6 @@
         }
       }
       function drawPolice(g) {
-        if (!police && state !== 'collapse') return;
         const pc = police;
         if (!pc) return;
         // 赤い光
@@ -639,9 +651,9 @@
         g.text('A', 14, 205, { size: 12, col: P.white, align: 'center' });
         g.disc(W - 34, 211, 8, bracing ? P.yellow : P.dgray);
         g.text('B', W - 34, 205, { size: 12, col: bracing ? P.ink : P.white, align: 'center' });
-        g.text(bracing ? 'ぐっ' : '', W - 22, 205, { size: 12, col: P.yellow });
-        if (bracing && state === 'build') g.text('ふんばり中', b.x + b.w / 2, 202, { size: 12, col: P.white, outline: P.ink, align: 'center' });
-        else if (hint > 0) g.text('Bをはなして！', b.x + b.w / 2, 202, { size: 12, col: P.yellow, outline: P.ink, align: 'center' });
+        // ふんばっている間は、ゲージを暗くして「ぐっ」（マーカーは見えたままにする）
+        if (bracing) g.text('ぐっ', W - 25, 205, { size: 12, col: P.yellow });
+        if (hint > 0) g.text('Bをはなして！', b.x + b.w / 2, 202, { size: 12, col: P.yellow, outline: P.ink, align: 'center' });
       }
 
       return {
@@ -693,8 +705,14 @@
               b.x += b.vx * dt;
               b.y += b.vy * dt;
               b.a += b.va * dt;
-              const floor = GROUND - 22 - (b.i % 3) * 4;
-              if (b.y >= floor) { b.y = floor; b.rest = true; b.a = Math.round(b.a / (Math.PI / 2)) * (Math.PI / 2); api.sfx('hit'); }
+              const k = (b.i % 3) * 3;
+              if (b.y >= GROUND - 30 - k) {
+                // 横か縦にたおれて止まる（下のゲージにかくれない高さに）
+                b.a = Math.round(b.a / (Math.PI / 2)) * (Math.PI / 2);
+                b.y = GROUND + 3 - FH - (Math.abs(Math.sin(b.a)) > 0.5 ? FW : FH) - k;
+                b.rest = true;
+                api.sfx('hit');
+              }
             });
             return;
           }
@@ -704,11 +722,9 @@
           }
           if (police) {
             updatePolice(dt);
-            if (state === 'build') state = police ? 'police' : 'build';
             if (!police) state = 'build';
             return;
           }
-          state = 'build';
           if (api.ended) return;
           // マーカー
           const v = 1 / sweep();
@@ -720,8 +736,8 @@
           bracing = inp.held('b');
           if (bracing && !wasBracing) api.sfx('cursor');
           // ぐらぐら：ふんばると減る。高くなるほど、ふんばらないと増えていく
-          if (bracing) wob = Math.max(0, wob - 22 * dt);
-          else wob = Math.max(0, wob + (built * 0.4 - 4) * dt);
+          if (bracing) wob = Math.max(0, wob - 14 * dt);
+          else wob = Math.max(0, wob + (built * 0.5 - 2) * dt);
           // のせる
           updateAct(dt);
           if (state !== 'build') return;
@@ -748,7 +764,6 @@
           // 警察（人数が決まった数になったか、決まった時間になったら、1 回だけ）
           if (!policeDone && !act && (built >= policeAt.n || api.time >= policeAt.t)) {
             startPolice();
-            state = 'police';
           }
         },
         draw(g) {
@@ -772,7 +787,7 @@
           // 投げる人の予告（左）と、飛んでいる物
           throwers.forEach((th) => {
             if (th.src === 'left') drawLeftWarn(g, th);
-            else if (!th.fired && th.t > 0.1) bubble(g, WINDOWS[th.w].x + 2, WINDOWS[th.w].y + 4, th.shout, { col: P.dred });
+            else if (!th.fired && th.t > 0.1) bubble(g, BLD_X - 1, WINDOWS[th.w].y + 12, th.shout, { col: P.dred, side: true });
           });
           flying.forEach((f) => drawItem(g, f.kind, lerpX(f), lerpY(f), f.spin));
           falling.forEach((f) => drawItem(g, f.kind, f.x, f.y, f.spin));

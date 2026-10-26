@@ -1,7 +1,7 @@
 /*
  * 9月「全裸コンビニ」 ― カラーボールをよけて、寮まで逃げきれ
  *  全裸（「男魂」の札とモザイクつき）でコンビニに行った帰り。夜の道を、画面の上にある寮へ向かって走る。
- *  前半（約14秒）：うしろの店員がカラーボールを投げてくる。落ちる所に赤い輪が出るので、←→で列をかえてよける。
+ *  前半（約15秒）：うしろの店員がカラーボールを投げてくる。落ちる所に赤い輪が出るので、←→で列をかえてよける。
  *    当たるとベチャッと色がついて、しっぱい。
  *  後半：おまわりさんが下から追ってくる。A連打で速く走り、自転車・電柱などを←→でよける。
  *    ぶつかると転んでおそくなる。寮の門に着いたらクリア。追いつかれたらしっぱい。
@@ -34,13 +34,9 @@
     [1.3, 'aim'], [2.6, 'aim'], [3.7, 'aim'], [4.8, 'pair'], [5.9, 'aim'], [6.6, 'aim'],
     [7.7, 'zigzag'], [9.0, 'pair'], [9.9, 'aim'], [10.6, 'aim'], [11.3, 'aim'], [12.4, 'wall'], [13.4, 'zigzag'],
   ];
-  const BALL_COLS = [['#fc7400', '#fcb860'], ['#f83898', '#f8a8d8']]; // カラーボール（オレンジ・ピンク）
-  const OBS = {
-    bike: { name: '自転車', hit: 'ガシャーン' },
-    pole: { name: '電柱', hit: 'ゴンッ' },
-    cone: { name: 'コーン', hit: 'カコーン' },
-    bags: { name: 'ゴミ袋', hit: 'ボスッ' },
-  };
+  const BALL_COLS = [['#fc7400', '#fcb860', 'オレンジ'], ['#f83898', '#f8a8d8', 'ピンク']]; // カラーボール（色・明るい所・色の名前）
+  // じゃま物（自転車・電柱・コーン・ゴミ袋）と、ぶつかったときの音の文字
+  const BUMP = { bike: 'ガシャーン', pole: 'ゴンッ', cone: 'カコーン', bags: 'ボスッ' };
 
   // 飾り（家・木・街灯）の場所を決める、毎回同じになる乱数
   function hash(k, s) {
@@ -56,7 +52,7 @@
     event: '',
     title: '全裸コンビニ',
     goal: 'よけて、\n逃げきれ！',
-    howto: ['←→：赤い輪からよける', '後半：A連打で走れ！', 'じゃま物にぶつかると転ぶ'],
+    howto: ['←→：赤い輪をよける', '後半：A連打で走れ！', 'じゃま物にぶつかると転ぶ'],
     note: '',
     time: 35,
     timeout: 'lose',
@@ -74,6 +70,7 @@
         { x: LANES[3], y: FEET + 66, run: 0.3, slow: 0 },
       ];
       const police = { on: false, x: LANES[2], run: 0 };
+      const grabSide = () => (me.x < 128 ? 1 : -1); // つかまえるとき、おまわりさんが並ぶ側（画面のまん中より）
       const balls = [];
       const decals = []; // 道に残ったペンキ
       const obs = []; // 後半のじゃま物
@@ -105,7 +102,7 @@
         lanes.forEach((ln) => {
           // 近いほうの店員が投げる
           const who = Math.abs(tenins[0].x - LANES[ln]) <= Math.abs(tenins[1].x - LANES[ln]) ? 0 : 1;
-          balls.push({ tx: LANES[ln], who, t: 0, dur, col, sx: 0, sy: 0, gx: 0, gy: 0, out: false });
+          balls.push({ tx: LANES[ln], who, t: 0, dur, col, sx: 0, sy: 0, out: false });
         });
         throwN++;
       }
@@ -115,13 +112,12 @@
         if (!me.splat && !api.ended && Math.abs(me.x - b.tx) < HIT_R) {
           me.splat = true;
           me.splatCol = b.col;
-          me.hitBy = { tx: b.tx, x: me.x, lane: me.lane, t: api.time };
           api.sfx('splat');
           api.shake(3, 0.35);
           api.flash(b.col[0], 0.18);
           pop('ベチャッ！', me.x, FEET - 60, b.col[1], 1.6);
           talk(0, '当たった！', 1.6);
-          api.lose('カラーボールが命中！\nオレンジ色で目立って\nすぐ見つかった…', { wait: 1.4 });
+          api.lose('カラーボールが命中！\n' + b.col[2] + '色で目立って\nすぐ見つかった…', { wait: 1.4 });
           return;
         }
         api.sfx('hit');
@@ -151,7 +147,7 @@
         api.sfx('buzzer');
         api.shake(3, 0.3);
         talk('police', '確保ーっ！', 2);
-        pop('ギクッ', me.x, FEET - 60, P.yellow, 1.6);
+        pop('ギクッ', me.x - grabSide() * 22, FEET - 58, P.yellow, 1.6); // おまわりさんの吹き出しと反対側に
         api.lose('おまわりさんに\nつかまった。\n「まず服を着なさい」', { wait: 1.4 });
       }
       function safe() {
@@ -358,10 +354,10 @@
           g.R(px + 1, gy - 39, 16, 3, P.white);
           g.R(px + 13, gy - 36, 3, 37, P.gray);
           if (s === 'l') {
-            // 表札「夕照寮」（たて書き）
-            g.R(px + 3, gy - 34, 11, 32, P.dbrown);
-            g.R(px + 4, gy - 33, 9, 30, P.cream);
-            ['夕', '照', '寮'].forEach((ch, i) => g.text(ch, px + 9, gy - 33 + i * 10, { size: 12, col: P.ink, align: 'center' }));
+            // 表札「夕照寮」（たて書き。1 文字 12 ドット）
+            g.R(px + 2, gy - 39, 14, 40, P.dbrown);
+            g.R(px + 3, gy - 38, 12, 38, P.cream);
+            ['夕', '照', '寮'].forEach((ch, i) => g.text(ch, px + 9, gy - 38 + i * 12, { size: 12, col: P.ink, align: 'center' }));
           }
         });
         // あいている門の戸
@@ -383,12 +379,12 @@
       }
 
       // 人を 2 倍で（足もとが (x, y)）
-      function person(g, kind, o, x, y, extra) {
+      function person(g, kind, o, x, y) {
         const fr = Math.floor(o.run || 0) % 4;
         const updown = o.dir === 'up' || o.dir === 'down';
         const img = api.person(kind, { dir: o.dir, frame: o.still ? 0 : fr % 2, naked: o.naked, variant: o.variant });
         g.shadow(x, y, 11);
-        g.sprite(img, x - 16, y - 47, Object.assign({ scale: 2, flip: updown && !o.still && fr >= 2 }, extra));
+        g.sprite(img, x - 16, y - 47, { scale: 2, flip: updown && !o.still && fr >= 2 });
       }
       function drawBike(g, o, y) {
         const cx = o.x, f = o.flip ? -1 : 1;
@@ -632,7 +628,7 @@
             if (!me.safe && !me.caught) {
               const vp = (easy ? VP - 6 : VP) + Math.max(0, gap - 84) * 1.5;
               gap += (speed - vp) * dt;
-            } else if (me.caught) gap = api.approach(gap, CATCH - 2, 40 * dt);
+            } else if (me.caught) gap = api.approach(gap, 2, 40 * dt);
             // じゃま物
             if (!api.ended) {
               obs.forEach((o) => {
@@ -644,7 +640,7 @@
                   boost *= 0.5;
                   api.sfx('damage');
                   api.shake(2, 0.25);
-                  pop(OBS[o.type].hit, o.x, FEET - 58, P.yellow, 0.9);
+                  pop(BUMP[o.type], o.x, FEET - 58, P.yellow, 0.9);
                 }
               });
               if (gap <= CATCH) caught();
@@ -652,7 +648,8 @@
             }
           }
           if (police.on) {
-            police.x = api.approach(police.x, me.x, 70 * dt);
+            // つかまえたら、となりに並んで肩をつかむ
+            police.x = api.approach(police.x, me.caught ? me.x + grabSide() * 24 : me.x, 70 * dt);
             police.run += dt * (me.caught ? 0 : me.safe ? 3 : 8);
           }
           if (me.safe) me.outY += 46 * dt;
@@ -681,14 +678,19 @@
           });
           if (police.on) {
             const py = FEET + gap;
-            if (py < H + 50) list.push({ y: py, f: () => person(g, 'police', { dir: 'up', run: police.run, still: me.caught }, police.x, py) });
+            const dir = me.caught ? (police.x > me.x ? 'left' : 'right') : 'up';
+            if (py < H + 50) list.push({ y: py, f: () => person(g, 'police', { dir, run: police.run, still: me.caught }, police.x, py) });
           }
           list.sort((a, b) => a.y - b.y).forEach((it) => it.f());
           balls.forEach((b) => drawBall(g, b));
 
           // 吹き出しと文字
           if (say) {
-            if (say.who === 'police' && police.on) bubble(g, police.x, Math.min(H - 30, FEET + gap - 50), say.str, { col: P.blue });
+            if (say.who === 'police' && police.on) {
+              // つかまえたときは、男魂くんにかからないよう外側へずらす
+              const bx = police.x + (me.caught ? grabSide() * 16 : 0);
+              bubble(g, bx, Math.min(H - 30, FEET + gap - 50), say.str, { col: P.blue });
+            }
             else if (say.who !== 'police') {
               const tn = tenins[say.who];
               if (tn.y < H + 20) bubble(g, tn.x, Math.min(H - 30, tn.y - 50), say.str, { col: P.dred });
@@ -700,7 +702,7 @@
           });
           if (api.time < 2.6 && phase === 'balls' && !me.splat) {
             g.R(40, 16, 176, 18, P.ink);
-            g.text('赤い輪からよけろ！', 128, 18, { size: 12, col: P.lyellow, align: 'center' });
+            g.text('赤い輪をよけろ！', 128, 18, { size: 12, col: P.lyellow, align: 'center' });
           }
           if (phase === 'switch' && police.on && !api.ended) {
             g.box(48, 38, 160, 50);

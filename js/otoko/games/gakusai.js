@@ -59,7 +59,7 @@
       let bump = 0, bumpCol = P.lgreen; // 数の板が弾む
       let spawned = 0;
       let done = false, doneT = 0;
-      let tried = 0, joined = 0; // テスト用：声をかけた数・来てくれた数
+      let tried = 0, joined = 0, obaIn = 0; // テスト用：声をかけた数・来てくれた女子のグループ・来てしまったおばちゃん
       const groups = [];
       const pops = []; // 「+3」などの文字
       const confetti = [];
@@ -151,7 +151,7 @@
         tried++;
       }
       function answer(g) {
-        const top = feetOf(g) - 30;
+        const top = feetOf(g) - 62; // 「+3」などは、吹き出しの上に出す
         if (g.kind === 'joshi') {
           if (api.chance(YES)) {
             g.state = 'join';
@@ -174,6 +174,7 @@
             g.t = 0;
             g.say = 'あら〜いいわね〜';
             addCount(-OBA_MINUS);
+            obaIn++;
             pop(cx(g), top, '−' + OBA_MINUS, P.red, true);
             api.sfx('damage');
             api.shake(3, 0.3);
@@ -364,14 +365,11 @@
         g.R(x0, 106, x1 - x0, 1, P.lorange);
         g.R(x0 + 2, 110, x1 - x0 - 4, 36, P.white);
         g.R(x0 + 2, 110, x1 - x0 - 4, 2, P.lgray);
-        g.text('やきそば', 32, 113, { size: 12, col: P.red, align: 'center' });
-        g.num('300', 24, 129, { col: P.ink, scale: 2 });
-        g.text('円', 48, 125, { size: 12, col: P.ink });
-        // 「女子 半額」の貼り紙
-        g.R(64, 114, 26, 28, P.lpink);
-        g.R(64, 114, 26, 1, P.pink);
-        g.text('女子', 77, 115, { size: 12, col: P.rose, align: 'center' });
-        g.text('半額', 77, 128, { size: 12, col: P.rose, align: 'center' });
+        // 店の名前と「女子半額」の貼り紙（男魂くんにかくれない左寄りに）
+        g.text('やきそば', 40, 113, { size: 16, col: P.red, align: 'center' });
+        g.R(12, 130, 56, 14, P.lpink);
+        g.R(12, 130, 56, 1, P.pink);
+        g.text('女子半額', 40, 131, { size: 12, col: P.rose, align: 'center' });
         g.R(x0, 146, x1 - x0, 2, P.dgray);
       }
       function drawStreet(g) {
@@ -462,6 +460,9 @@
       }
       function drawTarget(g) {
         if (api.ended) return;
+        // えらんでいる列（のぼりの左に「▶」）
+        const ly0 = LANES[lane].feet - 9;
+        for (let i = 0; i < 4; i++) g.R(ZONE_L - 8 + i, ly0 + i, 1, 7 - i * 2, P.yellow);
         const t = target();
         if (!t) return;
         const feet = LANES[t.lane].feet;
@@ -499,13 +500,14 @@
         g.R(bx, y, bw, bh, bump > 0 ? bumpCol : P.red);
         g.R(bx + 2, y + 2, bw - 4, bh - 4, P.white);
         g.text('さそった女子', bx + bw / 2, y + 3, { size: 12, col: P.dred, align: 'center' });
-        const col = count >= NEED ? P.green : count < 0 ? P.red : P.ink;
+        const col = count >= NEED ? P.green : P.ink;
         g.num(String(count), bx + 46, y + 16, { scale: 3, col, align: 'right' });
         g.num('/' + NEED, bx + 50, y + 21, { scale: 2, col: P.dgray });
       }
       function drawTalk(g) {
-        groups.forEach((gr) => {
-          if (!gr.say || gr.sayT > 1.1) return;
+        // おばちゃんの吹き出しは、まわりの「ひっ」より上に
+        const talk = groups.filter((gr) => gr.say && gr.sayT <= 1.1).sort((a, b) => (a.kind === 'oba') - (b.kind === 'oba'));
+        talk.forEach((gr) => {
           const feet = LANES[gr.lane].feet;
           const top = feet - 26 + gr.members[0].oy;
           const mx = gr.x + (gr.lane === 0 ? gr.w - 8 : 8) + gr.members[0].ox;
@@ -528,7 +530,7 @@
         get count() { return count; },
         get lane() { return lane; },
         get cool() { return cool; },
-        get stats() { return { tried, joined, spawned }; },
+        get stats() { return { tried, joined, spawned, oba: obaIn }; },
         groups,
         // テスト用：いま A をおしたら声をかける相手
         target() {

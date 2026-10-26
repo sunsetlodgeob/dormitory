@@ -22,12 +22,14 @@
   const STAIRS = 5; // 階段の列（男魂くんはここから上がってくる）
   const SPEED = 72; // 男魂くんの歩く速さ（ドット/秒）
   const INITIAL = 3; // 最初から廊下にいるゾンビ
+  const STORY_T = 2.8; // 最初の説明を出しておく時間（このあとドアから出てきはじめる）
   const WALL = '#d0c4a0', WALL_D = '#a89c7c', FLOOR = '#34509c', FLOOR_D = '#2c4488', FLOOR_L = '#4466b4';
   const DIRV = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] };
   // 正気に戻ったときのひとこと（最初は必ず「はっ…俺は何を…」）
   const LINES = ['はっ…俺は何を…', 'ここは…廊下？', 'キノコ…うっ…', 'あれ、もう朝？', 'なんで廊下に…', 'はっ…！', '鍋…食べたっけ？', '頭がいたい…', 'えっ、何事？'];
   const MUMBLE = ['うー…', 'あー…', 'うぁー…', 'キノコ…'];
   const CURED_KIND = ['douki', 'senpai', 'ichinen'];
+  const SAY_FROM = 0.35, SAY_TO = 2.6; // 正気に戻ってから、ひとことを出しておく間（秒）
 
   OTK.register({
     id: 'zombie',
@@ -47,7 +49,7 @@
       const easy = api.tries >= 2; // 2 回しっぱいしたら、ゾンビを少しおそく・人数を 1 人へらす
       const TOTAL = easy ? 8 : 9;
 
-      const me = { x: STAIRS * COL + COL / 2, y: 104, dir: 'down', walk: 0, punchT: 0, cool: 0, inv: 0, hearts: 3, kx: 0, ky: 0, zombie: false };
+      const me = { x: STAIRS * COL + COL / 2, y: 104, dir: 'down', walk: 0, moving: false, punchT: 0, cool: 0, inv: 0, hearts: 3, kx: 0, ky: 0, zombie: false };
       const zs = [];
       const doors = [];
       NORTH.forEach((name, i) => doors.push({ side: 'n', i, name, x: i * COL + COL / 2, open: false, tell: 0 }));
@@ -55,13 +57,13 @@
       // ドアは開けっぱなしのことも多い
       api.shuffle(doors.filter((d) => d.name !== '階段')).slice(0, 4).forEach((d) => { d.open = true; });
       const fx = []; // 「ボカッ」などの文字と、火花
-      let cured = 0, left = TOTAL, spawnT = 2.2, pending = null, camX = 0, nextId = 0, hurtN = 0, punches = 0, hits = 0;
+      let cured = 0, left = TOTAL, spawnT = STORY_T, pending = null, camX = 0, nextId = 0, hurtN = 0, punches = 0, hits = 0;
 
       function addZombie(x, y, o) {
         const id = nextId++;
         const z = Object.assign({
           id, x, y, hp: 2, state: 'walk', t: 0, kx: 0, ky: 0, v: id % 3, dir: 'down', walk: api.rnd(1), ph: api.rnd(6.28),
-          idleIn: api.rnd(1.5, 3.5), mumble: api.rnd(0.5, 3), mumbleT: 0, mumbleS: api.pick(MUMBLE), toY: y, line: '', sayT: 0, shakeT: 0,
+          idleIn: api.rnd(1.5, 3.5), mumble: api.rnd(0.5, 3), mumbleT: 0, mumbleS: api.pick(MUMBLE), toY: y, line: '', shakeT: 0,
         }, o || {});
         zs.push(z);
         return z;
@@ -133,10 +135,9 @@
         // 正気に戻った
         z.state = 'cured';
         z.t = 0;
-        z.line = LINES[cured % LINES.length];
-        z.sayT = 2.2;
+        z.line = LINES[cured % LINES.length]; // 吹き出しは「ドカッ」が消えてから（SAY_FROM〜SAY_TO 秒）
         cured++;
-        pop('ドカッ', z.x, z.y - 30, P.orange);
+        pop('ドカッ', z.x, z.y - 30, P.orange, SAY_FROM);
         api.shake(2, 0.15);
         api.after(0.2, () => api.sfx('coin'));
         if (cured >= TOTAL) api.win('全員、正気に戻った！\nキノコ鍋は\n禁止になりました。', { wait: 1.6 });
@@ -194,7 +195,6 @@
       function updateZombie(z, dt) {
         z.t += dt;
         z.shakeT = Math.max(0, z.shakeT - dt);
-        z.sayT = Math.max(0, z.sayT - dt);
         // ふっとび
         z.x += z.kx * dt;
         z.y += z.ky * dt;
@@ -278,7 +278,8 @@
             if (me.punchT <= 0) me.dir = dirTo(dx, dy);
           }
         }
-        if ((mx || my) && !me.zombie) {
+        me.moving = !!(mx || my) && !me.zombie;
+        if (me.moving) {
           const n = Math.hypot(mx, my);
           const sp = SPEED * (me.punchT > 0 ? 0.5 : 1);
           me.x += (mx / n) * sp * dt;
@@ -364,7 +365,7 @@
           g.R(fe - 2, FLOOR_T - 14, 2, 10, '#fc7860');
           g.R(fe - 1, FLOOR_T - 17, 3, 2, P.ink);
         }
-        [[1, 'board'], [7, 'board']].forEach(([i]) => {
+        [1, 7].forEach((i) => {
           const bx = sx(i * COL + COL - 8);
           if (bx < -20 || bx > W + 20) return;
           g.R(bx - 1, 38, 18, 18, P.dbrown);
@@ -395,7 +396,7 @@
           g.R(dx + 2, top + 19, DOOR_W - 4, 16, '#d8a068');
           g.R(dx + DOOR_W - 5, top + 20, 2, 2, P.yellow);
         }
-        if (d.tell > 0 && g.blink(6)) g.text('ガチャ', dx + DOOR_W / 2, top - 15, { size: 12, col: P.yellow, outline: P.black, align: 'center' });
+        if (d.tell > 0 && g.blink(6)) g.text('ガチャ', dx + DOOR_W / 2, top + 12, { size: 12, col: P.yellow, outline: P.black, align: 'center' });
       }
       function drawFloor(g) {
         g.R(0, FLOOR_T, W, FLOOR_B - FLOOR_T, FLOOR);
@@ -488,7 +489,7 @@
           const kind = CURED_KIND[z.id % 3];
           sitting(g, api.person(kind, { dir: 'down', variant: z.id }), x, y);
           if (z.t < 0.3 && g.blink(10)) g.R(x - 9, y - 22, 18, 22, P.white);
-          else if (z.t > 2.4) {
+          else if (z.t > SAY_TO) {
             // ぼうぜん（汗）
             const k = Math.floor((api.time + z.ph) * 1.5) % 2;
             g.R(x + 7, y - 20 + k, 2, 3, P.lsky);
@@ -496,7 +497,7 @@
           return;
         }
         const step = Math.floor(z.walk * (z.state === 'emerge' ? 4 : 3.5)) % 4;
-        const dir = z.state === 'emerge' ? z.dir : z.dir;
+        const dir = z.dir;
         const updown = dir === 'up' || dir === 'down';
         const still = z.state === 'stun' || z.state === 'idle';
         const img = api.person('zombie', { dir, frame: still ? 0 : step % 2, variant: z.v });
@@ -523,7 +524,7 @@
           g.R(x + 5, y - 20, 2, 1, P.red);
           return;
         }
-        const moving = me.walk > 0 && (api.input.dir().x || api.input.dir().y);
+        const moving = me.moving && !api.ended;
         const step = Math.floor(me.walk * 7) % 4;
         const updown = me.dir === 'up' || me.dir === 'down';
         const img = api.person('otoko', { dir: me.dir, frame: moving ? step % 2 : 0 });
@@ -626,17 +627,17 @@
           zs.forEach((z) => {
             const x = sx(z.x);
             if (x < -30 || x > W + 30) return;
-            if (z.state === 'cured' && z.sayT > 0) bubble(g, x, z.y - 22, z.line);
+            if (z.state === 'cured' && z.t >= SAY_FROM && z.t < SAY_TO) bubble(g, x, z.y - 22, z.line);
             else if (z.state !== 'cured' && z.mumbleT > 0) g.text(z.mumbleS, x, z.y - 38, { size: 12, col: P.lgreen, outline: P.black, align: 'center' });
           });
           drawFx(g);
           drawHud(g);
           drawMap(g);
-          if (api.time > 0 && api.time < 2.8 && !api.ended) {
-            g.R(28, 150, 200, 34, P.ink);
-            g.frame(29, 151, 198, 32, P.violet);
-            g.text('あやしいキノコ鍋を食べた寮生が', 128, 153, { size: 12, col: P.white, align: 'center' });
-            g.text('ゾンビになった！', 128, 168, { size: 12, col: P.lgreen, align: 'center' });
+          if (api.time > 0 && api.time < STORY_T && !api.ended) {
+            g.R(28, 38, 200, 34, P.ink);
+            g.frame(29, 39, 198, 32, P.violet);
+            g.text('あやしいキノコ鍋を食べた寮生が', 128, 41, { size: 12, col: P.white, align: 'center' });
+            g.text('ゾンビになった！', 128, 56, { size: 12, col: P.lgreen, align: 'center' });
           }
         },
       };
