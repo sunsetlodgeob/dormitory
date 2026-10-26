@@ -37,6 +37,25 @@ window.OB_STATUS = {
     { id: '', month: null, event: '', title: '寮生ひとりひとりのドット絵', status: 'あとで', note: 'Codex に発注するかも' },
   ],
 
+  // ストーリーの場面（game/?skit=<id> で、その場面から見られる）
+  skits: [
+    { id: 'opening', title: '入寮', note: '寮に着く → 管理人さんにあいさつ → 食堂で寮長たちに迎えられる' },
+    { id: 'nomu', title: '4月 新歓コンパ', note: '「コールが来たら飲む！限界がきたら吐く！」' },
+    { id: 'nise', title: '4月 ニセ一年のうわさ', note: '「ナウい寮っすね！」' },
+    { id: 'gyudon', title: '6月 仕送り前', note: '牛丼屋は 50円引き。財布は部屋に…' },
+    { id: 'deisui', title: '7月 終電前の電話', note: '「…この電話、鳴るんだな」' },
+    { id: 'deisui_win', title: '7月 クリアのあと', note: '「…ここ、どこ？」' },
+    { id: 'conveni', title: '9月 罰ゲームのくじ', note: '「ついでにアイス買ってきて」' },
+    { id: 'conveni_win', title: '9月 クリアのあと', note: '「…で、アイスは？」' },
+    { id: 'zombie', title: '10月 キノコ鍋', note: '裏の川原のキノコ（たぶん）' },
+    { id: 'zombie_win', title: '10月 クリアのあと', note: '「なんでみんな顔がはれてるんだ？」' },
+    { id: 'gakusai', title: '11月 学祭の作戦会議', note: '目標は女子100人。とりのおばちゃん登場' },
+    { id: 'setsubun', title: '2月 節分', note: '「豆は、まかれるほうだ」' },
+    { id: 'unko', title: '3月 追いコン', note: '卒業する先輩からのプレゼント' },
+    { id: 'kippu', title: '3月 追いコンの夜', note: '「また全裸ですか…」' },
+    { id: 'ending', title: '3月の終わり 屋上', note: '「これが『夕照』だ」→ エンディングへ' },
+  ],
+
   // Google 側と、公開までの仕上げ
   tasks: [
     { area: 'Google 側', name: 'フォーム → スプシ → Gemini で整理', status: '完了', note: 'Apps Script。本物の Google ではまだ動かしていない' },

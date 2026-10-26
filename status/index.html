@@ -78,6 +78,12 @@
     <div class="st-cards" id="games"></div>
   </section>
 
+  <section class="fc-window" aria-labelledby="skits-title">
+    <h2 id="skits-title">ストーリーの場面（たたき）</h2>
+    <p class="st-note">「みる」で、その場面から始まります（そのあとは 1 年の続きを遊べます）。A で早送り、START（Esc）でとばせます。</p>
+    <div class="st-cards" id="skits"></div>
+  </section>
+
   <section class="fc-window" aria-labelledby="tasks-title">
     <h2 id="tasks-title">Google 側と、公開までの仕上げ</h2>
     <ul class="st-list" id="tasks"></ul>
@@ -179,6 +185,16 @@
       c.append(a);
     }
     $('games').append(c);
+  }
+
+  // ストーリーの場面
+  for (const k of S.skits || []) {
+    const c = el('article', 'st-card');
+    c.append(el('h3', null, k.title), el('p', null, k.note || ''));
+    const a = el('a', 'fc-btn', 'みる');
+    a.href = '../game/?skit=' + encodeURIComponent(k.id);
+    c.append(a);
+    $('skits').append(c);
   }
 
   // Google 側と仕上げ
