@@ -3,7 +3,9 @@
  *  場面（scene）を順に切りかえていく。ミニゲームの中身は js/otoko/games/*.js
  *  進み具合は localStorage 'otk-save' に { step, clear, good, bad } で覚える
  *    step：1年のうち、次に遊ぶミニゲームの番号（0 から）
- *  テスト用：game/?play=<id> でそのミニゲームだけ遊べる（くわしくは docs/site/ENGINE.md）
+ *  1年の流れ：はじまりの寸劇 → カレンダー → 前ふりの寸劇 → 説明 → 3・2・1 → ミニゲーム → 結果 →（勝ったあとの寸劇）→ 次の月…
+ *    寸劇（ミニゲームの間の短いお話）の台本は js/otoko/scenes.js、動かすしくみは js/otoko/story.js
+ *  テスト用：game/?play=<id> でそのミニゲームだけ遊べる。?skit=<id> でその寸劇から、?noskit=1 で寸劇なし（くわしくは docs/site/ENGINE.md）
  */
 (function () {
   'use strict';
@@ -271,7 +273,7 @@
   };
   const FLAVOR = {
     nomu: '桜がさいている。新歓の季節だ。', nise: '新歓は、まだ終わらない。', gyudon: 'つゆ。金がない。', deisui: '夏。夜は長い。',
-    conveni: 'まだ夏休み。暑い。', zombie: '秋。寮のようすが、おかしい。', gakusai: '学祭の季節。', setsubun: 'さむい。豆がある。',
+    conveni: 'まだ夏休み。暑い。', zombie: '秋。キノコの季節。', gakusai: '学祭の季節。', setsubun: 'さむい。豆がある。',
     unko: '別れの季節。', kippu: '追いコンは、まだ終わらない。',
   };
 
@@ -326,7 +328,7 @@
         startStory();
       } else if (it.id === 'cont') {
         audio.sfx('ok');
-        go(save.step >= total() ? GoodEnd() : Calendar(save.step));
+        go(save.step >= total() ? withSkit('ending', GoodEnd) : Calendar(save.step));
       } else if (it.id === 'prac') {
         audio.sfx('ok');
         go(Practice());
@@ -343,7 +345,7 @@
       audio.sfx('ok');
       save.step = 0;
       writeSave();
-      go(Story());
+      go(withSkit('opening', () => Calendar(0)));
     }
     return {
       name: 'menu',
@@ -462,56 +464,46 @@
     };
   }
 
-  // ── はじまりの話 ──────────────────────────────────
-  // \n は、きりのよい所での改行（1 行 13 文字まで）
-  const STORY = [
-    '20xx年4月。',
-    '新入生の男魂くんは、\n大学の男子寮「夕照寮」に\n入寮した。',
-    '寮には、歴代の寮生が\n全員いる。学年も名前も、\nよくわからない。',
-    '先輩A、同期B、一年C……。\nとにかく人が多い。\nそして、だいたい裸だ。',
-    '寮の行事は、ほぼ毎月ある。\nどれも、ろくでもない。',
-    'この1年をのりきれば、\nきっと何かが手に入る。\n……はずだ。',
-  ];
-  function Story() {
-    const typer = Typer(STORY);
+  // ── 寸劇（ミニゲームの間の短いお話） ──────────────────────────
+  // 台本は js/otoko/scenes.js（OTK.SKITS）、動かすのは js/otoko/story.js。名前は
+  //   opening（はじまり）、ミニゲームの id（その前ふり）、<id>_win（勝ったあと）、ending（よいエンディングの前）
+  // 1年をはじめたときだけ見せる（練習モード・?play= では出ない）。やりなおしのときは前ふりをとばす。
+  let noSkits = params.get('noskit') === '1' || params.get('noscenes') === '1';
+  function Skit(id, next) {
+    let gone = false;
+    const leave = () => { if (!gone) { gone = true; go(next()); } };
+    let s;
+    try {
+      s = OTK.skit.create(id, { onEnd: leave });
+    } catch (e) {
+      console.error('寸劇「' + id + '」を作れません:', e);
+      return next();
+    }
     return {
-      name: 'story',
-      enter() { audio.bgm('play'); },
-      update(dt) {
-        typer.update(dt);
-        if (input.pressed('pause')) { audio.sfx('ok'); go(Calendar(0)); return; }
-        if (input.pressed('a') || input.tap) {
-          if (typer.advance()) { audio.sfx('ok'); go(Calendar(0)); }
-        }
-      },
-      draw() {
-        const t = this.t;
-        drawSpring(t);
-        // 寮生が窓から顔を出す
-        [[1, 0, 'senpai'], [4, 0, 'douki'], [9, 1, 'senpai'], [12, 0, 'ichinen'], [2, 1, 'zombie']].forEach(([i, f, k], n) => {
-          if (t < 1.2 + n * 0.8) return;
-          const wx = 28 + 5 + i * 14, wy = 72 + 5 + f * 17 + 3;
-          g.ctx.save();
-          g.ctx.beginPath();
-          g.ctx.rect(wx, wy, 9, 10);
-          g.ctx.clip();
-          g.sprite(OTK.person(k, { variant: n + 1 }), wx - 3, wy + Math.max(0, 6 - Math.round((t - 1.2 - n * 0.8) * 20)));
-          g.ctx.restore();
-        });
-        // 荷物を持って、玄関へ歩いていく
-        const x = Math.min(112, -16 + t * 14);
-        const arrived = x >= 112;
-        hero(Math.round(x), 106, arrived ? 'up' : 'right', t, { still: arrived });
-        if (!arrived) {
-          R(Math.round(x) + 3, 120, 7, 6, '#7c4c2c');
-          R(Math.round(x) + 4, 119, 5, 1, '#3c2c1c');
-        }
-        g.box(6, 144, W - 12, 76);
-        typer.draw(18, 154, W - 36, { lines: 3 });
-        g.text('START：とばす', W - 12, 2, { size: 12, align: 'right', col: P.navy });
-      },
+      name: 'skit',
+      skit: s,
+      enter() { s.enter(); },
+      // 寸劇でエラーが出ても、先へ進めるように
+      update(dt) { try { s.update(dt); } catch (e) { console.error('寸劇「' + id + '」でエラー:', e); leave(); } },
+      draw() { try { s.draw(); } catch (e) { if (!gone) { console.error('寸劇「' + id + '」の描画でエラー:', e); leave(); } } },
     };
   }
+  // 寸劇があれば見せてから next() へ。なければ（または寸劇なしの設定なら）すぐ next()
+  function withSkit(id, next) {
+    return !noSkits && OTK.skit && OTK.skit.has(id) ? Skit(id, next) : next();
+  }
+  // 寸劇のあとに行く場面
+  function skitNext(id) {
+    if (id === 'opening') return () => Calendar(0);
+    if (id === 'ending') return GoodEnd;
+    const won = /_win$/.test(id);
+    const gid = id.replace(/_win$/, '');
+    const step = games().findIndex((d) => d.id === gid);
+    if (step < 0) return () => Title();
+    if (won) return step + 1 >= total() ? () => withSkit('ending', GoodEnd) : () => Calendar(step + 1);
+    return () => Intro({ mode: 'story', id: gid, step, tries: 0 });
+  }
+
   // ── 月の表示（カレンダー） ────────────────────────────
   function Calendar(step, tries) {
     const list = games();
@@ -526,7 +518,10 @@
         writeSave();
       },
       update() {
-        if (this.t > 2.6 || (this.t > 0.3 && input.any())) go(Intro({ mode: 'story', id: d.id, step, tries: tries || 0 }));
+        if (this.t > 2.6 || (this.t > 0.3 && input.any())) {
+          // やりなおし（tries が 1 以上）のときは、前ふりの寸劇をとばして説明へ
+          go(tries ? Intro({ mode: 'story', id: d.id, step, tries }) : withSkit(d.id, skitNext(d.id)));
+        }
       },
       draw() {
         const t = this.t;
@@ -770,7 +765,6 @@
   // ── 結果 ─────────────────────────────────────────
   function Result(ctx, run, res) {
     const win = res.result === 'win';
-    const list = games();
     return {
       name: 'result',
       run,
@@ -788,8 +782,7 @@
           curRun = null;
           if (ctx.mode === 'story') {
             if (!win) go(BadEnd(ctx));
-            else if (ctx.step + 1 >= list.length) go(GoodEnd());
-            else go(Calendar(ctx.step + 1));
+            else go(withSkit(ctx.id + '_win', skitNext(ctx.id + '_win')));
           } else {
             const next = Object.assign({}, ctx, { tries: (ctx.tries || 0) + (win ? 0 : 1) });
             if (ctx.mode === 'debug' && !(ctx.quick)) go(Intro(next));
@@ -1043,7 +1036,7 @@
       case 'title': return Title();
       case 'menu': return Menu();
       case 'practice': return Practice();
-      case 'story': return Story();
+      case 'story': return Skit('opening', () => Calendar(0)); // むかしの名前（はじまりの話）
       case 'ending_good': return GoodEnd();
       case 'ending_bad': return BadEnd({ mode: 'story', step: Math.max(0, Math.min(total() - 1, save.step)), id: (games()[save.step] || games()[0]).id });
       default: return null;
@@ -1057,6 +1050,16 @@
     get api() { return curRun ? curRun.api : null; },
     get save() { return JSON.parse(JSON.stringify(save)); },
     get speed() { return OTK.speed; },
+    // 寸劇：いま見ている寸劇（{ id, step, steps, done, line, map }）、寸劇の名前の一覧、寸劇なしにする
+    get skit() { return D.cur && D.cur.name === 'skit' && D.cur.skit ? D.cur.skit.info : null; },
+    get skits() { return OTK.skit ? OTK.skit.ids() : []; },
+    get noSkits() { return noSkits; },
+    set noSkits(v) { noSkits = !!v; },
+    // その寸劇から始める（終わったら、1年の流れのとおり次へ）
+    playSkit(id) {
+      if (!OTK.skit || !OTK.skit.has(id)) throw new Error('寸劇がありません: ' + id);
+      go(Skit(id, skitNext(id)), { instant: true });
+    },
     set speed(v) { OTK.speed = Math.max(0.1, Number(v) || 1); },
     // ミニゲームを 1 本はじめる。quick: true なら説明と 3・2・1 をとばす。tries: 2 などで、しっぱいしたあとのやさしい難しさを試せる
     start(id, o) {
@@ -1096,8 +1099,11 @@
   OTK.setScene(director);
   const playId = params.get('play');
   if (params.get('seed') != null && params.get('seed') !== '') OTK.seed = Number(params.get('seed')) | 0;
+  const skitId = params.get('skit') || params.get('scene');
   if (playId && OTK.get(playId)) OTK.debug.start(playId, { quick: params.get('quick') === '1' });
+  else if (skitId && OTK.skit && OTK.skit.has(skitId)) OTK.debug.playSkit(skitId);
   else {
+    if (skitId) console.warn('?skit= の寸劇が見つかりません: ' + skitId);
     if (playId) console.warn('?play= のミニゲームが見つかりません: ' + playId);
     go(Title(), { instant: true });
   }

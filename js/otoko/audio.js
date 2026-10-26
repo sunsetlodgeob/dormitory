@@ -164,6 +164,11 @@
     pause: () => seq('pulse25', [NOTE(88), NOTE(81), NOTE(88), NOTE(81)], 0.05, 0.1),
     damage: () => { tone('square', 600, 120, 0.18, 0.12); noise(0.1, 0.2, 0, { hp: 1000 }); },
     power: () => seq('pulse25', [NOTE(72), NOTE(79), NOTE(84), NOTE(91)], 0.045, 0.11),
+    // 寸劇（js/otoko/story.js）用：びっくり「！」、はてな「？」、電話のベル、ぼわん（着がえ・変身）
+    surprise: () => seq('pulse25', [NOTE(84), NOTE(96)], 0.05, 0.13),
+    hatena: () => tone('pulse25', 520, 1040, 0.16, 0.1),
+    ring: () => { for (let i = 0; i < 10; i++) tone('square', i % 2 ? 1250 : 1560, null, 0.035, 0.05, i * 0.045); },
+    poof: () => { noise(0.32, 0.3, 0, { lp: 2600, to: 300 }); tone('triangle', 330, 110, 0.25, 0.18); },
   };
   const lastSfx = {};
 
@@ -250,6 +255,15 @@
       bpm: 120, loop: false,
       p1: `@2 o4 l8 b r16 b- r16 a r16 a-4.`,
       tri: `l8 o2 e r16 d+ r16 d r16 c+4.`,
+    },
+    // 寸劇（ミニゲームの間のお話）：のんきな寮の毎日
+    hibi: {
+      bpm: 118, loop: true,
+      p1: `@1 o5 l8 c4 e g a4 g4 | f4 a g e4 r4 | d4 f a g4 e c | d2 r2 |
+        c4 e g >c4 <b a | g4 f e f4 a4 | g f e d e4 d <b | >c2 r2`,
+      p2: `@2 v5 o4 l8 [r e r g]2 | [r f r a]2 | [r d r f]2 | [r d r g]2 | [r e r g]2 | [r f r a]2 | [r d r g]2 | [r e r g]2`,
+      tri: `l4 o3c o2g o3c o2g | o3f c f c | o3d o2a o3d o2a | o2g d g b | o3c o2g o3c o2g | o3f c f c | o2g d g b | o3c o2g o3c r`,
+      dr: `v8 l8 [k h h h s h h h]8`,
     },
     // 練習モードの一覧など（静かめ）
     menu: {

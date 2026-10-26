@@ -15,7 +15,10 @@ game/index.html          ゲーム「男魂くんの1年」
   js/otoko/audio.js      ピコピコ音（効果音・BGM）
   js/otoko/chars.js      人物のドット絵
   js/otoko/main.js       タイトル・1年の進行・練習モード・エンディング
+  js/otoko/story.js      寸劇（ミニゲームの間の短いお話）を動かすしくみ
+  js/otoko/scenes.js     寸劇の台本（セリフを直すときはここだけ）
   js/otoko/games/*.js    ミニゲーム（1 本 1 ファイル）
+                         寸劇の背景に、寮さんぽの js/world.js（地図）と js/art.js（絵）も読む
 nenpyo/index.html        年表（Google ログイン）   js/nenpyo.js  css/nenpyo.css
 heya/index.html          部屋割り                  js/heya.js    css/heya.css
 meibo/index.html         名簿                      js/meibo.js   css/meibo.css
@@ -100,6 +103,8 @@ docs/site/SETUP.md       Google 側の設定手順（幹事向け）
 
 20xx年4月、新入生の男魂くんが夕照寮に入寮する。1年間の行事（ミニゲーム）を順にこなす。登場する寮生は過去の寮生全員だが、学年も名前も分からない（先輩A・同期B…）。
 
+- 行事と行事の間に、ドット絵の人物が動く短い寸劇が入る（入寮のあいさつ、各行事の前ふり、勝ったあとの一言、屋上の夕焼け）。
+  見ているだけでよく、START でとばせる。台本は `js/otoko/scenes.js`、書き方は `docs/site/ENGINE.md` の 9。
 - 全部クリア → 寮になじみ、**留年が確定する**（めでたしめでたし）
 - 途中で失敗 → 途中退寮。中途半端に寮の影響を受けたので友達もできず、**留年が確定する**
 - ゲームオーバーのあとは「その月からやりなおす」を選べる。
@@ -174,10 +179,11 @@ OTK.register({
 - ぜんぶまとめて動かすときは `sh tests/run-all.sh`（1 つでも失敗すると、終了コードが 0 以外になる）。30 分ほどかかる。
 - `gas/Code.gs` の確認は `node tests/gas/run.js`（Google には出ない。Apps Script のまねをして動かす）。
 - 同時に動かしても重ならないように、ポートを分ける：
-  ゲームのエンジン 8801、ホーム 8802、部屋割り 8803、名簿・年表 8804、ミニゲーム 8811〜8815、サイト全体 8805、確認役 8821〜。
+  ゲームのエンジン 8801、ホーム 8802、部屋割り 8803、名簿・年表 8804、ミニゲーム 8811〜8815、サイト全体 8805、ゲームの寸劇 8806、確認役 8821〜。
 - どの確認も、環境変数 `PORT` でポートを変えられる（例：`PORT=8821 node tests/e2e/home.test.js`）。古い名前の `HOME_PORT`・`HEYA_PORT`・`MEIBO_PORT`・`NENPYO_PORT` も使える。
 - このリポジトリの外（Google Fonts など）には出られないことがある。フォントが読めないことによるエラーは無視してよい（`realErrors()`）。
 - 確認のための入り口：
   - ホーム：`window.HOME.state`（いまの場面・カーソル）、`HOME.hit`、`HOME.audio.current()`・`HOME.audio.started()`
-  - ゲーム：`OTK.debug`（`docs/site/ENGINE.md` の 7）。`game/?play=<id>&quick=1&seed=1` で、そのミニゲームからすぐ始まる
+  - ゲーム：`OTK.debug`（`docs/site/ENGINE.md` の 7）。`game/?play=<id>&quick=1&seed=1` で、そのミニゲームからすぐ始まる。
+    `game/?skit=<名前>` でその寸劇から、`game/?noskit=1` で寸劇なし（ENGINE.md の 9）
   - 部屋割り：`window.HEYA`

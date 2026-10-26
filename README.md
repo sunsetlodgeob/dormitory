@@ -12,7 +12,7 @@
 | ページ | 場所 | 中身 |
 | --- | --- | --- |
 | ホーム | `index.html` | ファミコンのゲームふうのメニュー。寮のまわりの地図でカーソルを動かして、行き先をえらぶ。下にふつうのリンクの一覧もある |
-| 男魂くんの1年 | `game/` | 新入生・男魂くんが、寮の1年の行事をミニゲーム 10 本でのりきる。練習モードで 1 本ずつも遊べる |
+| 男魂くんの1年 | `game/` | 新入生・男魂くんが、寮の1年の行事をミニゲーム 10 本でのりきる。行事の間には、寮を舞台にした短い寸劇が入る。練習モードで 1 本ずつも遊べる |
 | 年表 | `nenpyo/` | 寮の事件簿を年度ごとに。Google でログインした、見る権限のある人だけが読める |
 | 部屋割り | `heya/` | 年度をえらぶと、ドット絵の寮の地図で、だれがどの部屋にいたかがわかる。一覧表にも切りかえられる |
 | 名簿 | `meibo/` | 入学した年度ごとの、寮生の名前 |
@@ -51,7 +51,7 @@ python3 -m http.server 8000
 ```sh
 sh tests/run-all.sh                    # ぜんぶ（30 分ほど）。失敗があると終了コードが 0 以外
 node tests/e2e/site.test.js            # サイト全体を 1 回ずつ回る（ページのつながり・注記・スマホの幅）
-node tests/e2e/home.test.js            # ページごと（home・game・heya・meibo・nenpyo・games-*）
+node tests/e2e/home.test.js            # ページごと（home・game・story・heya・meibo・nenpyo・games-*）
 node tests/gas/run.js                  # Apps Script（gas/Code.gs）。Google には出ない
 PORT=8821 node tests/e2e/home.test.js  # ポートを変える
 ```
@@ -67,7 +67,7 @@ Playwright は `/opt/node22/lib/node_modules/playwright` か、ふつうの `req
 | 場所 | 中身 |
 | --- | --- |
 | `index.html`・`css/home.css`・`js/home/` | ホーム |
-| `game/`・`css/otoko.css`・`js/otoko/` | ゲーム「男魂くんの1年」。ミニゲームは `js/otoko/games/<id>.js` に 1 本 1 ファイル |
+| `game/`・`css/otoko.css`・`js/otoko/` | ゲーム「男魂くんの1年」。ミニゲームは `js/otoko/games/<id>.js` に 1 本 1 ファイル。寸劇の台本は `js/otoko/scenes.js`（背景は寮さんぽの `js/world.js`・`js/art.js` を借りる） |
 | `nenpyo/`・`heya/`・`meibo/` と `js/nenpyo.js`・`js/heya.js`・`js/meibo.js`・`css/<名前>.css` | 年表・部屋割り・名簿 |
 | `sanpo/`・`css/style.css`・`js/world.js`・`js/art.js`・`js/game.js` | 寮さんぽ（間取り・ドット絵・操作） |
 | `css/site.css` | コンテンツのページ共通の見た目（白い二重線のウインドウなど） |

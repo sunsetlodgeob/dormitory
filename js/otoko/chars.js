@@ -81,6 +81,10 @@
       skin: at(['#88c070', '#98b878', '#78b090'], v), hair: at([HAIR.black, HAIR.brown, '#3c4c3c'], v, 2), hs: at(['spiky', 'short', 'mash'], v),
       top: 'rag', topCol: at(['#7c7c7c', '#8c6c4c', '#5c6c8c', '#6c8c5c'], v, 3), legCol: at(['#4c4c5c', '#5c4c3c'], v), shoeCol: '#3c3c3c', zombie: true,
     }),
+    // 管理人さん（はげ頭にめがね、オリーブ色のカーディガン、つっかけ）。寮さんぽの管理人さんと同じ色
+    kanri: () => ({ skin: SKINS[1], hair: HAIR.gray, hs: 'bald', top: 'long', topCol: '#6f7d5c', legCol: '#4a4a52', shoeCol: '#7c5c3c', glasses: true, brows: true }),
+    // 寮長（紺のジャージに、赤い「寮長」の腕章）
+    ryocho: () => ({ skin: SKINS[1], hair: HAIR.black, hs: 'spiky', top: 'jersey', topCol: '#2f4f8a', legCol: '#2f4f8a', stripe: P.white, shoeCol: '#7c7c7c', brows: true, armband: P.red }),
     // 通りすがりの人（会社員・おじいさん・学生など）
     kyaku: (v) => {
       const t = v % 4;
@@ -428,6 +432,7 @@
     }
     if (L.mark === 'otoko' && !back) otokoMark(p, 5, 12, P.red);
     if (L.mark === 'tag' && !back) { p(9, 13, 3, 2, P.white); p(9, 13, 3, 1, P.red); }
+    if (L.armband) p(back ? 12 : 2, 13, 2, 2, L.armband);
   }
 
   // ── 体（横向き：左向きで描いて、右向きは反転） ─────────────────
@@ -482,6 +487,7 @@
     if (L.top === 'suit') { p(4, 11, 2, 2, P.white); p(4, 12, 1, 3, L.tie || P.red); }
     if (L.mark === 'otoko') { p(5, 12, 1, 3, P.red); }
     if (L.mark === 'tag') p(5, 13, 1, 2, P.white);
+    if (L.armband) p(7, 13, 2, 2, L.armband);
   }
 
   function drawPerson(L, dir, fr, naked) {

@@ -7,7 +7,7 @@
  *    コンソールにエラーがない、幅 360px のスマホで横にはみ出さない
  *  - ドメインの直下（/js/… など）を読みに行かない
  *  - ホームの下のリンクと、地図の旗から、各ページへ行ける
- *  - ゲームのメニューの「ホームへもどる」、部屋割り →「この年度の寮を歩く」→ 寮さんぽ
+ *  - ゲームのメニューの「ホームへもどる」、ゲームの寸劇（寮さんぽの地図と絵を借りる）、部屋割り →「この年度の寮を歩く」→ 寮さんぽ
  *  - HTML・CSS・JS に、/ から始まるパスを書いていない
  */
 const assert = require('assert');
@@ -208,6 +208,20 @@ async function gameHome(browser, base) {
   assert.deepStrictEqual(realErrors(errors), [], 'ゲーム: コンソールにエラー');
   assert.deepStrictEqual(outside, [], 'ゲーム: /dormitory/ の外を読みに行った');
   await ctx.close();
+
+  // 寸劇は、寮さんぽの地図（js/world.js）と絵（js/art.js）を /dormitory/ の下から読む
+  const sk = await openSub(browser, base, 'game/?skit=opening', { wait: 300 });
+  await sk.page.waitForFunction(() => window.OTK && OTK.debug && OTK.debug.skit && OTK.debug.skit.id === 'opening');
+  await sk.page.waitForTimeout(1200);
+  const info = await sk.page.evaluate(() => ({ map: OTK.debug.skit.map, dorm: !!(window.DORM && DORM.WORLD && DORM.renderMap), bg: !!DORM.WORLD.maps.EXT.bg }));
+  assert.ok(info.map === 'EXT' && info.dorm && info.bg, '寸劇の背景: ' + JSON.stringify(info));
+  await shot(sk.page, 'd-game-skit');
+  await sk.page.keyboard.press('Escape');
+  await sk.page.waitForFunction(() => OTK.debug.scene === 'calendar');
+  check(true, 'ゲームの寸劇が、寮の前の地図の上で動き、START でとばせる');
+  assert.deepStrictEqual(realErrors(sk.errors), [], 'ゲームの寸劇: コンソールにエラー');
+  assert.deepStrictEqual(sk.outside, [], 'ゲームの寸劇: /dormitory/ の外を読みに行った');
+  await sk.ctx.close();
 }
 
 // ── 5. 部屋割り → 寮さんぽ ──────────────────────────────

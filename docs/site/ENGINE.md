@@ -130,7 +130,7 @@
 | 書き方 | 内容 |
 | --- | --- |
 | `sfx(name)` | 効果音（下の一覧） |
-| `bgm(name)` | BGM を切りかえる（`'play'` `'tense'` `'menu'` `'title'`、`null` で止める） |
+| `bgm(name)` | BGM を切りかえる（`'play'` `'tense'` `'menu'` `'title'` `'hibi'`（寸劇ののんきな曲）、`null` で止める） |
 | `shake(強さ, 秒)` | 画面をゆらす（ふつう `shake(3, 0.3)`） |
 | `flash(色, 秒)` | 画面を一瞬その色にする（ふつう `flash(P.white, 0.12)`） |
 | `hit(a, b)` | `{x, y, w, h}` どうしが重なっているか |
@@ -142,6 +142,7 @@
 ### 効果音の名前
 
 `ok` `ng` `select` `cursor` `cancel` `hit` `punch` `jump` `coin` `throw` `splat` `step` `alarm` `fanfare` `buzzer` `drink` `vomit` `siren` `damage` `power` `count` `go` `tick` `stamp` `pause` `text`
+（寸劇用に `surprise`（びっくり）`hatena`（はてな）`ring`（電話のベル）`poof`（ぼわん）もある）
 
 ## 5. 描く道具 `g`（draw に渡されるもの）
 
@@ -172,7 +173,7 @@
 
 16×24 ドットの canvas を返す（同じ指定なら同じものを使い回すので、毎回呼んでよい）。
 
-- `kind`：`otoko`（男魂くん：白い T シャツに赤い「男」、赤いはちまき）、`senpai`（先輩：ジャージ）、`douki`（同期）、`ichinen`（一年：名札つき）、`joshi`（女子学生）、`obachan`（おばちゃん：三角巾とエプロン）、`police`（おまわりさん）、`tenin`（店員。variant 0 が牛丼屋、1 がコンビニ）、`ekiin`（駅員）、`zombie`（ゾンビ）、`kyaku`（通りすがり：会社員・おじいさんなど）
+- `kind`：`otoko`（男魂くん：白い T シャツに赤い「男」、赤いはちまき）、`senpai`（先輩：ジャージ）、`douki`（同期）、`ichinen`（一年：名札つき）、`joshi`（女子学生）、`obachan`（おばちゃん：三角巾とエプロン）、`police`（おまわりさん）、`tenin`（店員。variant 0 が牛丼屋、1 がコンビニ）、`ekiin`（駅員）、`zombie`（ゾンビ）、`kyaku`（通りすがり：会社員・おじいさんなど）、`kanri`（管理人さん：めがねにカーディガン）、`ryocho`（寮長：紺のジャージに赤い腕章）
 - `opts.dir`：`'down'`（正面）`'up'`（後ろ）`'left'` `'right'`
 - `opts.frame`：0 か 1（歩き。正面・後ろは 0, 1, 0, 1 を左右反転、の 4 コマにすると自然）
 - `opts.variant`：0〜（番号で髪や服の色が変わる。人がたくさんいる場面で使う）
@@ -189,12 +190,13 @@
 - `game/?play=<id>` … そのミニゲームの説明画面から始まる。結果のあと A でもう一度。
 - `game/?play=<id>&quick=1` … 説明と 3・2・1 をとばして、すぐ始まる。
 - `&seed=123` を付けると乱数が毎回同じになる。
+- `game/?skit=<名前>` … その寸劇から始まる（終わると、1年の流れのとおり次へ）。`game/?noskit=1` … 寸劇なしで遊ぶ。くわしくは 9。
 
 ### `OTK.debug`（ブラウザのコンソールや Playwright から）
 
 | 書き方 | 内容 |
 | --- | --- |
-| `OTK.debug.scene` | いまの場面の名前：`title` `menu` `practice` `story` `calendar` `intro` `countdown` `play` `pause` `result` `ending_good` `ending_bad`（ホームへ移るときは `leave`） |
+| `OTK.debug.scene` | いまの場面の名前：`title` `menu` `practice` `skit`（寸劇） `calendar` `intro` `countdown` `play` `pause` `result` `ending_good` `ending_bad`（ホームへ移るときは `leave`） |
 | `OTK.debug.current` | 遊んでいるミニゲームの id（なければ `null`） |
 | `OTK.debug.game` | `create(api)` が返したもの（中の状態を見るのに使う） |
 | `OTK.debug.api` / `OTK.debug.run` | いまの api ／ 実行の情報（`run.phase`：`ready` `play` `stamp` `done`、`run.result`、`run.msg`） |
@@ -203,7 +205,10 @@
 | `OTK.debug.seed(n)` | 次に始めるミニゲームの乱数を固定（`null` で戻す） |
 | `OTK.debug.speed = 4` | 早送り（4 倍） |
 | `OTK.debug.story(n)` | 1年の n 番目（0 から）の月から始める |
-| `OTK.debug.goto(name)` | `title` `menu` `practice` `story` `ending_good` `ending_bad` へ飛ぶ |
+| `OTK.debug.goto(name)` | `title` `menu` `practice` `story`（はじまりの寸劇） `ending_good` `ending_bad` へ飛ぶ |
+| `OTK.debug.skit` | いま見ている寸劇 `{ id, step, steps, line, full, box, map, cam, actors }`（寸劇でなければ `null`。`line` はいま読んでいるセリフで、読み終わってウインドウが残っているだけのときは `null`） |
+| `OTK.debug.skits` / `OTK.debug.playSkit(名前)` | 寸劇の名前の一覧 ／ その寸劇から始める（9） |
+| `OTK.debug.noSkits = true` | 寸劇を出さない（`?noskit=1` と同じ） |
 | `OTK.debug.save` / `OTK.debug.reset()` | セーブの中身 ／ セーブを消す |
 
 ### Playwright で
@@ -235,9 +240,51 @@ withSite(8811, async ({ open }) => {
 
 ## 8. 画面の流れ（参考）
 
-タイトル → メニュー →（1年をはじめる）はじまりの話 → カレンダー「4月 新歓」→ 説明 → 3・2・1 → ミニゲーム → クリア！／しっぱい… → 結果 → 次の月…
+タイトル → メニュー →（1年をはじめる）はじまりの寸劇 → カレンダー「4月 新歓」→ 前ふりの寸劇 → 説明 → 3・2・1 → ミニゲーム → クリア！／しっぱい… → 結果 →（勝ったあとの寸劇）→ 次の月…
 
-- 全部クリア → よいエンディング（寮になじんだ。そして、留年が確定した。）→ スタッフロール
-- 途中でしっぱい → わるいエンディング（途中退寮。）→「この月からやりなおす」か「タイトルへ」
+- 全部クリア → 屋上の寸劇 → よいエンディング（寮になじんだ。そして、留年が確定した。）→ スタッフロール
+- 途中でしっぱい → わるいエンディング（途中退寮。）→「この月からやりなおす」（前ふりの寸劇はとばす）か「タイトルへ」
 - 練習モード：好きなミニゲームを 1 本ずつ。クリアすると ★
 - 進み具合は localStorage `otk-save`、音のオン・オフは `otk-sound`
+
+## 9. 寸劇（ミニゲームの間の短いお話）
+
+1年をはじめたときだけ（練習モード・`?play=` では出ない）、行事と行事の間に、ドット絵の人物が動く短いお話が入る。
+見ているだけでよい。セリフは読める時間（文字が出きってから 1 秒 ＋ 1 文字 0.08 秒、長くても 4.5 秒）がたつと自動で進む。A（タップ）で今のセリフを早く進め、A を押しっぱなしで早送り、START（キーボードは Esc）でまるごととばす。画面のすみに「START：とばす」（ボタンが出ていないパソコンでは「Esc：とばす」）と出る。
+読み終わったセリフのウインドウは、次の `say` `card` `map` `fade` `walk` `win` まで（▼なしで）残る。おじぎや「！」の間にウインドウが消えたり出たりしないように。
+
+- 台本は `js/otoko/scenes.js` の `OTK.SKITS`（データだけ。セリフを直すときはここだけ書きかえる）。動かすのは `js/otoko/story.js`。
+- 背景は寮さんぽと同じ地図（`js/world.js` の `DORM.WORLD.maps`：`EXT` 寮の前、`1F` `2F` `3F`、`RF` 屋上）を `js/art.js` の `DORM.renderMap` で描いたもの。1 マス 16 ドットで、人物（16×24）と大きさがそろう。画面には 16×14 マス入る。
+- 名前：`opening`（入寮）、ミニゲームの id（その前ふり）、`<id>_win`（勝ったあと。ないものは出ない）、`ending`（よいエンディングの前）。
+- やりなおし（わるいエンディングの「この月からやりなおす」）では、前ふりをとばしてすぐ説明へ。
+
+### 1 本の書き方
+
+```js
+gyudon: {
+  map: '3F', cam: [6, 0],          // 地図と、画面の左上に来るマス
+  light: 'rain', bgm: 'hibi',      // 明かり（day night sunset rain autumn）・音楽。weather で桜・雨・雪・落ち葉も
+  steps: [
+    ['put', '男魂くん', 13, 3, 'down', { pose: 'lie' }],   // 人を置く（足もとがそのマスに来る）
+    ['say', null, '305号室。\n仕送りまで、あと5日。'],     // ナレーション
+    ['put', '同期B', 9, 7, 'right'],
+    ['walk', '同期B', [[14, 7], [14, 5]]],                   // 歩く（1 区間ずつ、横 → 縦）
+    ['say', '同期B', 'おーい男魂。\n牛丼屋、今日は\n50円引きだってよ。'], // セリフ（名札つき。1 行 14 文字まで、3 行まで）
+    ['+walk', '同期B', [[14, 7], [10, 7]], { face: 'right' }], // 頭に + で、終わるのを待たずに次へ（同時に動かす）
+    ['wait', 0.3],
+    ['walk', '男魂くん', [[14, 3], [14, 7], [23, 7]], { run: true }],
+    ['fade', 'out'],
+  ],
+},
+```
+
+- 命令の一覧（`put` `hide` `walk` `face` `hop` `bow` `shake` `emote` `say` `set` `prop` `card` `wait` `cam` `map` `fade` `win` `light` `weather` `bgm` `sfx` `quake`）と、それぞれの書き方は `js/otoko/scenes.js` の先頭にある。
+- 人の名前は `OTK.SKIT_CAST`（同じファイルの上）の名前を使う。名札にもその名前が出る。CAST にない名前を `say` に書くと、その名前の名札になる（`'みんな'` `'電話の声'` など）。
+- 人の足もとは、床・ドア・階段・イス・外の道のマスにする（壁や机の上に立たせない）。歩く人が、画面に見えているほかの人の上を通らないようにする（すれちがうときは列を変えるか、少し待たせる）。どちらも `tests/e2e/story.test.js` が 1 コマずつ調べる。
+- 人が画面の下のほうにいる場面は `['win', 'top']`（または `win: 'top'`）で、セリフのウインドウを上に出す。
+
+### 確かめ方
+
+- `game/?skit=gyudon` … その寸劇から。`OTK.debug.playSkit('gyudon')` も同じ。
+- `OTK.debug.skit` … いまの寸劇の状態（何番目の命令か、いまのセリフ、人の位置など）。
+- `node tests/e2e/story.test.js` … 台本の確認（知らない命令・人がない、セリフがウインドウに入る）、全部の寸劇を早送りで流す、1 コマずつ進めて人どうしが重ならない・壁や家具の上に立たない、START・A・タップ、1年の流れ。

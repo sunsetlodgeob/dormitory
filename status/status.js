@@ -32,7 +32,7 @@ window.OB_STATUS = {
     { id: 'setsubun', month: 2, event: '節分', title: '節分ピラミッド', status: '完了' },
     { id: 'unko', month: 3, event: '追いコン', title: 'うんこをよけろ', status: '完了' },
     { id: 'kippu', month: 3, event: '追いコン', title: '全裸で切符', status: '完了' },
-    { id: '', month: null, event: '', title: '行事の合間のストーリー（たたき）', status: '作成中', note: 'ドット絵の寸劇。入寮のあいさつや、行事の前ふり' },
+    { id: '', month: null, event: '', title: '行事の合間のストーリー（たたき）', status: '確認中', note: 'ドット絵の寸劇 15 場面。持ち主に見てもらって、直すところを決める' },
     { id: '', month: null, event: '', title: '男魂野球大会', status: 'あとで', note: 'タイトル画面に「準備中」で置いてある' },
     { id: '', month: null, event: '', title: '寮生ひとりひとりのドット絵', status: 'あとで', note: 'Codex に発注するかも' },
   ],

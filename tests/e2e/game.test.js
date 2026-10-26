@@ -3,6 +3,8 @@
  *   node tests/e2e/game.test.js
  *   SHOTS_DIR=/tmp/shots node tests/e2e/game.test.js   … スクリーンショットも撮る（リポジトリの外に）
  * ミニゲームの中身には頼らない（勝ち負けは OTK.debug.forceResult で決める）。
+ * 寸劇（ミニゲームの間のお話）は、はじまりの寸劇が出ることだけ見て、あとは OTK.debug.noSkits でとばす
+ * （寸劇そのものの確認は tests/e2e/story.test.js）。
  */
 const fs = require('fs');
 const path = require('path');
@@ -99,13 +101,16 @@ async function desktop(open) {
   await page.waitForTimeout(150);
   for (let i = 0; i < 3; i++) { await page.keyboard.press('ArrowUp'); await page.waitForTimeout(60); }
 
-  // 1年をはじめる → はじまりの話 → 10 本
+  // 1年をはじめる → はじまりの寸劇（START でとばす）→ 10 本（ここからは寸劇なし）
   await page.evaluate(() => { OTK.debug.speed = 4; });
   await page.keyboard.press('Enter');
-  await waitScene(page, 'story');
+  await waitScene(page, 'skit');
+  check((await page.evaluate(() => OTK.debug.skit.id)) === 'opening', '「1年をはじめる」で、はじまりの寸劇');
   await page.waitForTimeout(500);
   await shot(page, 'd-story');
-  await pressUntil(page, 'Enter', 'calendar');
+  await page.evaluate(() => { OTK.debug.noSkits = true; });
+  await page.keyboard.press('Escape');
+  await waitScene(page, 'calendar');
   await page.waitForTimeout(150);
   await shot(page, 'd-calendar');
   for (let i = 0; i < games.length; i++) {
@@ -282,15 +287,19 @@ async function phone(open) {
   await page.evaluate(() => { OTK.debug.speed = 3; });
   await tapUntil(page, '[data-otk-key="pause"]', 'menu');
   check(true, 'START でメニューへ');
-  await tapUntil(page, '[data-otk-key="a"]', 'story');
-  // 画面のタップで話を進める
-  for (let i = 0; i < 40 && (await scene(page)) === 'story'; i++) {
+  await tapUntil(page, '[data-otk-key="a"]', 'skit');
+  // 画面のタップで、はじまりの寸劇を最後まで進める
+  for (let i = 0; i < 150 && (await scene(page)) === 'skit'; i++) {
     await page.locator('#otk-canvas').tap({ position: { x: 150, y: 150 } });
     await page.waitForTimeout(120);
   }
   await waitScene(page, 'calendar');
-  check(true, '画面のタップで話を進められる');
+  check(true, '画面のタップで寸劇を進められる');
+  // 次の前ふりの寸劇は、START ボタンでとばす
+  await waitScene(page, 'skit');
+  await page.locator('[data-otk-key="pause"]').tap();
   await waitScene(page, 'intro');
+  check(true, 'START ボタンで寸劇をとばす');
   await tapUntil(page, '[data-otk-key="a"]', 'countdown');
   await waitScene(page, 'play');
   // 十字キー（指をのせて離す）
@@ -406,17 +415,12 @@ async function details(open, base) {
   const rb = await brokenBorder(page, { x: 16, y: 26, w: 224, h: 180 });
   check(rb.length === 0, '結果の画面の文字がはみ出さない' + (rb.length ? rb.join(' ') : ''));
 
-  // はじまりの話：どのページもウインドウにおさまる
-  await page.evaluate(() => { OTK.debug.speed = 4; OTK.debug.goto('story'); });
-  await waitScene(page, 'story');
-  const storyBad = [];
-  for (let i = 0; i < 6; i++) {
-    await page.waitForTimeout(600); // 早送りで、ページの字が出きるまで
-    storyBad.push(...(await brokenBorder(page, { x: 6, y: 144, w: 244, h: 76 })));
-    if (i < 5) await page.keyboard.press('Enter'); // 次のページへ
-  }
-  await page.evaluate(() => { OTK.debug.speed = 1; });
-  check(storyBad.length === 0, 'はじまりの話の文字がウインドウにおさまる' + (storyBad.length ? storyBad.join(' ') : ''));
+  // はじまりの話（むかしの名前の goto('story')）は、はじまりの寸劇になる。セリフの確認は tests/e2e/story.test.js
+  await page.evaluate(() => { OTK.debug.goto('story'); });
+  await waitScene(page, 'skit');
+  check((await page.evaluate(() => OTK.debug.skit.id)) === 'opening', 'OTK.debug.goto(\'story\') で、はじまりの寸劇');
+  await page.keyboard.press('Escape');
+  await waitScene(page, 'calendar');
 
   // わるいエンディングの選択肢がウインドウにおさまる
   await page.evaluate(() => { OTK.debug.speed = 4; OTK.debug.goto('ending_bad'); });
@@ -442,7 +446,7 @@ async function details(open, base) {
   await page.keyboard.press('Enter');
   await page.waitForTimeout(150);
   await clickGame(page, 90, 134); // 「A：はい」
-  await waitScene(page, 'story');
+  await waitScene(page, 'skit');
   check((await page.evaluate(() => OTK.debug.save.step)) === 0, '確認の「はい」をタップすると、はじめから');
 
   // 10 本目をクリアして、エンディングを見る前に閉じたとき：つづきからでエンディングへ
@@ -452,7 +456,9 @@ async function details(open, base) {
   await pressUntil(page, 'Enter', 'menu');
   await page.waitForTimeout(300);
   await shot(page, 'd-menu-cont-ending');
-  await pressUntil(page, 'Enter', 'ending_good', 3); // カーソルは、はじめから「つづきから」にある
+  await pressUntil(page, 'Enter', 'skit', 3); // カーソルは、はじめから「つづきから」にある。屋上の寸劇から
+  await page.keyboard.press('Escape');
+  await waitScene(page, 'ending_good');
   const sv10 = await page.evaluate(() => OTK.debug.save);
   check(sv10.good === 1 && sv10.step === 0, '10 本目のあとに閉じても、つづきからでよいエンディングを見られる');
 
