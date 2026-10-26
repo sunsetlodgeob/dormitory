@@ -470,6 +470,20 @@ async function details(open, base) {
   await waitScene(page, 'menu');
   check(true, '「戻る」で戻ってきたとき、真っ暗のままにならない');
 
+  // OTK.debug.start の tries（しっぱいしたあとの易しさを試す）と、終わったあとの pointer
+  await page.evaluate(() => OTK.debug.start('nomu', { quick: true, tries: 2 }));
+  await waitScene(page, 'play');
+  check((await page.evaluate(() => OTK.debug.api.tries)) === 2, 'OTK.debug.start(id, { tries: 2 }) で api.tries が 2');
+  const cvb = await page.locator('#otk-canvas').boundingBox();
+  await page.mouse.move(cvb.x + cvb.width / 2, cvb.y + cvb.height / 2);
+  await page.mouse.down();
+  await page.waitForTimeout(100);
+  const downPlaying = await page.evaluate(() => OTK.debug.api.input.pointer.down);
+  await page.evaluate(() => OTK.debug.forceResult('win'));
+  const downAfter = await page.evaluate(() => OTK.debug.api.input.pointer.down);
+  await page.mouse.up();
+  check(downPlaying === true && downAfter === false, '画面をおしたまま終わると、api.input.pointer.down は false になる');
+
   // BGM の各パートの長さがそろっている（ずれると、くりかえすたびに音がずれる）
   const mml = await page.evaluate(() => Object.entries(OTK.audio._songs).filter(([, d]) => {
     const lens = ['p1', 'p2', 'tri', 'dr'].filter((k) => d[k]).map((k) => OTK.audio._parse(d[k], k === 'dr').len);
