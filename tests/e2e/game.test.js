@@ -70,7 +70,7 @@ async function desktop(open) {
   check((await canvasColors(page)) > 10, 'タイトルが描かれている');
   const games = await page.evaluate(() => OTK.list().map((d) => ({ id: d.id, order: d.order, month: d.month })));
   check(games.length === 10, 'ミニゲームが 10 本登録されている');
-  check(games.map((d) => d.id).join(',') === 'nomu,nise,gyudon,deisui,conveni,zombie,gakusai,setsubun,unko,kippu', '順番が ARCH.md のとおり');
+  check(games.map((d) => d.id).join(',') === 'nomu,nise,gyudon,deisui,conveni,zombie,gakusai,setsubun,kippu,unko', '順番が ARCH.md のとおり');
   check(games.map((d) => d.month).join(',') === '4,4,6,7,9,10,11,2,3,3', '月が ARCH.md のとおり');
   await shot(page, 'd-title');
 

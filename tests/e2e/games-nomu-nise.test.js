@@ -135,12 +135,14 @@ async function nomuPhone(open) {
 }
 
 // ── ニセ一年を見抜け ─────────────────────────────────
+// 新歓 2 日目。一年が 8 回、声をかけてくる。そのうち 3 回は、同じニセ一年（一年のふりをした 3年生。毎年恒例のドッキリ）。
+// 8 回のあとにネタばらし。一度もニセ一年を使わなければクリア。
 // decide(s) が 'a'（受ける）・'b'（断る）・null（なにもしない）を返す
 async function playNise(page, push, decide, o) {
   o = o || {};
   let lastIdx = -1, lastAt = 0;
   const t0 = Date.now();
-  while (Date.now() - t0 < (o.maxMs || 90000)) {
+  while (Date.now() - t0 < (o.maxMs || 120000)) {
     const s = await look(page);
     if (s && s.res) return s;
     if (s && s.phase === 'talk' && (s.idx !== lastIdx || Date.now() - lastAt > 800)) {
@@ -166,40 +168,44 @@ async function niseDesktop(open) {
   check(def.time === null, '時間制限なし（1 人ずつの持ち時間だけ）');
   check(def.howto.some((l) => /ニセ一年（3年生）/.test(l)) && !/OB/.test(def.howto.join('') + def.note), 'ニセ一年は、一年のふりをした 3年生（OB ではない）');
 
-  // 7 人のうち 1 人だけニセ一年。だれか・セリフ・顔は種ごとにかわる
+  // 8 回のうち 3 回が、同じニセ一年。何番目か・セリフ・先輩のようすは種ごとにかわる
   const runs = await page.evaluate(() => {
     const out = [];
     for (let sd = 1; sd <= 16; sd++) {
       OTK.debug.seed(sd);
       OTK.debug.start('nise', { quick: true });
       const g = OTK.debug.game;
-      out.push({ people: g.people.map((p) => ({ fake: p.fake, deco: p.deco, talk: p.talk, offer: p.offer, text: p.text, label: p.label })), pools: g.pools });
+      out.push({ turns: g.turns.map((t) => ({ fake: t.fake, who: t.who, v: t.v, talk: t.talk, offer: t.offer, text: t.text, react: t.react })), pools: g.pools });
     }
     return out;
   });
-  check(runs.every((r) => r.people.length === 7 && r.people.filter((p) => p.fake).length === 1), '一年は 7 人、ニセ一年はいつも 1 人');
-  check(new Set(runs.map((r) => r.people.findIndex((p) => p.fake))).size >= 4, 'ニセ一年が何番目かは、毎回ちがう');
-  check(new Set(runs.map((r) => r.people.find((p) => p.fake).text)).size >= 8, 'ニセ一年のセリフも、毎回ちがう');
-  check(runs.every((r) => !r.people[0].fake), '1 人目はいつも本物（くらべる手がかり）');
+  const fakes = (r) => r.turns.map((t, i) => (t.fake ? i : -1)).filter((i) => i >= 0);
+  check(runs.every((r) => r.turns.length === 8 && fakes(r).length === 3), '一年が 8 回声をかけてくる。そのうち 3 回がニセ一年');
+  check(runs.every((r) => new Set(r.turns.filter((t) => t.fake).map((t) => t.v)).size === 1), 'ニセ一年は、3 回とも同じ人（何度もパシリを買って出る）');
+  check(runs.every((r) => { const re = r.turns.filter((t) => !t.fake); return new Set(re.map((t) => t.who)).size === 5 && !re.some((t) => t.v === r.turns.find((x) => x.fake).v); }), '本物の一年は 5 人（ニセ一年とは別の顔）');
+  check(runs.every((r) => !r.turns[0].fake && fakes(r).every((i, k, a) => !k || i - a[k - 1] > 1)), '1 回目はいつも本物。ニセ一年は続けては来ない');
+  check(runs.every((r) => r.turns.every((t) => t.v !== 3)), '寸劇の一年D（ichinen の 3）と同じ顔は出ない（寸劇からは、だれがニセ一年かわからない）');
+  check(new Set(runs.map((r) => fakes(r).join())).size >= 5, 'ニセ一年が何番目に来るかは、毎回ちがう');
+  check(new Set(runs.map((r) => r.turns.find((t) => t.fake).text)).size >= 8, 'ニセ一年のセリフも、毎回ちがう');
   const pools = runs[0].pools;
-  const tellText = (p) => pools.FAKE_TALK.includes(p.talk) || pools.FAKE_OFFER.includes(p.offer);
-  check(pools.TELLS.join() === 'stubble,kuma,jersey' && pools.HERRING_LOOKS.join() === 'glasses,bandage', '見た目のぼろは 3年生らしいもの（青ひげ・くま・寮のジャージ）。ひっかけは、めがね・ばんそうこう');
-  check(runs.every((r) => r.people.every((p) => (p.fake ? tellText(p) && pools.TELLS.includes(p.deco) : !tellText(p) && !pools.TELLS.includes(p.deco)))),
-    'ぼろ（寮にくわしすぎるセリフ・青ひげ／くま／寮のジャージ）があるのはニセ一年だけ');
-  check(new Set(runs.map((r) => r.people.find((p) => p.fake).deco)).size === 3, '見た目のぼろも、毎回ちがう');
-  // OB のころのぼろ（古いことば・昔の物）は、もう出ない。正体は 3年生
-  const allText = Object.keys(pools).filter((k) => !/LOOKS|TELLS/.test(k)).map((k) => [].concat(pools[k]).join('\n')).join('\n');
-  check(!/OB|ナウい|チョベリグ|昭和|テレカ|カセット|ポケベル|ワープロ|昔話|腰が|若いもん|よっこいしょ/.test(allText), 'OB のぼろ（古いことば・昔の物・年よりくさい話）は出ない');
-  check(pools.REVEAL.concat(pools.FAKE_ACCEPT, pools.FAKE_TIMEOUT).every((t) => /3年/.test(t)), '正体がばれると「じつは3年」');
-  check(pools.FAKE_TALK.some((t) => /去年/.test(t)) && pools.FAKE_TALK.some((t) => /寮長|先輩/.test(t)) && pools.FAKE_OFFER.some((t) => /過去問/.test(t)), '3年生のぼろ：去年を知っている・先輩や寮長になれなれしい・過去問を持っている など');
-  check(runs.some((r) => r.people.some((p) => !p.fake && pools.HERRING.includes(p.talk))) && runs.some((r) => r.people.some((p) => !p.fake && p.deco)), '本物にも、ひっかけ（怪しく聞こえるセリフ・めがねなど）がいる');
-  check(runs.every((r) => r.people.every((p) => /^一年[A-G]$/.test(p.label))), '名前は出さない（一年A〜G）');
+  const tellTalk = (t) => pools.FAKE_TALK.includes(t.talk);
+  check(runs.every((r) => r.turns.every((t) => (t.fake ? (tellTalk(t) || pools.REACTS.includes(t.react)) && pools.FAKE_OFFER.includes(t.offer) : !tellTalk(t) && !t.react && !pools.FAKE_OFFER.includes(t.offer)))),
+    'ニセ一年が来るたび、ぼろ（くわしすぎるセリフか、うしろの先輩のようす）が必ず 1 つはある。本物にはない');
+  check(new Set([].concat(...runs.map((r) => r.turns.map((t) => t.react).filter(Boolean)))).size === 3, '先輩のようすは 3 とおり（笑いをこらえる・目をそらす・スマホでとる）');
+  check(pools.FAKE_TALK.some((t) => /去年/.test(t)) && pools.FAKE_TALK.some((t) => /寮長/.test(t)) && pools.FAKE_TALK.some((t) => /オリエン|入学式/.test(t)) && pools.FAKE_TALK.some((t) => /号室|風呂|自販機/.test(t)),
+    '3年生のぼろ：去年を知っている・寮長になれなれしい・入学式やオリエンにうとい・寮にくわしすぎる');
+  check(pools.FAKE_OFFER.some((t) => /パシ/.test(t)) && pools.FAKE_OFFER.some((t) => /買って/.test(t)) && pools.FAKE_PLAIN.some((t) => /タメ口/.test(t)), 'ニセ一年は、自分からパシリを買って出る（「タメ口でいこうぜ」）');
+  check(runs.some((r) => r.turns.some((t) => !t.fake && pools.HERRING.includes(t.talk))) && pools.HERRING.some((t) => /タメ口/.test(t)) && pools.OFFER.some((t) => /つごうか/.test(t)), '本物にも、ひっかけ（二浪・「タメ口でいいよ」・お茶をつぐ など）がいる');
+  const allText = Object.keys(pools).filter((k) => k !== 'REACTS').map((k) => [].concat(pools[k]).join('\n')).join('\n');
+  check(!/OB|ナウい|昭和|テレカ|ポケベル|昔話|タダ酒/.test(allText), 'OB のぼろ（古いことば・昔の物・タダ酒）は出ない');
+  check(/一年じゃ/.test(pools.REVEAL[0]) && /3年です/.test(pools.REVEAL[1]) && /使われなかった/.test(pools.WIN_LINE), 'ネタばらし「実は、一年じゃありませんでした！ 3年です！」');
   // セリフがウインドウ（3 行・1 行 14 文字）に入る
   const fit = await page.evaluate((pools) => {
     const bad = [];
     const lines = (t) => OTK.g.wrap(t, 232, 16).length;
-    for (const t of pools.TALK.concat(pools.HERRING, pools.FAKE_TALK)) for (const f of pools.OFFER.concat(pools.FAKE_OFFER)) if (lines(t + '\n' + f) > 3) bad.push(t + ' / ' + f);
-    for (const t of pools.ACCEPT.concat(pools.REFUSE, [pools.GEN_TIMEOUT, pools.FAKE_ACCEPT, pools.FAKE_TIMEOUT], pools.REVEAL)) if (lines(t) > 3) bad.push(t);
+    for (const t of pools.TALK.concat(pools.HERRING)) for (const f of pools.OFFER) if (lines(t + '\n' + f) > 3) bad.push(t + ' / ' + f);
+    for (const t of pools.FAKE_TALK.concat(pools.FAKE_PLAIN)) for (const f of pools.FAKE_OFFER) if (lines(t + '\n' + f) > 3) bad.push(t + ' / ' + f);
+    for (const t of pools.ACCEPT.concat(pools.REFUSE, pools.FAKE_ACCEPT, pools.FAKE_REFUSE, pools.REVEAL, [pools.GEN_TIMEOUT, pools.FAKE_TIMEOUT, pools.WIN_LINE, pools.LOSE_LINE])) if (lines(t) > 3) bad.push(t);
     return bad;
   }, pools);
   check(fit.length === 0, 'セリフがウインドウに入る' + (fit.length ? '：' + fit.join('、') : ''));
@@ -211,41 +217,54 @@ async function niseDesktop(open) {
   await page.waitForFunction(() => OTK.debug.game.state.phase === 'talk' && OTK.debug.game.state.idx === 0, null, { timeout: 5000 });
   await page.waitForTimeout(700);
   await shot(page, 'nise-talk');
-  const w = await playNise(page, push, smart);
-  check(w.res === 'win' && w.hearts === 3 && w.reveal, 'ニセ一年だけ断るとクリア（' + (w.fakeAt + 1) + '人目がニセ一年）');
-  check(/3年生/.test(w.msg) && w.name === '3年生（ニセ一年）', '正体は 3年生（' + String(w.msg).replace(/\n/g, '') + '）');
+  const s0 = await look(page);
+  check(s0.name === '一年' && s0.seniors.join() === 'chat,chat', '名札は「一年」だけ（名前は出さない）。本物のときは、先輩はふつうに話している');
+  // ニセ一年の番で、先輩のようすが変わる
+  const seenReact = [];
+  const w = await playNise(page, push, (s) => {
+    if (s.fake && s.react) seenReact.push(s.seniors.includes(s.react));
+    return smart(s);
+  });
+  check(seenReact.length > 0 && seenReact.every(Boolean), 'ニセ一年の番では、うしろの先輩のようすが変わる');
+  check(w.res === 'win' && w.used === 0 && w.refusedFake === 3 && w.hearts === 3 && w.friends === 5, 'ニセ一年だけ断ると、本物 5 人と友だちになって…');
+  check(w.reveal && w.phase === 'reveal' && w.name === '3年生' && /使われなかった/.test(w.line), '…最後にネタばらし。「…きみには、使われなかったなあ」でクリア');
+  check(/ニセ一年/.test(w.msg), 'クリアのひとこと（' + String(w.msg).replace(/\n/g, '') + '）');
   await page.waitForTimeout(500);
   await shot(page, 'nise-reveal');
-  check(w.friends === w.fakeAt, 'ほかの一年の申し出は受けた（友だち ' + w.friends + '人）');
   await finish(page, 'win', 'nise-win');
 
-  // 負け①：ニセ一年の申し出を受ける
-  await page.evaluate(() => { OTK.debug.seed(8); OTK.debug.start('nise', { quick: true }); });
+  // 負け①：だれの申し出も受ける（ニセ一年を 3 回パシリにした）。負けがわかるのは、最後のネタばらし
+  await page.evaluate(() => { OTK.debug.seed(8); OTK.debug.speed = 3; OTK.debug.start('nise', { quick: true }); });
   await waitScene(page, 'play');
-  const a = await playNise(page, push, () => 'a');
-  check(a.res === 'lose' && a.reveal && a.choice === 'accept', 'ニセ一年の申し出を受けると負け');
-  check(/3年生/.test(a.msg) && /先輩/.test(a.line), '3年生（先輩）をこき使ってしまった（' + String(a.msg).replace(/\n/g, '') + '）');
+  let sawUsed = false;
+  const a = await playNise(page, push, (s) => { if (s.used > 0 && !s.reveal) sawUsed = true; return 'a'; });
+  check(sawUsed, 'ニセ一年を使っても、その場ではだれも何も言わない（ドッキリ）');
+  check(a.res === 'lose' && a.used === 3 && a.reveal && a.phase === 'reveal' && a.hearts === 0, 'ネタばらしで、3年生をパシリにしていたとわかって負け（大ダメージ）');
+  check(/3年生/.test(a.msg) && /ありがと/.test(a.line), '「こき使ってくれて、ありがとな、一年。」（' + String(a.msg).replace(/\n/g, '') + '）');
   await finish(page, 'lose', 'nise-lose-fake');
 
-  // 負け②：本物を 3 人断る（ニセ一年が 4 人目より後にいる種で）
-  const sd = await page.evaluate(() => {
-    for (let n = 1; n < 300; n++) {
-      OTK.debug.seed(n);
-      OTK.debug.start('nise', { quick: true });
-      if (OTK.debug.game.state.fakeAt >= 3) return n;
-    }
-    return null;
-  });
+  // 負け②：ニセ一年を 1 回だけ使っても負け
+  await page.evaluate(() => { OTK.debug.seed(5); OTK.debug.speed = 3; OTK.debug.start('nise', { quick: true }); });
   await waitScene(page, 'play');
+  let first = true;
+  const o1 = await playNise(page, push, (s) => { if (s.fake && first) { first = false; return 'a'; } return smart(s); });
+  check(o1.res === 'lose' && o1.used === 1 && o1.reveal, '一度でもニセ一年を使ったら負け');
+  await finish(page, 'lose', 'nise-lose-once');
+
+  // 負け③：本物を 3 人断る（その場で負け。ネタばらしはない）
+  await page.evaluate(() => { OTK.debug.seed(3); OTK.debug.speed = 2; OTK.debug.start('nise', { quick: true }); });
+  await waitScene(page, 'play');
+  const third = await page.evaluate(() => OTK.debug.game.turns.map((t, i) => (t.fake ? -1 : i)).filter((i) => i >= 0)[2]);
   const r = await playNise(page, push, () => 'b');
-  check(r.res === 'lose' && r.hearts === 0 && !r.reveal && r.idx === 2, '本物を 3 人断ると負け（種 ' + sd + '）');
+  check(r.res === 'lose' && r.hearts === 0 && !r.reveal && r.idx === third, '本物を 3 人断ると、その場で負け（' + (third + 1) + '人目）');
+  check(/友だち/.test(r.msg), '「断りすぎて、友だちができなかった」');
   await finish(page, 'lose', 'nise-lose-alone');
 
-  // 負け③：返事をしないと、受けたことになる（ニセ一年でつかまる）
+  // 負け④：返事をしないと、受けたことになる（ニセ一年も使ってしまう）
   await page.evaluate(() => { OTK.debug.seed(8); OTK.debug.speed = 4; OTK.debug.start('nise', { quick: true }); });
   await waitScene(page, 'play');
   const t = await playNise(page, push, () => null);
-  check(t.res === 'lose' && t.choice === 'timeout' && t.hearts === 3, '時間切れは「受ける」あつかい');
+  check(t.res === 'lose' && t.used === 3 && t.friends === 5 && t.hearts === 0, '時間切れは「受ける」あつかい');
   await finish(page, 'lose', 'nise-lose-timeout');
 
   const errs = realErrors(errors);
@@ -274,13 +293,13 @@ async function nisePhone(open) {
   await page.waitForTimeout(500);
   if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'nise-phone.png') });
   const w = await playNise(page, tapBtn, smart);
-  check(w.res === 'win' && w.hearts === 3, '画面のボタンをタップしてクリアできる');
+  check(w.res === 'win' && w.hearts === 3 && w.used === 0, '画面のボタンをタップしてクリアできる');
   await finish(page, 'win', 'nise-phone-win');
   // 画面下の A ボタンでも遊べる（全部受けると負け）
-  await page.evaluate(() => { OTK.debug.seed(21); OTK.debug.start('nise', { quick: true }); });
+  await page.evaluate(() => { OTK.debug.seed(21); OTK.debug.speed = 3; OTK.debug.start('nise', { quick: true }); });
   await waitScene(page, 'play');
   const a = await playNise(page, pusher(true), () => 'a');
-  check(a.res === 'lose' && a.choice === 'accept', '画面下の A ボタンで受けられる（全部受けると負け）');
+  check(a.res === 'lose' && a.used === 3, '画面下の A ボタンで受けられる（全部受けると負け）');
   await finish(page, 'lose', 'nise-phone-lose');
   const errs = realErrors(errors);
   check(errs.length === 0, 'エラーなし' + (errs.length ? '：\n' + errs.join('\n') : ''));

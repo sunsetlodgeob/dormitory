@@ -20,9 +20,16 @@
 
   // ── 寮の地図（寮さんぽと同じもの） ─────────────────────────
   function DORM() { return window.DORM && window.DORM.WORLD ? window.DORM : null; }
+  // 寸劇だけで使う地図（js/otoko/scenes.js の OTK.SKIT_MAPS。川ぞいの道など）。寮さんぽの地図には足さない
+  const skitMaps = {};
   function mapOf(id) {
     const D = DORM();
-    const m = D && D.WORLD.maps[id];
+    let m = D && D.WORLD.maps[id];
+    if (!m && D && OTK.SKIT_MAPS && OTK.SKIT_MAPS[id]) {
+      m = skitMaps[id] || (skitMaps[id] = Object.assign({ labels: [], links: {} }, OTK.SKIT_MAPS[id]));
+      // 外の地図の絵（DORM.renderMap）は寮の建物も描くので、寮の出てこない地図では、建物を画面の外に置いておく
+      if (m.kind === 'ext' && !m.building) m.building = { x: 0, y: -60, w: 56, h: 9, roof: 3 };
+    }
     if (!m) return null;
     if (!m.id) { m.id = id; m.h = m.rows.length; m.w = m.rows[0].length; } // js/game.js と同じ下ごしらえ
     if (!m.bg) D.renderMap(m);
@@ -33,11 +40,18 @@
   const coarse = window.matchMedia ? window.matchMedia('(hover: none), (pointer: coarse)') : null;
   const keysShown = () => !document.body.classList.contains('otk-touch') && !(coarse && coarse.matches);
   // 地図の絵は、はじめて使うときに作ると、暗転の最初の 1 コマが重くなる。手があいたときに 1 枚ずつ先に作っておく
-  (function prerender(list) {
-    if (!DORM() || !list.length) return;
+  //  （寸劇だけの地図は、scenes.js を読んだあとに、最後にまとめて）
+  (function prerender(list, extra) {
+    if (!DORM()) return;
+    if (!list.length) {
+      if (extra) return;
+      extra = true;
+      list = Object.keys(OTK.SKIT_MAPS || {});
+      if (!list.length) return;
+    }
     const later = window.requestIdleCallback ? (f) => window.requestIdleCallback(f, { timeout: 4000 }) : (f) => setTimeout(f, 600);
-    later(() => { try { mapOf(list[0]); } catch (e) { /* 寸劇のときに作りなおす */ } prerender(list.slice(1)); });
-  })(['EXT', '1F', '2F', '3F', 'RF']);
+    later(() => { try { mapOf(list[0]); } catch (e) { /* 寸劇のときに作りなおす */ } prerender(list.slice(1), extra); });
+  })(['EXT', '1F', '2F', '3F', 'RF'], false);
   // 玄関の看板「夕照寮」はフォントで描くので、フォントが届いたら外の絵を作りなおす（js/game.js と同じ）
   if (DORM() && document.fonts && document.fonts.load) {
     document.fonts.load('16px "DotGothic16"', '夕照寮').then(() => {
@@ -192,6 +206,15 @@
       R(hx - 1, hy - 4, 3, 7, P.ink); R(hx, hy - 3, 1, 5, P.lgray);
     } else if (kind === 'kami') { // くじの紙
       R(hx - 1, hy - 6, 7, 7, P.ink); R(hx, hy - 5, 5, 5, P.white); R(hx + 1, hy - 4, 3, 1, P.red); R(hx + 1, hy - 2, 3, 1, P.red);
+    } else if (kind === 'kippu') { // 切符（クリーム色に、黒い線）
+      R(hx - 1, hy - 5, 9, 6, P.ink); R(hx, hy - 4, 7, 4, '#f8ecc0'); R(hx, hy - 2, 7, 1, '#5c4c3c'); R(hx + 1, hy - 4, 2, 1, P.red);
+    } else if (kind === 'houki') { // ほうき（はいている。穂先が左右にゆれる）
+      const back = dir === 'left' ? 1 : -1; // 柄の上は体のうしろ、穂先は前の足もと
+      const tx = dir === 'left' ? x + 11 : x + 4, ty = y + 9;
+      const bx = (dir === 'left' ? x - 2 : x + 17) + Math.round(Math.sin(t * 6) * 2), by = y + 22;
+      for (let i = 0; i <= 12; i++) R(Math.round(tx + ((bx - tx) * i) / 12), Math.round(ty + ((by - 3 - ty) * i) / 12), 1, 1, '#8c5c2c');
+      R(bx - 4, by - 3, 8, 4, P.ink); R(bx - 3, by - 3, 6, 3, '#d8b860'); R(bx - 3, by - 3, 6, 1, '#a07830');
+      if (Math.floor(t * 3) % 2) R(bx + back * 5, by - 1, 1, 1, '#c8c0a8'); // ほこり
     }
   }
   // 置き物（足もとのマスに置く）。x, y はマスの左上の画面座標
@@ -211,11 +234,18 @@
       R(px + 5, py + 3, 6, 2, P.ink);
       R(px + 3, py + 7, 10, 5, P.red);
       bitmap(['.###.', '##.##', '...##', '..##.', '.....', '..##.'], px + 6, py + 6, P.white);
-    } else if (k === 'nobori') { // のぼり（やきそば）
+    } else if (k === 'nobori') { // のぼり（学祭のホストクラブ「夕照」：黒地に金のふち、ピンクと金の字）
+      const gold = '#e0b840';
       R(px + 3, py - 22, 2, 38, P.ink); R(px + 3, py - 22, 1, 38, P.lgray);
-      R(px + 5, py - 20, 10, 30, P.ink); R(px + 6, py - 19, 8, 28, P.white); R(px + 6, py - 19, 8, 2, P.red);
-      for (let i = 0; i < 4; i++) R(px + 8, py - 14 + i * 6, 4, 4, P.red);
-      R(px + 6, py + 7, 8, 1, P.red);
+      R(px + 5, py - 20, 10, 30, P.ink); R(px + 6, py - 19, 8, 28, '#1c1824');
+      R(px + 6, py - 19, 8, 1, gold); R(px + 6, py + 8, 8, 1, gold); R(px + 6, py - 19, 1, 28, gold); R(px + 13, py - 19, 1, 28, gold);
+      for (let i = 0; i < 4; i++) { R(px + 8, py - 15 + i * 6, 4, 4, i % 2 ? gold : '#f878b8'); R(px + 9, py - 14 + i * 6, 2, 2, '#1c1824'); }
+    } else if (k === 'kanban') { // 立て看板（黒地に金のふち。pr.text をピンク、pr.sub を金で）
+      const w = 40, h = 30, x0 = px + 8 - w / 2, y0 = py - 22;
+      R(x0 + 5, y0 + h, 2, 10, P.ink); R(x0 + w - 7, y0 + h, 2, 10, P.ink);
+      R(x0, y0, w, h, P.ink); R(x0 + 1, y0 + 1, w - 2, h - 2, '#e0b840'); R(x0 + 2, y0 + 2, w - 4, h - 4, '#1c1824');
+      if (pr.text) g.text(pr.text, px + 8, y0 + 3, { size: 12, align: 'center', col: (Math.floor(t * 2) % 4) ? '#f878b8' : '#fcc8e4' });
+      if (pr.sub) g.text(pr.sub, px + 8, y0 + 15, { size: 12, align: 'center', col: '#f8d878' });
     } else if (k === 'teppan') { // 鉄板
       R(px - 8, py + 6, 32, 10, P.ink); R(px - 7, py + 7, 30, 8, P.dgray); R(px - 7, py + 7, 30, 2, P.gray);
       R(px - 4, py + 9, 6, 2, P.lorange); R(px + 4, py + 9, 7, 2, P.tan); R(px + 13, py + 9, 6, 2, P.lorange); R(px + 6, py + 11, 3, 1, P.lgreen);
@@ -379,6 +409,9 @@
         setMap(mid, cx, cy);
         st.actors = {};
         st.props = {};
+        // 前の場所で、まだ終わっていない「+」の命令（ゆっくり歩く人など）は、ここで打ち切る。
+        // 消えた人は動かないので、待っていると寸劇が終わらない（セリフをタップでとばしたときなど）
+        st.bg = [];
         if (opt) {
           if ('light' in opt) st.light = opt.light;
           if ('weather' in opt) st.weather = opt.weather;
@@ -405,7 +438,7 @@
         const a = actor(who);
         if (!a) return null;
         route(a, pts, op);
-        return () => !a.path;
+        return () => !a.path || st.actors[who] !== a;
       },
       face(who, dir) { arr(who).forEach((w) => { const a = actor(w); if (a) a.dir = dir; }); },
       hop(who, n) {
@@ -846,5 +879,8 @@
     create,
     has: (id) => !!(OTK.SKITS && OTK.SKITS[id]),
     ids: () => Object.keys(OTK.SKITS || {}),
+    // 地図（寮さんぽの地図と、寸劇だけの地図）。テスト用
+    map: mapOf,
+    maps: () => (DORM() ? Object.keys(DORM().WORLD.maps) : []).concat(Object.keys(OTK.SKIT_MAPS || {})),
   };
 })();

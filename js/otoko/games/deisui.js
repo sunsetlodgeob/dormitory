@@ -1,13 +1,13 @@
 /*
  * 7月「同期Bをさがせ」 ― 泥酔して消えた同期Bを、終電までに電車でさがす
- *  いまは 23:40、終電は 0:40。となりの駅へ乗るのも、駅をさがすのも、1 回 5 分（だから 12 回うごける）。
+ *  いまは 23:30、終電は 0:40（70 分）。となりの駅へ乗るのは 5 分、駅をさがす（降りて見てまわる）のは 10 分。
  *  制限時間はこの時計だけ（本物の秒数の制限はない）。時計が 0:40 になったら終電がなくなって、しっぱい。
  *  同期Bは、金沢八景から上り（横浜方面）か下り（浦賀方面）に 2〜5 駅のどこか。どちらかはランダム。
- *  同期Bは乗ったまま 1 枚ずつ脱いで、駅のホームにすてていった（くつした → シャツ → ズボン → パンツ一丁）。
- *  だから、さがした駅の落とし物で、あと何駅かがわかる：くつした＝あと 3 駅以上、シャツ＝あと 2 駅、ズボン＝つぎの駅。
+ *  同期Bは乗ったまま 1 枚ずつ脱いで、駅のホームにすてていった（くつ → くつした → シャツ → ズボン → パンツ一丁）。
+ *  だから、さがした駅の落とし物で、あと何駅かがわかる：くつ＝あと 4 駅、くつした＝3 駅、シャツ＝2 駅、ズボン＝つぎの駅。
  *  同期Bの駅では、待合室のベンチで、パンツ一丁で寝ている。反対側の駅と、同期Bより先の駅には何もない。
- *  かしこくやれば（となりの駅をさがして、落とし物を見て、まっすぐ乗る）、いちばん運が悪くても 11 回（55 分）で見つかる。
- *  何も考えずに全部の駅をさがしたり、はしまで乗ったりすると、終電に間に合わない。
+ *  かしこくやれば（となりの駅をさがして、落とし物を見て、まっすぐ乗る）、いちばん運が悪くても 65 分で見つかる（5 分あまる）。
+ *  さがすのは高いので、手がかりを見ずに 1 駅ずつ全部さがすと、半分くらいは終電に間に合わない。はしまで乗っても見つからない。
  */
 (function () {
   'use strict';
@@ -16,11 +16,13 @@
   const STATIONS = ['横浜', '上大岡', '杉田', '能見台', '金沢文庫', '金沢八景', '追浜', '汐入', '横須賀中央', '堀ノ内', '浦賀'];
   const HOME = 5; // 金沢八景
   const DISTS = [2, 3, 4, 5]; // 同期Bは、八景から何駅目にいるかもしれないか
-  const STEP_MIN = 5; // 1 回うごく（乗る・さがす）と、5 分
-  const START = 23 * 60 + 40; // 23:40
+  const STEP_MIN = 5; // 時計の目もり（5 分）
+  const RIDE_MIN = 5; // となりの駅へ乗ると、5 分
+  const LOOK_MIN = 10; // 駅をさがすと、10 分（降りて、ホームと待合室を見てまわる）
+  const START = 23 * 60 + 30; // 23:30
   const LAST = 24 * 60 + 40; // 0:40（終電）
   const RIDE = 1.1; // 1 駅ぶん乗るアニメーション（秒）。その間に時計が 5 分すすむ
-  const LOOK = 0.9; // さがすアニメーション（秒）。同じく 5 分
+  const LOOK = 1.4; // さがすアニメーション（秒）。その間に時計が 10 分すすむ
 
   // 画面のわりふり
   const SX = (i) => 18 + i * 22; // 路線図の駅の x
@@ -32,10 +34,15 @@
   const EKIIN_X = 192; // 八景の駅員さん
   const TAP_L = 72, TAP_R = 190; // 駅の場面のタップ：これより左は上り、右は下り、間（待合室）はさがす
 
-  // 落とし物（八景に近い方から、くつした → シャツ → ズボン の順に脱いでいった）。絵は 10×8 ドット
+  // 落とし物（八景に近い方から、くつ → くつした → シャツ → ズボン の順に脱いでいった）。絵は 10×8 ドット
   const ITEMS = {
+    shoes: {
+      name: 'くつ', msg: 'くつだ！ まだ4駅も先…', left: '4駅',
+      pal: { b: '#b05c1c', h: '#e8a060', s: '#fcfcfc', l: '#5c2c0c' },
+      rows: ['.bb.......', '.bhb......', '.bblb.....', '.bbblbb...', '.bbbbbhbb.', '.bbbbbbbbb', 'ssssssssss', '..........'],
+    },
     socks: {
-      name: 'くつした', msg: 'くつしただ！ まだ3駅以上先…', left: '3駅以上',
+      name: 'くつした', msg: 'くつしただ！ あと3駅！', left: '3駅',
       pal: { r: '#f83800', w: '#d8d8d8', g: '#fcfcfc' },
       rows: ['..rrrr....', '..wwww....', '..rrrr....', '..wwww....', '..wwww....', '..wwwwwww.', '..wwwwgwww', '...wwwwww.'],
     },
@@ -56,18 +63,18 @@
       rows: ['..........', 'dddddddddd', 'rrwrrrrwrr', 'rrrrrwrrrr', 'rwrrrrrrwr', 'rrrr..rrrr', 'rrw....rrr', '..........'],
     },
   };
-  const ORDER = ['socks', 'shirt', 'pants', 'trunks'];
+  const ORDER = ['shoes', 'socks', 'shirt', 'pants', 'trunks'];
   const NOTHING = ['何もない。ハトがいるだけ。', '何もない。自販機がまぶしい。', '何もない。風がぬるい。', '何もない。セミが鳴いている。', '何もない。ここじゃない。'];
 
   // その駅に何があるか。side は同期Bの向き（上り -1・下り +1）、dist は八景から何駅目か
-  //  'home'（八景）・'none'（何もない）・'socks' 'shirt' 'pants'（落とし物）・'b'（同期B）
+  //  'home'（八景）・'none'（何もない）・'shoes' 'socks' 'shirt' 'pants'（落とし物）・'b'（同期B）
   function what(i, side, dist) {
     if (i === HOME) return 'home';
     const k = (i - HOME) * side; // 同期Bのほうへ何駅目か（反対側はマイナス）
     if (k < 1 || k > dist) return 'none';
     if (k === dist) return 'b';
-    const r = dist - k; // 同期Bまで、あと何駅
-    return r >= 3 ? 'socks' : r === 2 ? 'shirt' : 'pants';
+    const r = dist - k; // 同期Bまで、あと何駅（1〜4）
+    return r >= 4 ? 'shoes' : r === 3 ? 'socks' : r === 2 ? 'shirt' : 'pants';
   }
   const fmt = (min) => (Math.floor(min / 60) % 24) + ':' + String(min % 60).padStart(2, '0');
 
@@ -163,8 +170,8 @@
     event: '',
     title: '同期Bをさがせ',
     goal: '終電までに\n同期Bをさがせ！',
-    howto: ['←→：となりの駅へ（5分）', 'A：駅をさがす（5分）', '服で、あと何駅かわかる'],
-    note: 'くつした＝3駅以上・シャツ＝2駅・\nズボン＝つぎの駅。0:40で終電！',
+    howto: ['←→：となりの駅へ（5分）', 'A：駅をさがす（10分）', '服で、あと何駅かわかる'],
+    note: 'くつ＝あと4駅・くつした＝3駅・\nシャツ＝2駅・ズボン＝つぎの駅。',
     time: null, // 時間の制限は、ゲームの中の時計（終電まで）だけ
     timeout: 'lose',
     bgm: 'play',
@@ -182,12 +189,13 @@
       STATIONS.forEach((s, i) => { if (at(i) === 'none' && api.chance(0.35)) oji[i] = true; });
       const flavor = {};
       STATIONS.forEach((s, i) => { flavor[i] = api.pick(NOTHING); });
-      const start = api.tries >= 1 ? START - STEP_MIN : START; // しっぱいしたら、5 分（1 回）おまけ
+      const start = api.tries >= 1 ? START - STEP_MIN : START; // しっぱいしたら、5 分おまけ
 
       const st = {
         cur: HOME, from: HOME, to: HOME, dir: 1,
         clock: start, // いまの時刻（分。24:00 をこえても数えつづける）
         clock0: start, // うごきはじめの時刻
+        cost: 0, // いまのうごきに、何分かかるか（乗る 5・さがす 10）
         mode: 'idle', // idle（操作を待つ）・ride（電車）・look（さがしている）・found（見つけた）・over（終電がなくなった）
         t: 0,
         searched: { [HOME]: 'home' }, // 駅 → 'home' | 'none' | 'socks' | 'shirt' | 'pants' | 'b'
@@ -196,7 +204,7 @@
         actions: 0, // うごいた回数
         msg: '', msgT: 0, msgName: '', queue: [],
         pop: null, // いま見つけた落とし物（ホームに少し出しておく）
-        plus: -1, // 「+5分」を出してからの秒数
+        plus: -1, // 「+5分」「+10分」を出してからの秒数
         cand: null, // 同期Bがいるかもしれない駅（わかったことから）
       };
       // はじめに、八景の駅員さんがひとこと
@@ -230,6 +238,7 @@
         st.mode = mode;
         st.t = 0;
         st.clock0 = st.clock;
+        st.cost = mode === 'ride' ? RIDE_MIN : LOOK_MIN;
         st.actions++;
         st.plus = 0;
         st.pop = null;
@@ -262,16 +271,21 @@
         begin('look');
         api.sfx('select');
       }
-      // 1 回うごきおわったら、時計をきっちり 5 分すすめて、終電かどうかを見る
-      function tick() {
-        st.clock = st.clock0 + STEP_MIN;
-        if (st.clock < LAST) return false;
+      // 0:40 になった。終電がなくなって、しっぱい（さがしている途中でも）
+      function over() {
         st.clock = LAST;
         st.mode = 'over';
         st.t = 0;
+        st.pop = null;
         say('終電がなくなった…', 9);
         api.sfx('buzzer');
         api.lose('終電がなくなった…\n同期Bは見つからず、\n歩いて帰った。', { wait: 1.6 });
+      }
+      // 1 回うごきおわったら、時計をきっちりすすめて、終電かどうかを見る
+      function tick() {
+        st.clock = st.clock0 + st.cost;
+        if (st.clock < LAST) return false;
+        over();
         return true;
       }
       function lookDone() {
@@ -282,7 +296,7 @@
         st.mode = 'idle';
         narrow();
         if (res === 'b') {
-          st.clock = st.clock0 + STEP_MIN;
+          st.clock = st.clock0 + st.cost;
           st.mode = 'found';
           st.t = 0;
           api.sfx('power');
@@ -325,23 +339,25 @@
         let x = 72;
         x += g.text('終電', x, 12, { size: 12, col: P.lgray });
         x += g.text(fmt(LAST), x + 4, 12, { size: 12, col: P.white }) + 4;
-        if (st.plus >= 0 && st.plus < 0.9) g.text('+5分', x + 12, 12 - Math.round((st.plus / 0.9) * 3), { size: 12, col: P.yellow });
+        if (st.plus >= 0 && st.plus < 0.9) g.text('+' + st.cost + '分', x + 12, 12 - Math.round((st.plus / 0.9) * 3), { size: 12, col: P.yellow });
         const rx = W - 4;
         const w2 = g.text('分', rx, 12, { size: 12, col: P.lgray, align: 'right' });
         const w1 = g.text(String(Math.max(0, left)), rx - w2 - 1, 12, { size: 12, col: warn ? P.red : P.yellow, align: 'right' });
         g.text('あと', rx - w2 - w1 - 3, 12, { size: 12, col: P.lgray, align: 'right' });
-        // 1 回ぶん（5 分）ずつの目もり
+        // 5 分ずつの目もり（のこりの分だけ色がつく。うごいている間は、使うぶんが点滅しながら減る）
         const n = Math.round((LAST - start) / STEP_MIN);
-        const gap = 1, sw = Math.floor((W - 4 - 72 - gap * (n - 1)) / n);
+        const gap = 1, span = (W - 4 - 72 + gap) / n; // 目もり 1 つぶんの幅（すき間こみ）
         const busy = st.mode === 'ride' || st.mode === 'look';
-        const prog = busy ? Math.min(1, st.t / (st.mode === 'ride' ? RIDE : LOOK)) : 0;
-        const rest = (LAST - (busy ? st.clock0 : st.clock)) / STEP_MIN; // うごく前の、のこり回数
-        const fill = rest <= 2 ? P.red : rest <= 4 ? P.yellow : P.lgreen;
+        const rest0 = (LAST - (busy ? st.clock0 : st.clock)) / STEP_MIN; // うごく前の、のこり（目もりの数）
+        const rest = Math.max(0, (LAST - st.clock) / STEP_MIN); // いまの、のこり
+        const after = busy ? Math.max(0, rest0 - st.cost / STEP_MIN) : rest0; // うごきおわったときの、のこり
+        const fill = rest0 <= 2 ? P.red : rest0 <= 4 ? P.yellow : P.lgreen;
         for (let k = 0; k < n; k++) {
-          const sx = 72 + k * (sw + gap);
+          const sx = 72 + Math.round(k * span), sw = 72 + Math.round((k + 1) * span) - gap - sx;
           g.R(sx, 27, sw, 5, P.xdgray);
-          if (k < rest - 1 || (k < rest && !busy)) g.R(sx, 27, sw, 5, fill);
-          else if (k < rest && busy) g.R(sx, 27, Math.round(sw * (1 - prog)), 5, g.blink(4) ? P.white : fill);
+          const part = Math.max(0, Math.min(1, rest - k)); // この目もりの、のこっている割合
+          if (part <= 0) continue;
+          g.R(sx, 27, Math.round(sw * part), 5, busy && k >= Math.floor(after) && g.blink(4) ? P.white : fill);
         }
       }
       function drawMap(g) {
@@ -445,9 +461,10 @@
         if (who) {
           g.sprite(who === 'b' ? ART.b : ART.oji, x + 20, seat - 22, { scale: 2 });
           if (open >= 1) {
+            // 「zZ」は、顔と駅名標にかからないように、胸の上を横へ流れていく
             const k = (api.time * 0.8) % 1, k2 = (k + 0.5) % 1;
-            g.text('z', x + 32 + k * 8, seat - 26 - k * 12, { size: 12, col: P.lsky, outline: P.night });
-            g.text('Z', x + 28 + k2 * 8, seat - 26 - k2 * 12, { size: 12, col: P.white, outline: P.night });
+            g.text('z', x + 44 + k * 16, seat - 24 + Math.round(Math.sin(k * 6.3) * 1.5), { size: 12, col: P.lsky, outline: P.night });
+            g.text('Z', x + 44 + k2 * 16, seat - 25 + Math.round(Math.sin(k2 * 6.3) * 1.5), { size: 12, col: P.white, outline: P.night });
           }
         }
         // すりガラス（3 枚。まん中が戸。あけると左へすべって、ガラスもうすくなる）
@@ -615,7 +632,7 @@
         get left() { return LAST - st.clock; }, // 終電まで、あと何分
         // テスト用：それぞれの駅に何があるか・決まりごと
         what: (i) => at(i),
-        rule: { what, HOME, STATIONS, DISTS, STEP_MIN, START, LAST, start },
+        rule: { what, HOME, STATIONS, DISTS, STEP_MIN, RIDE_MIN, LOOK_MIN, START, LAST, start },
         update(dt) {
           st.t += dt;
           if (st.msgT > 0) st.msgT -= dt;
@@ -628,7 +645,10 @@
           if (st.mode === 'ride' || st.mode === 'look') {
             const dur = st.mode === 'ride' ? RIDE : LOOK;
             // 時計は、うごいている間に 1 分ずつすすむ（ゲームの中の時間は、この時計だけ）
-            st.clock = st.clock0 + Math.min(STEP_MIN - 1, Math.floor((st.t / dur) * STEP_MIN));
+            const m = Math.floor((st.t / dur) * st.cost);
+            // 0:40 までにおわらない（のこり 5 分でさがした）ときは、0:40 になったところで終電がなくなる
+            if (st.clock0 + st.cost > LAST && st.clock0 + m >= LAST) { over(); return; }
+            st.clock = st.clock0 + Math.min(st.cost - 1, m);
             if (st.mode === 'ride') {
               if (Math.abs(st.t - 0.45) < dt / 2) api.sfx('step');
               if (st.t >= RIDE) arrive();

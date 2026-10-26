@@ -81,7 +81,7 @@ async function badFooting(page) {
   return page.evaluate(() => {
     const k = OTK.debug.skit;
     if (!k || !k.map) return [];
-    const m = DORM.WORLD.maps[k.map];
+    const m = OTK.skit.map(k.map);
     const OK = '.,_<-~;%*`&:+/E{UV"^Zc';
     const out = [];
     for (const a of k.actors) {
@@ -103,7 +103,7 @@ async function scripts(open) {
   await page.waitForTimeout(200);
   const res = await page.evaluate(() => {
     const KNOWN = ['map', 'cam', 'put', 'hide', 'walk', 'face', 'hop', 'bow', 'shake', 'emote', 'say', 'wait', 'sfx', 'bgm', 'fade', 'quake', 'light', 'weather', 'win', 'set', 'prop', 'card'];
-    const MAPS = Object.keys(DORM.WORLD.maps);
+    const MAPS = OTK.skit.maps(); // 寮さんぽの地図と、寸劇だけの地図（OTK.SKIT_MAPS）
     const bad = [];
     let lines = 0;
     const fits = (s) => OTK.g.wrap(s, OTK.W - 28, 16).length === 1;
@@ -129,10 +129,34 @@ async function scripts(open) {
         if (name === 'card') String(st[1]).split('\n').forEach((l) => { if (OTK.g.measure(l, 32) > OTK.W - 44) bad.push(at + ': 紙に入らない「' + l + '」'); });
       });
     }
-    return { bad, lines, ids: Object.keys(OTK.SKITS) };
+    // セリフ（[話す人, 文]）と、地図の移りかわり
+    const said = {}, maps = {};
+    for (const [id, def] of Object.entries(OTK.SKITS)) {
+      said[id] = def.steps.filter((st) => String(st[0]).replace(/^\+/, '') === 'say').map((st) => [st[1], String(st[2])]);
+      maps[id] = [def.map].concat(def.steps.filter((st) => st[0] === 'map').map((st) => st[1]));
+    }
+    // 寸劇だけの地図も、寮さんぽと同じ形（どの行も同じ長さ、外の地図の記号）
+    for (const [mid, m] of Object.entries(OTK.SKIT_MAPS || {})) {
+      if (!m.rows.every((r) => r.length === m.rows[0].length)) bad.push('地図 ' + mid + ': 行の長さがそろっていない');
+      if (m.rows.length < 14 || m.rows[0].length < 16) bad.push('地図 ' + mid + ': 画面（16×14 マス）より小さい');
+    }
+    return { bad, lines, ids: Object.keys(OTK.SKITS), said, maps };
   });
   check(res.bad.length === 0, '台本に、知らない命令・人・音や、入りきらないセリフがない（セリフ ' + res.lines + ' 個）' + (res.bad.length ? '：\n' + res.bad.join('\n') : ''));
+  // 持ち主の話にあわせたところ
+  const texts = (id) => (res.said[id] || []).map((x) => x[1].replace(/\n/g, '')).join('／');
+  const kanri = Object.entries(res.said).filter(([, l]) => l.some((x) => x[0] === '管理人さん')).map(([id]) => id);
+  check(kanri.length === 0, '管理人さんは、どの寸劇でも話さない（うしろでそうじをしているだけ）' + (kanri.length ? '：' + kanri.join('・') : ''));
+  check(!/今夜/.test(texts('opening')) && /4日後/.test(texts('opening')), '入寮の日は、まだ新歓ではない（新歓コンパは 4 日後）');
+  check(/1日目/.test(texts('nomu')) && /2日目/.test(texts('nise')), '新歓コンパは 2 日つづく（飲むか吐くか＝1日目、ニセ一年＝2日目）');
+  const early = ['opening', 'nomu', 'nise'].filter((id) => /ニセ|3年|ドッキリ|まぎれ/.test(texts(id)));
+  check(early.length === 0, 'ネタばらしより前は、だれもニセ一年のことを一年に言わない（ドッキリ）' + (early.length ? '：' + early.join('・') : ''));
+  check(/ニセ一年/.test(texts('nise_win')) && /入学式/.test(texts('nise_win')), '勝ったあと、ネタばらし → 次の日の入学式（nise_win）');
+  check(/ホストクラブ/.test(texts('gakusai')) && /お酒はなし/.test(texts('gakusai')) && !/やきそば|焼きそば/.test(texts('gakusai')), '学祭は、寮のホストクラブ（お酒はなし）');
+  check(/全裸/.test(texts('kippu')) && /切符/.test(texts('kippu')) && !/うんこ/.test(texts('kippu')) && res.maps.kippu.slice(-1)[0] === 'EXT', '追いコンは切符が先。前ふりは、全裸で寮の玄関の前まで');
+  check(res.maps.unko[0] === 'KAWA' && /プレゼント/.test(texts('unko')), 'うんこは、切符の帰り道（川ぞいの道）で、先輩が待ちぶせ');
   const games = await page.evaluate(() => OTK.list().map((d) => d.id));
+  check(games.indexOf('kippu') + 1 === games.indexOf('unko') && games.indexOf('unko') === games.length - 1, '追いコンは「全裸で切符」→「うんこをよけろ」の順（最後がうんこ）');
   const want = ['opening', 'ending'].concat(games);
   check(want.every((id) => res.ids.includes(id)), 'はじまり・ミニゲーム 10 本の前ふり・エンディングの寸劇がそろう');
   const wins = res.ids.filter((id) => /_win$/.test(id));
@@ -149,9 +173,24 @@ async function playAll(open, ids, games) {
   const nextOf = (id) => {
     if (id === 'opening') return 'calendar';
     if (id === 'ending') return 'ending_good';
-    if (/_win$/.test(id)) return id === games[games.length - 1] + '_win' ? 'skit' : 'calendar';
+    // 最後の 1 本に勝ったあとは、屋上の寸劇（ここは ?noskit=1 なので、とばして、よいエンディング）
+    if (/_win$/.test(id)) return id === games[games.length - 1] + '_win' ? 'ending_good' : 'calendar';
     return 'intro';
   };
+  // 寸劇が終わったときの様子を記録する（早送りだと最後の命令が一瞬で終わり、外から見はっていると見のがすことがある）
+  await page.evaluate(() => {
+    window.__skitEnd = {};
+    const create = OTK.skit.create;
+    OTK.skit.create = (id, o) => {
+      const s = create(id, Object.assign({}, o, {
+        onEnd() {
+          window.__skitEnd[id] = { step: s.st.i, steps: OTK.SKITS[id].steps.length, done: s.st.done };
+          if (o && o.onEnd) o.onEnd();
+        },
+      }));
+      return s;
+    };
+  });
   for (const id of ids) {
     await page.evaluate((i) => { OTK.debug.speed = 4; OTK.debug.playSkit(i); }, id);
     await waitSkit(page, id);
@@ -180,7 +219,9 @@ async function playAll(open, ids, games) {
       await page.waitForTimeout(30);
     }
     await page.keyboard.up('z');
-    check(s === nextOf(id) && maxStep >= steps - 1, id + '：最後まで流れて「' + s + '」へ（' + ((Date.now() - t0) / 1000).toFixed(1) + ' 秒）');
+    const end = await page.evaluate((i) => window.__skitEnd[i] || null, id);
+    const all = !!end && end.done && end.step >= end.steps && Math.max(maxStep, end.step) >= steps - 1;
+    check(s === nextOf(id) && all, id + '：最後まで流れて「' + s + '」へ（' + ((Date.now() - t0) / 1000).toFixed(1) + ' 秒）' + (all ? '' : '：' + JSON.stringify(end)));
     check(feet.size === 0, id + '：人が壁や家具の上に立たない' + (feet.size ? '：\n' + [...feet].slice(0, 5).join('\n') : ''));
     check(borders.length === 0, id + '：セリフのウインドウの線が欠けない' + (borders.length ? '：' + borders.join(' ／ ') : ''));
   }
@@ -234,6 +275,23 @@ async function stepAll(open) {
     return out;
   });
   check(res.length === 0, 'どの寸劇も、人どうしが重ならず、壁や家具の上に立たない' + (res.length ? '：\n' + res.slice(0, 8).join('\n') : ''));
+  // セリフや紙をすぐにとばしても（スマホでタップを連打）、ゆっくり歩く人などを待ちつづけずに、最後まで行く
+  const stuck = await page.evaluate(() => {
+    const out = [];
+    for (const id of OTK.skit.ids()) {
+      const s = OTK.skit.create(id, { onEnd() {} });
+      const st = s.st;
+      let i = 0;
+      for (; i < 60 * 120 && !st.ended; i++) {
+        s.update(1 / 60);
+        if (st.say && !st.say.next) { st.say.n = st.say.len; st.say.full = true; st.say.next = true; }
+        if (st.card && !st.card.next) st.card.next = true;
+      }
+      if (!st.ended) out.push(id + '（' + st.i + ' 番目の命令で止まる）');
+    }
+    return out;
+  });
+  check(stuck.length === 0, 'セリフをすぐとばしても、どの寸劇も最後まで行く' + (stuck.length ? '：' + stuck.join('・') : ''));
   check(realErrors(errors).length === 0, 'エラーなし');
   await page.close();
 }
@@ -360,6 +418,12 @@ async function flow(open, games) {
   await waitScene(page, 'result');
   await page.waitForTimeout(450);
   await page.keyboard.press('Enter');
+  const lastWin = games[games.length - 1] + '_win';
+  if (await page.evaluate((i) => OTK.skit.has(i), lastWin)) {
+    await waitSkit(page, lastWin);
+    check(true, '10 本目に勝ったあと、勝ったあとの寸劇（' + lastWin + '）');
+    await page.keyboard.press('Escape');
+  }
   await waitSkit(page, 'ending');
   check((await skit(page)).map === 'RF', '10 本目のあと、屋上の寸劇');
   await page.waitForTimeout(1200);

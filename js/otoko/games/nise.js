@@ -1,13 +1,18 @@
 /*
  * 4月 新歓「ニセ一年を見抜け」
- *  一年が 7 人、1 人ずつ「お茶つぎますよ」などと声をかけてくる。1 人だけ、一年のふりをした 3年生（ニセ一年）。
- *  寮では毎年、3年生が 1 人、一年にまぎれこむ。先輩にお茶をつがせたら、たいへん。
- *  - A：受ける　B：断る（1 人 6 秒ほど。だまっていると、受けたことになる）
- *  - ニセ一年を断ればクリア。ニセ一年の申し出を受けるか、本物を 3 人断ると負け
- *  - ニセ一年のぼろ：セリフ（寮にくわしすぎる・「去年の新歓」・先輩や寮長になれなれしい・過去問を持っている）と、
- *    見た目（うっすら青ひげ・目の下のくま・寮のジャージをはおっている）。3年生なので、年は 2 つ上なだけ
- *  - 本物にも、ちょっと怪しく聞こえる人（二浪・兄が寮にいた・オープンキャンパスで見た など）や、めがね・ばんそうこうの人がいる
- *  だれがニセ一年か、セリフ、見た目のぼろは、毎回ランダム。
+ *  新歓コンパの 2 日目。一年が 1 人ずつ、「連絡先、交換しない？」などと声をかけてくる。
+ *  寮では毎年、3年生が 1 人、一年のふりをして一年にまぎれこむ（先輩はみんな知っているドッキリ。一年は知らない）。
+ *  そのニセ一年は、ネタばらしでいちばん効くように、わざと一年にこき使われようとして、何度も寄ってくる。
+ *  - A：受ける　B：断る（1 人 6.5 秒ほど。だまっていると、受けたことになる）
+ *  - 8 回のうち 3 回がニセ一年（同じ人が、何度も来る）。本物は受けて、ニセ一年は断る
+ *  - 本物を 3 人断ると、友だちができずに負け
+ *  - 8 回が終わるとネタばらし「実は、一年じゃありませんでした！ 3年です！」。
+ *    一度もニセ一年を使わなければクリア。一度でも使っていたら、3年生をパシリにしていたので負け
+ *  - ぼろ：セリフ（去年を知っている・寮にくわしすぎる・寮長になれなれしい・入学式やオリエンにうとい）と、
+ *    うしろの先輩たちのようす（ニセ一年が来ると、笑いをこらえる・目をそらす・スマホでとる）。
+ *    どの回も、どちらか 1 つは必ずある
+ *  - 本物にも、ちょっと怪しく聞こえる人（二浪・兄が寮にいた・「タメ口でいいよ」）や、お茶をついでくれる人がいる
+ *  だれがニセ一年か、何番目に来るか、セリフ、先輩のようすは、毎回ランダム。
  */
 (function () {
   'use strict';
@@ -16,81 +21,85 @@
   // 1 行は 14 文字まで（それより長いときは \n で切っておく）。世間話は 2 行まで、申し出は 1 行で、あわせて 3 行
   // 本物の一年の世間話
   const TALK = [
-    '同じ一年っす。よろしくです！',
-    '寮、思ったより広いっすね。',
-    '履修登録、もう終わりました？',
-    '連絡先、交換しましょうよ。',
-    'サークル、どこ見に行きます？',
-    '入学式のスーツ、\nきつかったっす。',
-    'スマホの充電、\nあと3%っす…。',
-    '地元から、きのう来ました。',
-    '先輩たち、\nテンション高いっすね。',
-    '寮の動画を見て、来ました！',
-    '駅で、道にまよいました。',
-    '自炊、がんばるつもりっす。',
+    'きのうのコンパ、\nやばかったな！',
+    '入学式、あしただな。\nスーツ、きつい…。',
+    '学部のオリエン、\nあさって9時だって。',
+    '履修登録、もう決めた？',
+    'サークル、どこ見に行く？',
+    '地元、どこ？\nおれは北海道！',
+    'スマホの充電、\nあと3%…。',
+    '先輩たち、テンション\n高すぎじゃない？',
+    '駅から寮まで、\nまよっちゃってさ。',
   ];
   // 本物だけど、ちょっと怪しく聞こえる世間話（ひっかけ）
   const HERRING = [
-    '二浪したんで、\nちょっと年上っす。',
-    '兄がこの寮にいたんで、\n話は聞いてます。',
-    '緊張して…いや、\n楽しいっす！',
-    '老け顔って、よく言われます。',
-    'オープンキャンパスで、\n寮も見学しました！',
-    '先輩の名前、もう\n覚えちゃいました！',
+    '二浪したから、\nちょっと年上なんだ。',
+    '兄貴が、この寮に\nいたんだよね。',
+    'オープンキャンパスで、\n寮も見に来たんだ。',
+    '老け顔って、\nよく言われる…。',
+    'タメ口でいいよ。\n同期なんだし！',
   ];
-  // ニセ一年（3年生）のぼろ（世間話）：寮にくわしすぎる・去年を知っている・先輩になれなれしい
-  const FAKE_TALK = [
-    '去年の新歓より、\n人が多いっすね。',
-    'おれらの代のときは…\nいや、なんでもないっす。',
-    '冷蔵庫のプリン、去年\n食われたんすよね…。',
-    'よう、先輩A！…じゃなくて、\nおつかれさまです！',
-    '寮長のやつ、今年は\nはりきってんな…あっ。',
-    'このコール、1年のときから\n変わってないな…あっ。',
-    '寮の歌なら、3番まで\n歌えますよ！',
-    '食堂のおばちゃん、\n今年も元気そうっすね。',
-  ];
-  // 申し出
+  // 本物の申し出・お願い（受けると友だちになれる）
   const OFFER = [
-    'お茶、おつぎしますよ。',
-    '荷物、部屋まで運びますよ。',
-    '席どうぞ。座ってください。',
-    'おしぼり、どうぞ。',
-    '唐揚げ、取り分けますね。',
-    '上着、かけておきますね。',
-    'ジュース、持ってきますよ。',
-    'ゴミ、まとめておきますよ。',
-    '紙皿、配っておきますね。',
+    '連絡先、交換しない？',
+    '入学式、いっしょに行こう！',
+    'からあげ、半分こしよう！',
+    '写真、いっしょにとろうよ。',
+    '充電器、ちょっと貸して！',
+    '学食、今度いっしょに行こう。',
+    'お茶、ついでにつごうか？',
+    'ポテチ、食べる？',
+    'サークル、いっしょに見よう。',
   ];
-  // ニセ一年のぼろ（一年なら持っていない・知らないはずのもの）
+  // ニセ一年（3年生）のぼろ：去年を知っている・寮にくわしすぎる・寮長になれなれしい・一年なら知っていることにうとい
+  const FAKE_TALK = [
+    '去年の新歓より…あ、\nいや、なんでもない！',
+    '風呂は、10時すぎが\nすいてるよ。',
+    '305号室？ あそこ、\n冬さむいんだよなあ。',
+    'オリエン？ あれ、\n出なくても平気だって。',
+    '入学式のスーツ？\n…あ、おれも着る着る！',
+    '寮長のやつ…じゃなくて、\n寮長さん、こわいよね〜。',
+    'このコール、なつかしい…\nいや、はじめて聞いた！',
+    '2階の自販機、10円\n安いの知ってた？',
+  ];
+  // ニセ一年の、ぼろのない世間話（このときは、うしろの先輩が必ず反応する）
+  const FAKE_PLAIN = [
+    'タメ口でいこうぜ、\nタメ口！',
+    'きのうのコンパ、\nたのしかったね〜。',
+    'おれたち、もう\n友だちだよな！',
+  ];
+  // ニセ一年の申し出：わざと一年にこき使われようとする
   const FAKE_OFFER = [
-    'テストの過去問、あげますよ。',
-    '楽勝の授業、教えますよ。',
-    'ぼくの冷蔵庫の段、使います？',
-    '先輩の部屋、案内しますよ。',
-    '風呂のすく時間、教えますよ。',
+    'なんか買ってくるよ！',
+    '荷物、部屋まで持つよ！',
+    '肩、もんであげようか？',
+    'おしぼり、とってくるよ！',
+    'なんでも言って！パシるから！',
+    'タメ口で、こき使ってよ！',
+    '飲みもの、つぎたすよ！',
   ];
-  const ACCEPT = ['あざっす！\nまかせてください。', 'よかった！\nこれからよろしく！', 'はい、すぐやります！', 'うれしいっす！\n友だちっすね！'];
-  const REFUSE = ['あ…そうっすか…。', 'す、すんません…。', 'じゃあ、また今度…。', 'しつれいしました…。'];
-  const GEN_TIMEOUT = '…返事がないけど、\nやっておきますね！';
-  // ニセ一年の申し出を受けると、3年生（先輩）をこき使ったことになる
-  const FAKE_ACCEPT = 'ドッキリ大成功〜！\nじつは3年だ。\n先輩をこき使ったな？';
-  const FAKE_TIMEOUT = 'だまってるなら、やるぞ。\n…じつは3年だ。\n先輩をこき使ったな？';
-  const FAKE_NAME = '3年生（ニセ一年）'; // 正体がばれたあとの名札
-  const REVEAL = ['…バレたか！\nじつは3年だ。\nやるな、一年！', 'ちっ、見抜かれたか。\n3年生の、毎年恒例さ。\nやるじゃないか！'];
-  const LETTERS = 'ABCDEFG';
+  const ACCEPT = ['やった！\nよろしくな！', 'サンキュー！\n友だちだな！', 'じゃ、あとでな！', 'おう、決まり！'];
+  const REFUSE = ['あ…そっか…。', 'ご、ごめん…。', 'じゃあ、また今度…。'];
+  const GEN_TIMEOUT = '…返事ないけど、\nいいってことだよな！';
+  // ニセ一年を使ったとき（まだ、だれも気づかない。うしろの先輩は笑いをこらえている）
+  const FAKE_ACCEPT = ['よろこんで〜！', 'まかせて！\nすぐ行ってくる！', 'おっけー！\nなんでも言ってね！'];
+  const FAKE_TIMEOUT = 'じゃ、適当に\nやっとくね〜！';
+  // ニセ一年を断ったとき
+  const FAKE_REFUSE = ['えー、遠慮すんなって〜。', 'そっか…\nまた言ってよ！', 'ふーん…\nなかなかやるじゃん。'];
+  // ネタばらし
+  const REVEAL = ['実は、一年じゃ\nありませんでした！', '3年です！'];
+  const WIN_LINE = '…きみには、\n使われなかったなあ。';
+  const LOSE_LINE = 'こき使ってくれて、\nありがとな、一年。';
+  const NAME = '一年';
+  const FAKE_NAME = '3年生'; // ネタばらしのあとの名札
+  const N = 8; // 声をかけてくる回数
+  const REACTS = ['smirk', 'away', 'film']; // ニセ一年が来たときの、うしろの先輩のようす
 
-  // ── 顔に、ぼろ（青ひげ・くま・寮のジャージ）や、ひっかけ（めがね・ばんそうこう）を足す ──────────
-  //  reveal：正体がばれたあと（寮のジャージを着た 3年生の姿。名札はなし）
+  // ── 顔に、めがね・ばんそうこう（見分けやすく）や、正体（寮のジャージ）を足す ──────────
   const JERSEY = '#283890', JERSEY_HI = '#3c50b8';
   const faces = new Map();
   function hex(d, i) {
     return d[i + 3] ? '#' + ((1 << 24) | (d[i] << 16) | (d[i + 1] << 8) | d[i + 2]).toString(16).slice(1) : null;
-  }
-  // 2 つの色をまぜる（t は b の割合）
-  function mix(a, b, t) {
-    const x = parseInt(a.slice(1), 16), y = parseInt(b.slice(1), 16);
-    const ch = (s) => Math.round(((x >> s) & 255) * (1 - t) + ((y >> s) & 255) * t);
-    return '#' + ((1 << 24) | (ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).slice(1);
   }
   function face(api, v, mood, deco, reveal) {
     const base = api.portrait('ichinen', { variant: v, mood });
@@ -113,26 +122,8 @@
       d[i + 2] = n & 255;
       d[i + 3] = 255;
     };
-    const skin = at(12, 19);
     const shirt = at(8, 29);
-    const onSkin = (px, py, col) => { if (at(px, py) === skin) put(px, py, col); };
-    if (deco === 'stubble') {
-      // うっすら青ひげ（あごと口のまわり）。一年より 2 つ上
-      const stubble = mix(skin, '#40507c', 0.3);
-      for (let py = 20; py <= 23; py++) for (let px = 10; px <= 21; px++) if ((px + py) % 2 === 0) onSkin(px, py, stubble);
-    } else if (deco === 'kuma') {
-      // 目の下のくま（レポートで徹夜つづき）
-      const k1 = mix(skin, '#6c5c9c', 0.45), k2 = mix(skin, '#6c5c9c', 0.25);
-      for (let px = 10; px <= 13; px++) { onSkin(px, 17, k1); onSkin(px + 8, 17, k1); }
-      for (let px = 11; px <= 12; px++) { onSkin(px, 18, k2); onSkin(px + 8, 18, k2); }
-    } else if (deco === 'jersey' && !reveal) {
-      // Tシャツの上に、寮のジャージ（先輩たちと同じ）をはおっている
-      for (let py = 27; py <= 31; py++) for (let px = 4; px <= 27; px++) {
-        if (at(px, py) !== shirt) continue;
-        if (px <= 10 || px >= 21) put(px, py, px === 8 || px === 23 ? '#fcfcfc' : JERSEY);
-      }
-      for (let py = 27; py <= 31; py++) { put(10, py, JERSEY_HI); put(21, py, JERSEY_HI); }
-    } else if (deco === 'glasses') {
+    if (deco === 'glasses') {
       const gc = '#3c3c4c';
       for (let i = 0; i < 6; i++) { put(9 + i, 13, gc); put(17 + i, 13, gc); put(9 + i, 17, gc); put(17 + i, 17, gc); }
       for (let j = 14; j <= 16; j++) { put(9, j, gc); put(14, j, gc); put(17, j, gc); put(22, j, gc); }
@@ -155,8 +146,7 @@
     faces.set(key, c);
     return c;
   }
-  const TELLS = ['stubble', 'kuma', 'jersey']; // ニセ一年の見た目のぼろ
-  const HERRING_LOOKS = ['glasses', 'bandage']; // 本物のひっかけ
+  const LOOKS = ['glasses', 'bandage']; // 本物の何人かは、めがね・ばんそうこう（見分けやすく）
 
   // ハートのドット（7×6）
   const HEART = ['0110110', '1111111', '1111111', '0111110', '0011100', '0001000'];
@@ -167,9 +157,9 @@
     month: 4,
     event: '新歓',
     title: 'ニセ一年を見抜け',
-    goal: 'ニセ者を断れ！',
-    howto: ['A：受ける　B：断る', 'ニセ一年（3年生）は1人', '本物を3人断ると負け'],
-    note: '寮にくわしすぎるやつが、あやしい。\nだまっていると、受けたことになる。',
+    goal: 'ニセ一年を使うな！',
+    howto: ['A：受ける　B：断る', 'ニセ一年（3年生）は断れ', '本物を3人断ると負け'],
+    note: 'セリフと、うしろの先輩に注意。\nだまっていると、受けたことになる。',
     time: null,
     timeout: 'lose',
     bgm: 'menu',
@@ -179,57 +169,73 @@
       const BOX = { x: 74, y: 14, w: 108, h: 106 }; // 顔のわく
       const BTN_A = { x: 10, y: 195, w: 80, h: 22 };
       const BTN_B = { x: 166, y: 195, w: 80, h: 22 };
+      // うしろの先輩（窓の前にすわっている。先輩A・先輩B と同じ色）
+      const SEN = [{ x: 196, v: 1, dir: 'right' }, { x: 226, v: 4, dir: 'left' }];
 
-      // 7 人を用意する（1 人目は、いつも本物）
-      const people = (() => {
-        const fakeAt = api.irnd(1, 6);
-        const vars = api.shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]).slice(0, 7);
+      // ── 8 回ぶんを用意する ───────────────────────────
+      // 人：本物 5 人 ＋ ニセ一年 1 人（index 5）。ニセ一年は 2 回目以降に、となりあわずに 3 回来る
+      const turns = (() => {
+        // 顔は毎回ランダム（寸劇の一年D と同じ顔 v3 は使わない。だれがニセ一年か、寸劇からはわからないように）
+        const vars = api.shuffle([0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]).slice(0, 6);
+        const looks = api.shuffle([0, 1, 2, 3, 4]).slice(0, api.irnd(1, 2));
+        const people = vars.map((v, i) => ({ v, fake: i === 5, deco: looks.includes(i) ? api.pick(LOOKS) : null }));
+        let slots;
+        for (let k = 0; k < 200; k++) {
+          slots = api.shuffle([1, 2, 3, 4, 5, 6, 7]).slice(0, 3).sort((a, b) => a - b);
+          if (slots[1] - slots[0] > 1 && slots[2] - slots[1] > 1) break;
+        }
         const talks = api.shuffle(TALK);
         const herrings = api.shuffle(HERRING);
         const offers = api.shuffle(OFFER);
-        const genuine = [];
-        for (let i = 0; i < 7; i++) if (i !== fakeAt) genuine.push(i);
-        const hTalk = api.shuffle(genuine).slice(0, api.irnd(1, 2)); // 怪しく聞こえる本物
-        const hLook = api.shuffle(genuine).slice(0, api.irnd(1, 2)); // めがね・ばんそうこうの本物
-        return vars.map((v, i) => {
-          const p = { label: '一年' + LETTERS[i], v, fake: i === fakeAt, mood: api.pick(['normal', 'happy']), deco: null, talk: '', offer: '' };
-          if (p.fake) {
-            p.deco = api.pick(TELLS);
-            if (api.chance(0.7)) {
-              p.talk = api.pick(FAKE_TALK);
-              p.offer = offers.pop();
-            } else {
-              p.talk = talks.pop();
-              p.offer = api.pick(FAKE_OFFER);
-            }
+        const hTalk = api.shuffle([0, 1, 2, 3, 4]).slice(0, api.irnd(1, 2)); // 怪しく聞こえる本物
+        const fTalk = api.shuffle(FAKE_TALK);
+        const fPlain = api.shuffle(FAKE_PLAIN);
+        const fOffer = api.shuffle(FAKE_OFFER);
+        const out = [];
+        let real = 0;
+        for (let i = 0; i < N; i++) {
+          if (slots.includes(i)) {
+            const p = people[5];
+            const plain = api.chance(0.3);
+            // ぼろのない世間話のときは、先輩が必ず反応する。2 回しっぱいしたあとは、いつも反応する
+            const react = plain || api.tries >= 2 || api.chance(0.65) ? api.pick(REACTS) : null;
+            const talk = plain ? fPlain.pop() : fTalk.pop();
+            const offer = fOffer.pop();
+            out.push({ who: 5, v: p.v, deco: p.deco, fake: true, talk, offer, text: talk + '\n' + offer, react, sen: api.irnd(0, 1), mood: 'happy' });
           } else {
-            p.talk = hTalk.includes(i) ? herrings.pop() : talks.pop();
-            p.offer = offers.pop();
-            if (hLook.includes(i)) p.deco = api.pick(HERRING_LOOKS);
+            const k = real++;
+            const p = people[k];
+            const talk = hTalk.includes(k) ? herrings.pop() : talks.pop();
+            const offer = offers.pop();
+            out.push({ who: k, v: p.v, deco: p.deco, fake: false, talk, offer, text: talk + '\n' + offer, react: null, sen: 0, mood: api.pick(['normal', 'happy']) });
           }
-          p.text = p.talk + '\n' + p.offer;
-          return p;
-        });
+        }
+        return out;
       })();
+      const fakeTurn = turns.find((t) => t.fake);
 
       const st = {
         t: 0,
         idx: 0,
-        phase: 'in', // in（あらわれる）→ talk（話す・選ぶ）→ react（反応）→ out（さる）→ in …
+        phase: 'in', // in（あらわれる）→ talk（話す・選ぶ）→ react（反応）→ out（さる）→ in … → reveal（ネタばらし）
         pT: 0,
         typed: 0,
         timeT: TIME,
         hearts: 3,
         heartT: 0, // ハートがわれた直後
         friends: 0,
+        used: 0, // ニセ一年を使った回数
+        refusedFake: 0,
         line: '',
         mood: 'normal',
-        reveal: false,
-        puffT: 0,
         choice: '',
         qShift: 0, // 列がつめる動き
+        rStep: 0, // ネタばらしの段
+        reveal: false, // 正体がわかった（ジャージ姿）
+        puffT: 0,
+        pale: false, // ガーン
       };
-      const cur = () => people[st.idx]; // ニセ一年で、かならず終わる（7 人目より先には進まない）
+      const cur = () => (st.phase === 'reveal' ? fakeTurn : turns[st.idx]);
       const inside = (tp, b) => tp.x >= b.x - 6 && tp.x < b.x + b.w + 6 && tp.y >= b.y - 8 && tp.y < b.y + b.h + 6;
 
       function decide(kind) {
@@ -240,19 +246,17 @@
         st.typed = 0;
         const acc = kind !== 'refuse';
         if (p.fake) {
-          st.reveal = true;
-          st.puffT = 0.35;
-          api.flash(P.white, 0.15);
           if (acc) {
-            st.line = kind === 'timeout' ? FAKE_TIMEOUT : FAKE_ACCEPT;
+            // 使ってしまった。まだ、だれも何も言わない（うしろの先輩は、笑いをこらえる）
+            st.used++;
+            st.line = kind === 'timeout' ? FAKE_TIMEOUT : FAKE_ACCEPT[(st.used - 1) % FAKE_ACCEPT.length];
             st.mood = 'happy';
-            api.sfx('buzzer');
-            api.lose(kind === 'timeout' ? 'だまっていたら、\n3年生の先輩を\nこき使ってしまった…' : 'ニセ一年は3年生！\n先輩をこき使って、\n寮じゅうの笑いもの。', { wait: 2.4 });
+            api.sfx('ok');
           } else {
-            st.line = api.pick(REVEAL);
-            st.mood = 'shock';
-            api.sfx('fanfare');
-            api.win('ニセ一年（3年生）を\n見抜いた！', { wait: 2.4 });
+            st.line = FAKE_REFUSE[Math.min(st.refusedFake, FAKE_REFUSE.length - 1)];
+            st.refusedFake++;
+            st.mood = st.refusedFake >= 3 ? 'normal' : 'sad';
+            api.sfx('cancel');
           }
         } else if (acc) {
           st.line = kind === 'timeout' ? GEN_TIMEOUT : api.pick(ACCEPT);
@@ -267,6 +271,41 @@
           api.sfx('damage');
           api.shake(2, 0.2);
           if (st.hearts <= 0) api.lose('断りすぎて、\n友だちが\nできなかった…', { wait: 1.8 });
+        }
+      }
+      // ネタばらしの段：0「実は…」→ 1（煙）「3年です！」→ 2 結果のひとこと
+      function revealStep(n) {
+        st.rStep = n;
+        st.pT = 0;
+        st.typed = 0;
+        if (n === 0) {
+          st.line = REVEAL[0];
+          st.mood = 'happy';
+          api.sfx('select');
+        } else if (n === 1) {
+          st.line = REVEAL[1];
+          st.reveal = true;
+          st.puffT = 0.35;
+          st.mood = 'happy';
+          api.flash(P.white, 0.15);
+          api.sfx('poof');
+        } else {
+          if (st.used) {
+            st.line = LOSE_LINE;
+            st.mood = 'happy';
+            st.pale = true;
+            st.hearts = 0;
+            st.heartT = 0.7;
+            api.shake(4, 0.5);
+            api.flash(P.red, 0.2);
+            api.sfx('damage');
+            api.lose('3年生の先輩を、\nパシリにしていた…', { wait: 2.2 });
+          } else {
+            st.line = WIN_LINE;
+            st.mood = 'sad';
+            api.sfx('fanfare');
+            api.win('ニセ一年を、一度も\n使わなかった！', { wait: 2.2 });
+          }
         }
       }
 
@@ -295,7 +334,6 @@
           g.R(x - 1, y - 1, 3, 3, i % 2 ? P.lpink : P.pink);
           g.R(x, y, 1, 1, P.white);
         });
-        // ひらひら散る花びら
         for (let i = 0; i < 4; i++) {
           const ph = (st.t * 0.25 + i * 0.27) % 1;
           const x = 194 + ((i * 13 + Math.floor(ph * 40) + Math.round(Math.sin(st.t * 2 + i) * 3)) % 50);
@@ -308,11 +346,60 @@
           g.frame(x, 13 + ((x / 8) % 2), 7, 5, c);
         }
       }
+      // 小さい吹き出し（文字）。cx は真ん中、by は下はし
+      function bubble(g, cx, by, str) {
+        const w = g.measure(str, 12) + 6, h = 14;
+        const x = Math.round(cx - w / 2), y = by - h;
+        g.R(x + 1, y, w - 2, h, P.ink);
+        g.R(x, y + 1, w, h - 2, P.ink);
+        g.R(x + 1, y + 1, w - 2, h - 2, P.white);
+        g.R(Math.round(cx) - 1, by - 1, 3, 2, P.ink);
+        g.R(Math.round(cx), by - 1, 1, 1, P.white);
+        g.text(str, x + 3, y + 1, { size: 12, col: P.ink });
+      }
+      // うしろの先輩 2 人（ちゃぶ台をはさんで、すわっている）。ニセ一年が来ると、ようすがおかしい
+      function seniorMode(i) {
+        const p = cur();
+        if (st.phase === 'reveal') return 'cheer';
+        if (p && p.fake && st.phase === 'react' && st.choice !== 'refuse') return 'laugh';
+        if (p && p.fake && p.react && p.sen === i && (st.phase === 'talk' || (st.phase === 'in' && st.pT > 0.15))) return p.react;
+        return 'chat';
+      }
+      function drawSeniors(g) {
+        // ちゃぶ台と湯のみ
+        g.R(207, 76, 24, 3, P.ink);
+        g.R(208, 76, 22, 2, '#8c5c34');
+        g.R(210, 79, 2, 3, P.ink);
+        g.R(226, 79, 2, 3, P.ink);
+        g.R(213, 73, 3, 3, P.white);
+        g.R(222, 73, 3, 3, P.lgreen);
+        SEN.forEach((s, i) => {
+          const mode = seniorMode(i);
+          let dir = s.dir, dx = 0, dy = 0, text = null, phone = false;
+          // 吹き出しは、となりの先輩とかさならないように、1 人ぶんだけ
+          if (mode === 'smirk') { dir = 'down'; dx = Math.floor(st.t * 16) % 2; text = 'ぷっ'; }
+          else if (mode === 'away') { dir = 'up'; text = '…'; }
+          else if (mode === 'film') { dir = 'down'; phone = true; text = 'じー'; }
+          else if (mode === 'laugh') { dir = 'down'; dx = Math.floor(st.t * 16) % 2; text = i ? null : 'くくっ'; }
+          else if (mode === 'cheer') { dir = 'down'; dy = -Math.round(Math.abs(Math.sin(st.t * 8 + i)) * 3); if (st.rStep >= 1) text = i ? '♪' : 'わはは'; }
+          else if (Math.floor(st.t / 2.6 + i * 0.5) % 3 === 0 && (st.t + i) % 2.6 < 0.9) text = '♪';
+          const img = api.person('senpai', { dir, variant: s.v });
+          const x = s.x + dx, y = 58 + dy;
+          g.ctx.drawImage(img, 0, 0, 16, 18, x, y, 16, 18); // 腰から下は、ちゃぶ台のかげ
+          if (phone) { // 顔の前にスマホをかまえて、とっている（赤い点が点滅）
+            g.R(x + 4, y + 4, 9, 12, P.ink);
+            g.R(x + 5, y + 5, 7, 10, '#5c5c6c');
+            g.R(x + 6, y + 6, 2, 2, P.lsky);
+            if (g.blink(2)) g.R(x + 9, y + 6, 2, 2, P.red);
+          }
+          if (text) bubble(g, x + 8, y - 1, text);
+        });
+      }
       function drawHearts(g) {
         g.text('友だち', 8, 21, { size: 12, col: P.white, outline: P.ink });
         for (let h = 0; h < 3; h++) {
           const alive = h < st.hearts;
-          const breaking = !alive && h === st.hearts && st.heartT > 0;
+          const breaking = !alive && st.heartT > 0 && (h === st.hearts || st.pale);
           const x0 = 8 + h * 17, y0 = 38;
           const col = alive ? P.red : breaking ? P.rose : P.dgray;
           const split = breaking ? Math.round((0.7 - st.heartT) * 6) : 0;
@@ -328,22 +415,28 @@
         }
       }
       function drawQueue(g) {
-        const rest = people.length - st.idx - 1;
+        if (st.phase === 'reveal') return;
+        const rest = N - st.idx - 1;
         g.text('あと ' + Math.max(0, rest) + '人', 218, 21, { size: 12, align: 'center', col: P.white, outline: P.ink });
-        for (let j = rest - 1; j >= 0; j--) {
+        for (let j = Math.min(rest, 6) - 1; j >= 0; j--) {
           const x = 187 + (j + st.qShift) * 10;
-          const p = people[st.idx + 1 + j];
+          const p = turns[st.idx + 1 + j];
           g.shadow(x + 8, 117, 6);
           g.sprite(api.person('ichinen', { dir: 'left', variant: p.v }), x, 94);
         }
       }
       function drawHero(g) {
-        const bob = st.phase === 'react' && st.mood === 'happy' && !st.reveal ? -Math.round(Math.abs(Math.sin(st.pT * 9)) * 3) : 0;
+        const happy = st.phase === 'react' && st.mood === 'happy';
+        const bob = happy ? -Math.round(Math.abs(Math.sin(st.pT * 9)) * 3) : 0;
         g.shadow(38, 108, 11);
         g.sprite(api.person('otoko', { dir: 'right' }), 22, 60 + bob, { scale: 2 });
-        if (st.phase === 'react' && st.pT < 1.2) {
-          if (st.reveal) g.text('！', 54, 46, { col: P.yellow, outline: P.black });
-          else if (st.mood === 'happy') g.text('♪', 54, 48 - Math.round(st.pT * 10), { col: P.rose, outline: P.white });
+        if (st.pale) { // ガーン（顔が青ざめる）
+          for (let i = 0; i < 5; i++) g.R(29 + i * 4, 62, 1, 12 + (i % 2) * 4, P.mblue);
+          g.text('！！', 54, 44, { col: P.yellow, outline: P.black });
+        } else if (st.phase === 'reveal' && st.rStep >= 1) {
+          if (!st.used) g.text('！', 54, 46, { col: P.yellow, outline: P.black });
+        } else if (st.phase === 'react' && st.pT < 1.2) {
+          if (st.mood === 'happy') g.text('♪', 54, 48 - Math.round(st.pT * 10), { col: P.rose, outline: P.white });
           else { g.R(52, 60, 2, 4, P.lsky); g.R(51, 62, 4, 2, P.lsky); }
         }
       }
@@ -353,7 +446,7 @@
         const ix = B.x + 4, iy = B.y + 4, iw = B.w - 8, ih = B.h - 8;
         g.R(ix, iy + ih - 22, iw, 22, P.sky);
         let k = 1;
-        if (st.phase === 'in') k = Math.min(1, st.pT / 0.3);
+        if (st.phase === 'in' || (st.phase === 'reveal' && st.rStep === 0)) k = Math.min(1, st.pT / 0.3);
         else if (st.phase === 'out') k = 1 - Math.min(1, st.pT / 0.3);
         if (k <= 0) return;
         const p = cur();
@@ -362,19 +455,17 @@
         g.ctx.beginPath();
         g.ctx.rect(ix, iy + Math.round((ih - h) / 2), iw, h);
         g.ctx.clip();
-        const mood = st.phase === 'react' || st.phase === 'out' ? st.mood : p.mood;
-        const typing = st.phase === 'talk' && st.typed < p.text.length;
+        const mood = st.phase === 'react' || st.phase === 'out' || st.phase === 'reveal' ? st.mood : p.mood;
+        const typing = (st.phase === 'talk' && st.typed < p.text.length) || (st.phase === 'reveal' && st.typed < st.line.length);
         const bob = typing && Math.floor(st.t * 8) % 2 ? 1 : 0;
         const shown = st.reveal && st.puffT < 0.2; // 煙のあとは、寮のジャージを着た 3年生の姿
-        const img = face(api, p.v, mood, p.deco, shown);
-        g.sprite(img, B.x + 6, B.y + 5 + bob, { scale: 3 });
+        g.sprite(face(api, p.v, mood, p.deco, shown), B.x + 6, B.y + 5 + bob, { scale: 3 });
         if (!shown) {
           // 名札
           g.R(B.x + 6 + 57, B.y + 5 + bob + 84, 12, 8, P.white);
           g.R(B.x + 6 + 57, B.y + 5 + bob + 84, 12, 2, P.red);
           g.frame(B.x + 6 + 56, B.y + 5 + bob + 83, 14, 10, P.ink);
         }
-        // 正体がばれた煙
         if (st.puffT > 0) {
           const r = 10 + (0.35 - st.puffT) * 90;
           [[0, 0], [-22, 10], [22, 8], [-12, -18], [14, -16]].forEach(([dx, dy], i) => g.disc(B.x + B.w / 2 + dx, B.y + B.h / 2 + dy, r * (i ? 0.6 : 1), i % 2 ? P.lgray : P.white));
@@ -384,11 +475,11 @@
       function drawDialog(g) {
         const p = cur();
         g.box(4, 124, 248, 98);
-        const name = st.reveal ? FAKE_NAME : p.label;
+        const name = st.reveal && st.puffT < 0.2 ? FAKE_NAME : NAME;
         const nw = g.measure(name, 12) + 14;
-        g.box(12, 108, nw, 20, { fill: st.reveal ? P.dred : P.navy });
+        g.box(12, 108, nw, 20, { fill: name === FAKE_NAME ? P.dred : P.navy });
         g.text(name, 19, 111, { size: 12, col: P.lyellow });
-        if (st.phase === 'in') return;
+        if (st.phase === 'in' || (st.phase === 'reveal' && st.rStep === 0 && st.pT < 0.3)) return;
         const str = st.phase === 'talk' ? p.text : st.line;
         const lines = g.wrap(str, 232, 16).slice(0, 3); // 1 行 14 文字まで
         let left = Math.floor(st.typed);
@@ -398,6 +489,7 @@
           left -= chars.length;
           if (part) g.text(part, 14, 134 + i * 20, { col: st.phase === 'talk' ? P.white : P.lyellow });
         });
+        if (st.phase === 'reveal') return;
         // 受ける・断る
         const btn = (b, key, label, chosen) => {
           const on = st.phase === 'talk' || chosen;
@@ -418,13 +510,16 @@
       }
 
       return {
-        people,
-        pools: { TALK, HERRING, FAKE_TALK, OFFER, FAKE_OFFER, ACCEPT, REFUSE, GEN_TIMEOUT, FAKE_ACCEPT, FAKE_TIMEOUT, REVEAL, TELLS, HERRING_LOOKS },
+        turns,
+        pools: { TALK, HERRING, OFFER, FAKE_TALK, FAKE_PLAIN, FAKE_OFFER, ACCEPT, REFUSE, GEN_TIMEOUT, FAKE_ACCEPT, FAKE_TIMEOUT, FAKE_REFUSE, REVEAL, WIN_LINE, LOSE_LINE, REACTS },
         // テスト用：いまの様子
         get state() {
+          const p = cur();
           return {
-            phase: st.phase, idx: st.idx, hearts: st.hearts, friends: st.friends, reveal: st.reveal, choice: st.choice,
-            fakeAt: people.findIndex((p) => p.fake), fake: cur().fake, timeLeft: st.timeT, line: st.line, name: st.reveal ? FAKE_NAME : cur().label,
+            phase: st.phase, idx: st.idx, hearts: st.hearts, friends: st.friends, used: st.used, refusedFake: st.refusedFake,
+            reveal: st.reveal, rStep: st.rStep, choice: st.choice, fake: !!(p && p.fake), react: p ? p.react : null,
+            seniors: [seniorMode(0), seniorMode(1)], timeLeft: st.timeT, line: st.line, name: st.reveal && st.puffT < 0.2 ? FAKE_NAME : NAME,
+            fakeTurns: turns.map((t, i) => (t.fake ? i : -1)).filter((i) => i >= 0),
           };
         },
         update(dt) {
@@ -435,7 +530,7 @@
           st.qShift = api.approach(st.qShift, 0, dt * 4);
           // 文字を 1 文字ずつ出す
           const before = Math.floor(st.typed);
-          if (st.phase === 'talk' || st.phase === 'react') st.typed += dt * (st.phase === 'talk' ? 30 : 40);
+          if (st.phase === 'talk' || st.phase === 'react' || (st.phase === 'reveal' && (st.rStep > 0 || st.pT >= 0.3))) st.typed += dt * (st.phase === 'talk' ? 30 : 34);
           if (st.phase === 'talk' && Math.floor(st.typed) !== before && before < cur().text.length && before % 3 === 0) api.sfx('text');
           if (api.ended) return;
 
@@ -460,17 +555,26 @@
             }
           } else if (st.phase === 'out') {
             if (st.pT >= 0.3) {
-              st.idx++;
-              st.phase = 'in';
               st.pT = 0;
               st.typed = 0;
               st.choice = '';
-              st.qShift = 1;
+              if (st.idx + 1 >= N) {
+                st.phase = 'reveal';
+                revealStep(0);
+              } else {
+                st.idx++;
+                st.phase = 'in';
+                st.qShift = 1;
+              }
             }
+          } else if (st.phase === 'reveal') {
+            if (st.rStep === 0 && st.pT >= 2.0) revealStep(1);
+            else if (st.rStep === 1 && st.pT >= 1.1) revealStep(2);
           }
         },
         draw(g) {
           drawRoom(g);
+          drawSeniors(g);
           drawHearts(g);
           drawQueue(g);
           drawHero(g);
