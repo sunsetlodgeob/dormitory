@@ -317,7 +317,7 @@ function installKippuBot() {
     const G = g();
     const list = [];
     for (let i = 1; i <= 4; i++) list.push({ x: G.CPS[i].x, y: G.CPS[i].y, rank: i, name: 'cp' + i });
-    list.push({ x: G.BUY.x + G.BUY.w / 2, y: G.BUY.y + 6, buy: true, rank: 4.5, name: 'buy' });
+    list.push({ x: G.BUY.x + G.BUY.w / 2, y: G.BUY.y + 6, buy: true, rank: 4.5, name: 'buy', then: { x: G.CPS[5].x, y: G.CPS[5].y } });
     for (let i = 5; i <= 8; i++) list.push({ x: G.CPS[i].x, y: G.CPS[i].y, rank: i, name: 'cp' + i });
     list.push({ x: G.GOAL.x + 9, y: 120, r: 8, rank: 9, name: 'goal' });
     return list;
@@ -343,7 +343,7 @@ function installKippuBot() {
       const i = k * NC + c;
       if (!memo[i]) {
         const x = cx(c), y = cy(c), t = k * DT;
-        let ok = !G.wouldBark(x, y, t) && !G.wouldBark(x, y, t + 0.2);
+        let ok = !G.wouldBark(x, y, t, PAD) && !G.wouldBark(x, y, t + 0.2, PAD);
         for (const m of M) if (ok && G.visibleAt(x, y, Math.max(0, t + m), PAD) >= 0) ok = false;
         memo[i] = ok ? 1 : 2;
       }
@@ -351,36 +351,71 @@ function installKippuBot() {
     };
     const buyK = Math.ceil(1.8 / DT); // 券売機の前で、買い終わるまで見られないこと
     const buyOk = (c, k) => { if (k + buyK >= N) return false; for (let q = 1; q <= buyK; q++) if (!safe(c, k + q)) return false; return true; };
-    const prev = new Int32Array(NC * N).fill(-1);
-    prev[start] = start;
-    let layer = [start], found = null;
-    for (let k = 0; k < N - 1 && !found; k++) {
-      const next = [];
-      for (const c of layer) {
-        if (isGoal[c] && (!goal.buy || buyOk(c, k))) { found = [c, k]; break; }
-        const x = c % cols, y = (c / cols) | 0;
-        const nb = [c];
-        if (x > 0) nb.push(c - 1);
-        if (x < cols - 1) nb.push(c + 1);
-        if (y > 0) nb.push(c - cols);
-        if (y < rows - 1) nb.push(c + cols);
-        for (const d of nb) {
-          if (!free[d] || (d !== c && !okAt((cx(c) + cx(d)) / 2, (cy(c) + cy(d)) / 2))) continue;
-          const j = (k + 1) * NC + d;
-          if (prev[j] !== -1 || !safe(d, k + 1)) continue;
-          prev[j] = c;
-          next.push(d);
+    // (c0, k0) から、ゴールのマスまでの幅優先。accept(c, k) が true になった所で止まる
+    function search(c0, k0, isG, accept, maxK) {
+      const prev = new Int32Array(NC * N).fill(-1);
+      prev[k0 * NC + c0] = c0;
+      let layer = [c0];
+      for (let k = k0; k < Math.min(N - 1, maxK); k++) {
+        const next = [];
+        for (const c of layer) {
+          if (isG[c] && accept(c, k)) return { prev, c, k, k0 };
+          const x = c % cols, y = (c / cols) | 0;
+          const nb = [c];
+          if (x > 0) nb.push(c - 1);
+          if (x < cols - 1) nb.push(c + 1);
+          if (y > 0) nb.push(c - cols);
+          if (y < rows - 1) nb.push(c + cols);
+          for (const d of nb) {
+            if (!free[d] || (d !== c && !okAt((cx(c) + cx(d)) / 2, (cy(c) + cy(d)) / 2))) continue;
+            const j = (k + 1) * NC + d;
+            if (prev[j] !== -1 || !safe(d, k + 1)) continue;
+            prev[j] = c;
+            next.push(d);
+          }
         }
+        layer = next;
+        if (!layer.length) break;
       }
-      layer = next;
-      if (!layer.length) break;
+      return null;
     }
+    // 券売機では、買ったあとに、かくれ場所（次のゴール）まで見られずに行けること
+    let thenG = null;
+    if (goal.buy && goal.then) {
+      thenG = new Uint8Array(NC);
+      for (let c = 0; c < NC; c++) if (free[c] && Math.hypot(cx(c) - goal.then.x, cy(c) - goal.then.y) <= 5) thenG[c] = 1;
+    }
+    // 着けるかどうかだけを調べる（道すじは覚えない）
+    const reach = (c0, k0, isG, maxK) => {
+      let layer = [c0];
+      for (let k = k0; k < Math.min(N - 1, maxK); k++) {
+        const seen = new Uint8Array(NC), next = [];
+        for (const c of layer) {
+          if (isG[c]) return true;
+          const x = c % cols, y = (c / cols) | 0;
+          for (const d of [c, x > 0 ? c - 1 : -1, x < cols - 1 ? c + 1 : -1, y > 0 ? c - cols : -1, y < rows - 1 ? c + cols : -1]) {
+            if (d < 0 || seen[d] || !free[d] || (d !== c && !okAt((cx(c) + cx(d)) / 2, (cy(c) + cy(d)) / 2)) || !safe(d, k + 1)) continue;
+            seen[d] = 1;
+            next.push(d);
+          }
+        }
+        layer = next;
+        if (!layer.length) return false;
+      }
+      return false;
+    };
+    const accept = (c, k) => {
+      if (!goal.buy) return true;
+      if (!buyOk(c, k)) return false;
+      return !thenG || reach(c, k + buyK, thenG, k + buyK + Math.ceil(8 / DT));
+    };
+    const found = search(start, 0, isGoal, accept, N);
     if (!found) return null;
     const pts = [];
-    let cc = found[0];
-    for (let kk = found[1]; kk >= 0; kk--) { pts.push([cx(cc), cy(cc)]); if (kk > 0) cc = prev[kk * NC + cc]; }
+    let cc = found.c;
+    for (let kk = found.k; kk >= 0; kk--) { pts.push([cx(cc), cy(cc)]); if (kk > 0) cc = found.prev[kk * NC + cc]; }
     pts.reverse();
-    return { t0: G.npcT, DT, pts, k: found[1] };
+    return { t0: G.npcT, DT, pts, k: found.k };
   };
   // いまの道すじで、押すキー（null：道すじから外れた）
   KB.steer = function (p) {

@@ -640,11 +640,11 @@
         const [aw, sl] = me.ticket ? [9, 3] : [6, 5];
         return ((t + 2) % (aw + sl)) < aw;
       };
-      // テスト用：今から ahead 秒後に (x, y) にいたら、犬がほえるか
-      function wouldBark(x, y, ahead) {
+      // テスト用：今から ahead 秒後に (x, y) にいたら、犬がほえるか（pad：よゆう）
+      function wouldBark(x, y, ahead, pad) {
         const t = npcT + (ahead || 0);
         if (areaAt(x) !== DOG.area || t < dog.nextOk) return false;
-        return api.dist(x, y, DOG.x, DOG.y) < (dogAwake(t) ? DOG.rAwake : DOG.rSleep);
+        return api.dist(x, y, DOG.x, DOG.y) < (dogAwake(t) ? DOG.rAwake : DOG.rSleep) + (pad || 0);
       }
 
       function talk(x, y, str, sec, col) { say = { x, y, str, t: sec || 1.4, col: col || P.ink }; }
@@ -726,11 +726,13 @@
       function arrow(g, x, y, col, dir) {
         // はねる ▼（dir が 'left' なら ◀）
         const b = Math.round(Math.abs(Math.sin(api.time * 5)) * 4);
-        if (dir === 'left') {
-          x -= b;
+        if (dir === 'left' || dir === 'right') {
+          // ◀ ▶（先が x）
+          const s = dir === 'left' ? 1 : -1;
+          x -= b * s;
           for (let i = 0; i < 5; i++) {
-            g.R(x + i, y - i - 1, 1, i * 2 + 3, P.black);
-            g.R(x + i + 1, y - i, 1, i * 2 + 1, col);
+            g.R(x + i * s, y - i - 1, 1, i * 2 + 3, P.black);
+            g.R(x + (i + 1) * s, y - i, 1, i * 2 + 1, col);
           }
           return;
         }
@@ -1740,8 +1742,9 @@
               const nx = p.seg.i + 1 < n.plan.segs.length ? n.plan.segs[p.seg.i + 1] : n.plan.segs[0];
               const ar = AREAS[n.area];
               const ex = api.clamp(nx.x0, Math.max(camX, ar.x) + 22, Math.min(camX + W, ar.x + ar.w) - 22);
-              if (g.blink(4)) g.text('チリンチリン', ex, nx.y0 - 30, { size: 12, align: 'center', col: P.lyellow, outline: P.black });
-              arrow(g, ex + (nx.x0 < ex ? -14 : 14), nx.y0 - 8, P.lyellow, nx.x0 < ex ? 'left' : 'right');
+              const from = nx.x0 < ex ? 'left' : 'right'; // 自転車が来る側
+              g.text('チリンチリン', ex + (from === 'left' ? 8 : -8), nx.y0 - 30 - (g.blink(4) ? 1 : 0), { size: 12, align: 'center', col: P.lyellow, outline: P.black });
+              arrow(g, from === 'left' ? ex - 16 : ex + 16, nx.y0 - 10, P.lyellow, from === 'left' ? 'right' : 'left');
               if (!n.rang || n.rang !== p.seg) { n.rang = p.seg; if (areaAt(me.x) === n.area) api.sfx('ring'); }
             }
           });

@@ -1,5 +1,6 @@
 /*
  * 2月 節分「節分ピラミッド」 ― 夜の寮の玄関前で、人間ピラミッド（4・3・2・1 の 10 人）を作る
+ *  夕照寮の伝統で、ピラミッドは全員全裸（「男魂」の札とモザイクで隠す）。雪の夜なので、みんなふるえて白い息を吐く。
  *  下のゲージでマーカーが左右に動く。ゾーンに入ったときに A をおすと、次の人が玄関から出てきて上に乗る。
  *  ずれると、その人は転がり落ちる（ぐらぐらが少し増えて、少し待たされる）。
  *  寮の窓や左のほうから、豆・みかん・雑誌・スリッパ・まくらが飛んでくる。当たると「ぐらぐら」がたまる。
@@ -15,7 +16,8 @@
   const PX = 12; // 下の段の左はし
   const SP = 36; // となりの人との間（2 倍の絵で）
   const ROW_H = 24; // 段の高さ
-  const FW = 22, FH = 16; // 四つんばいの絵の大きさ（1 倍）
+  const FW = 22, FH = 16; // 四つんばいの絵の大きさ（1 倍）。手が着くのは FH の高さ
+  const KH = FH + 3; // 四つんばいの絵の canvas の高さ（首から下げた札が、手の間に下がるぶん）
   const BLD_X = 172; // 寮の建物の左はし
   const DOOR = { x: 196, y: 128, w: 40, h: 66 }; // 玄関
   const WAIT = { x: 200, y: GROUND - 48 }; // 次の人が玄関で待つ所（2 倍の絵の左上）
@@ -27,7 +29,7 @@
     for (let i = 0; i < n; i++) SLOTS.push({ r, x: PX + (i + r / 2) * SP, y: GROUND - FH * 2 - r * ROW_H });
   });
   const NEED = SLOTS.length;
-  // のる順の寮生（てっぺんは男魂くん）。名前は出さない
+  // のる順の寮生（てっぺんは男魂くん）。名前は出さない。全員、全裸
   const CREW = [
     { kind: 'senpai', v: 0 }, { kind: 'senpai', v: 4 }, { kind: 'senpai', v: 2 }, { kind: 'senpai', v: 5 },
     { kind: 'douki', v: 1 }, { kind: 'senpai', v: 3 }, { kind: 'douki', v: 2 },
@@ -45,7 +47,8 @@
   const ITEM_KINDS = ['mame', 'mame', 'mikan', 'mikan', 'slipper', 'zasshi', 'makura'];
   const SHOUTS = ['鬼はー外！', 'えいっ', 'くらえ！', '鬼はー外！'];
 
-  // ── 四つんばいの人の絵（正面から。頭は人物の絵から借りる） ────────────
+  // ── 四つんばいの人の絵（正面から。頭は人物の絵から借りる。全裸） ────────────
+  //  正面からは、肩・背中・腕と、首から下げた「男魂」の札だけが見える（はっきりした裸は描かない）
   const kcache = new Map();
   function shade(hex, amt) {
     const n = parseInt(hex.slice(1), 16);
@@ -59,26 +62,36 @@
   function kneeler(api, m) {
     const key = m.kind + '|' + m.v;
     if (kcache.has(key)) return kcache.get(key);
-    const src = api.person(m.kind, { dir: 'down', variant: m.v });
-    const shirt = m.kind === 'otoko' ? '#fcfcfc' : pixel(src, 4, 16);
+    const src = api.person(m.kind, { dir: 'down', variant: m.v, naked: true });
     const skin = pixel(src, 4, 8);
-    const c = OTK.makeCanvas(FW, FH + 1);
+    const skS = shade(skin, -0.18), skH = shade(skin, 0.3);
+    const c = OTK.makeCanvas(FW, KH);
     const x2 = c.getContext('2d');
     const p = (x, y, w, h, col) => { x2.fillStyle = col; x2.fillRect(x, y, w, h); };
-    // 背中（上から少し見える）と、腕
-    p(2, 2, 18, 4, shirt);
-    p(3, 2, 16, 1, shade(shirt, 0.3));
-    p(0, 4, 4, 6, shirt);
-    p(18, 4, 4, 6, shirt);
-    p(0, 10, 4, 4, skin);
-    p(18, 10, 4, 4, skin);
-    p(0, 14, 5, 2, skin);
+    // 背中（上から少し見える）と、腕。服はない
+    p(2, 2, 18, 4, skin);
+    p(3, 2, 16, 1, skH);
+    p(0, 4, 4, 10, skin);
+    p(18, 4, 4, 10, skin);
+    p(0, 5, 1, 9, skS); // 腕の外がわのかげ
+    p(21, 5, 1, 9, skS);
+    p(1, 4, 2, 1, skH); // 肩
+    p(19, 4, 2, 1, skH);
+    p(0, 14, 5, 2, skin); // 手
     p(17, 14, 5, 2, skin);
+    p(1, 14, 1, 1, skS); p(3, 14, 1, 1, skS); p(18, 14, 1, 1, skS); p(20, 14, 1, 1, skS); // 指
     // 胸の下（かげ）
-    p(4, 11, 14, 5, shade(shirt, -0.55));
-    if (m.kind === 'otoko') { p(9, 3, 4, 1, OTK.P.red); p(10, 4, 2, 1, OTK.P.red); } // 背中の「男」の気配
+    p(4, 11, 14, 5, '#2a2030');
     // 頭
     x2.drawImage(src, 0, 0, 16, 11, 3, 3, 16, 11);
+    // 首から下げた「男魂」の札（手の間に下がる）
+    p(7, 13, 1, 1, '#7c5c3c');
+    p(14, 13, 1, 1, '#7c5c3c');
+    const R = OTK.P.red;
+    p(7, 14, 8, 5, '#fcfcfc');
+    p(7, 18, 8, 1, '#d8d0c0');
+    p(8, 15, 2, 3, R); p(9, 16, 1, 1, '#fcfcfc'); // 男
+    p(11, 15, 3, 1, R); p(12, 16, 1, 2, R); p(11, 17, 1, 1, R); p(13, 17, 1, 1, R); // 魂
     // 鬼のツノ（カチューシャ）
     p(5, 1, 2, 3, '#f8d878');
     p(5, 0, 1, 1, '#f8d878');
@@ -102,12 +115,12 @@
     month: 2,
     event: '節分',
     title: '節分ピラミッド',
-    goal: 'ピラミッドを\n完成させろ！',
+    goal: '全裸で\n組みあげろ！',
     howto: ['A：ゾーンで次の人をのせる', 'B：おしている間ふんばる', '警察が来たら↓で中へ！'],
     note: '',
     time: 50,
     timeout: 'lose',
-    timeoutMsg: '時間切れ。\n寒すぎて、みんな\n部屋に帰った。',
+    timeoutMsg: '時間切れ。\n全裸は寒すぎた。\nみんな部屋に帰った。',
     bgm: 'tense',
     create(api) {
       const P = api.P, W = api.W, H = api.H;
@@ -216,7 +229,7 @@
           const sp = slotPos(i);
           bodies.push({ i, x: sp.x, y: sp.y, vx: api.rnd(-50, 50) + (SLOTS[i].x - 70) * 0.6, vy: api.rnd(-90, -30), a: 0, va: api.rnd(-6, 6), rest: false });
         }
-        api.lose('ピラミッドがくずれた。\n全員、豆まみれ。', { wait: 1.6 });
+        api.lose('ピラミッドがくずれた。\n全裸で、豆まみれ。', { wait: 1.6 });
       }
 
       // ── 投げる ──
@@ -315,7 +328,7 @@
             pc.t = 0;
             pc.copX = pc.carX + 20;
             api.sfx('buzzer');
-            api.lose('警察につかまった。\n「きみたち、こんな\n時間に何してるの」', { wait: 2.2 });
+            api.lose('警察につかまった。\n「とりあえず、\n服を着なさい」', { wait: 2.2 });
           }
         } else if (pc.s === 'hide') {
           pc.carX = api.approach(pc.carX, W - 70, dt * 60);
@@ -581,7 +594,7 @@
           const fr = (pc.copDir === 'left' || pc.copDir === 'right') && (pc.s === 'caught' || pc.t < 1 || pc.t > 2.2) ? Math.floor(api.time * 6) % 2 : 0;
           g.sprite(api.person('police', { dir: pc.copDir, frame: fr }), pc.copX, GROUND - 48, { scale: 2 });
           if (pc.said) bubble(g, pc.copX + 16, GROUND - 50, pc.said);
-          if (pc.s === 'caught' && pc.t > 0.6) bubble(g, pc.copX + 10, GROUND - 50, 'きみたち、\n何してるの？', { col: P.navy });
+          if (pc.s === 'caught' && pc.t > 0.6) bubble(g, pc.copX + 10, GROUND - 50, 'きみたち、\nなんで裸？', { col: P.navy });
         }
         // 逃げる人・もどる人
         if (pc.s === 'hide' || pc.s === 'back') {
