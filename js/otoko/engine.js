@@ -409,10 +409,14 @@
     o = o || {};
     const size = o.size || 32;
     const edge = o.edge || P.black;
+    const col = o.col || P.white, rim = o.rim || P.white, shade = o.shade || P.xdgray;
+    // ふちが文字と同じ色（白い字に白いふち）のときは、かげも太らせて、上もふくめて黒でかこむ。
+    // そうしないと、かげの色が字の中に細い線になって見え、字がこわれたように見える
+    const flat = rim === col;
     for (let dy = -2; dy <= 2; dy++)
-      for (let dx = -2; dx <= 2; dx++) if (Math.abs(dx) + Math.abs(dy) <= 3 && (dx || dy)) text(str, x + dx, y + dy + 1, { size, col: edge, align: o.align });
-    text(str, x, y + 2, { size, col: o.shade || P.xdgray, align: o.align, outline: o.rim || P.white });
-    return text(str, x, y, { size, col: o.col || P.white, align: o.align, outline: o.rim || P.white });
+      for (let dx = -2; dx <= 2; dx++) if (Math.abs(dx) + Math.abs(dy) <= 3 && (dx || dy)) text(str, x + dx, y + dy + (flat ? 0 : 1), { size, col: edge, align: o.align });
+    text(str, x, y + 2, { size, col: shade, align: o.align, outline: flat ? shade : rim });
+    return text(str, x, y, { size, col, align: o.align, outline: rim });
   }
 
   // 折り返し。行頭に来てはいけない文字（、。」など）は、前の文字といっしょに次の行へ送る（追い出し）。

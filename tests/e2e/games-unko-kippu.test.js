@@ -519,7 +519,8 @@ async function kippuPhone(open) {
 }
 
 // 2 回しっぱいしたあと（tries 2）は少し易しくなる
-// OTK.debug.start は tries を 0 にするので、ここでは OTK.makeRun で 1 回ぶんを作って、手で進めて調べる
+// 時間を止めて比べたいので、OTK.makeRun で 1 回ぶんを作って、手で進めて調べる。
+// ふつうの入り口（OTK.debug.start の tries）でも同じになることも確かめる
 async function easyMode(open) {
   console.log('2 回しっぱいしたあとの易しさ');
   const { page, errors } = await open('game/?play=unko&quick=1&seed=1', { wait: 300 });
@@ -545,6 +546,10 @@ async function easyMode(open) {
   });
   check(r.fly2 > r.fly0 + 0.1, 'うんこ：影が長く出る（' + r.fly0.toFixed(2) + ' → ' + r.fly2.toFixed(2) + ' 秒）');
   check(r.k2 > r.k0, '切符：見つかるまでが少し長い（' + r.k0.toFixed(2) + ' → ' + r.k2.toFixed(2) + ' 秒）');
+  await page.evaluate(() => { OTK.debug.speed = 1; OTK.debug.seed(5); OTK.debug.start('kippu', { quick: true, tries: 2 }); });
+  await page.waitForFunction(() => OTK.debug.scene === 'play' && OTK.debug.current === 'kippu');
+  const g2 = await page.evaluate(() => [OTK.debug.api.tries, OTK.debug.game.grace]);
+  check(g2[0] === 2 && g2[1] === r.k2, 'OTK.debug.start(id, { tries: 2 }) でも同じ易しさ（' + g2.join('・') + '）');
   const errs = realErrors(errors);
   check(!errs.length, 'エラーなし' + (errs.length ? '：' + errs.join('\n') : ''));
   await page.context().close();

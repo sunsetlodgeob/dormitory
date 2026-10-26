@@ -21,6 +21,7 @@ heya/index.html          部屋割り                  js/heya.js    css/heya.cs
 meibo/index.html         名簿                      js/meibo.js   css/meibo.css
 sanpo/index.html         寮さんぽ（建物を歩ける再現）  js/world.js js/art.js js/game.js css/style.css
                          （?year= の部屋割りと注記のために js/site/ の 4 つも読む）
+status/index.html        進捗（作る人と幹事向け。ホームからはリンクしない）  status/status.js に中身
 css/site.css             コンテンツのページ共通の見た目
 js/site/config.js        設定（URL など。空ならサンプルで動く）
 js/site/sample.js        サンプルデータ（すべて架空）

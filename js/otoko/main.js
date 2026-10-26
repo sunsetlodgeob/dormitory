@@ -382,7 +382,7 @@
           g.text(it.label, BX + 28, y, { col: on ? P.white : P.dgray });
           if (it.id === 'cont' && canCont()) {
             const d = games()[save.step];
-            g.text(d ? d.month + '月から' : 'エンディング', BX + BW - 12, y + 3, { size: 12, align: 'right', col: P.lsky });
+            g.text(d ? d.month + '月から' : 'エンド', BX + BW - 12, y + 3, { size: 12, align: 'right', col: P.lsky });
           }
           if (it.id === 'yakyu') g.text('準備中', BX + BW - 12, y + 3, { size: 12, align: 'right', col: P.dgray });
           if (it.id === 'prac') g.text('★' + clearedCount() + '/' + total(), BX + BW - 12, y + 3, { size: 12, align: 'right', col: P.yellow });
@@ -627,7 +627,8 @@
         R(18, y, W - 36 - tw, 1, P.mblue);
         y += 8;
         howto.slice(0, room).forEach((l) => { g.text(l, 22, y); y += 18; });
-        if (!warned && (howtoAll.length > Math.min(4, room) || noteAll.length > 2)) {
+        // フォントの読みこみ中は幅がちがうので、読みこみ終わってから調べる
+        if (!warned && (!document.fonts || document.fonts.status === 'loaded') && (howtoAll.length > Math.min(4, room) || noteAll.length > 2)) {
           warned = true;
           console.warn('ミニゲーム「' + d.id + '」の説明が画面に入りきりません。howto は 3 行、note は 2 行までにしてください。');
         }
