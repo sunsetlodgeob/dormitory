@@ -67,6 +67,45 @@
     return npcs.find((n) => visible(n) && n.x === x && n.y === y) || null;
   }
 
+  // ── 年度（部屋割りのページから ?year=2005 で来たとき） ─────────────
+  // その年度の部屋割りを読み、部屋のドアをノックすると住人の名前が出る
+  const YEAR = (() => {
+    let y = null;
+    try { y = new URLSearchParams(location.search).get('year'); } catch (e) { /* noop */ }
+    return /^\d{4}$/.test(y || '') ? +y : null;
+  })();
+  const yearRooms = { state: 'none', byRoom: {} };
+  if (YEAR && window.OB && window.OB.data) {
+    yearRooms.state = 'loading';
+    window.OB.data.loadPublic().then((d) => {
+      // 部屋割りのページ（js/heya.js）と同じそろえ方：全角の数字や「305号室」も読む
+      const str = (v) => String(v == null ? '' : v).trim();
+      for (const r of d.rooms || []) {
+        if (!r || Number(str(r.year).normalize('NFKC')) !== YEAR) continue;
+        const room = str(r.room).normalize('NFKC').replace(/[^0-9]/g, '');
+        const name = str(r.name);
+        if (!room || !name) continue;
+        const list = (yearRooms.byRoom[room] = yearRooms.byRoom[room] || []);
+        if (list.indexOf(name) < 0) list.push(name);
+      }
+      yearRooms.state = 'ok';
+    }).catch(() => { yearRooms.state = 'error'; });
+  }
+  // ドアがどの部屋のものか（居室のドアでなければ null）
+  function doorRoom(map, x, y) {
+    if (!'+/'.includes(at(map, x, y))) return null;
+    for (const yy of [y - 1, y + 1]) {
+      const m = /^(\d+)号室$/.exec(labelAt(map, x, yy) || '');
+      if (m) return m[1];
+    }
+    return null;
+  }
+  // 廊下側からノックできるドアか（部屋の中からはノックしない）
+  function knockable(x, y) {
+    const room = doorRoom(S.map, x, y);
+    return room && labelAt(S.map, S.p.x, S.p.y) !== room + '号室' ? room : null;
+  }
+
   // ── 音（効果音だけ） ───────────────────────────────
   let actx = null;
   let soundOn = true;
@@ -95,6 +134,7 @@
     else if (kind === 'stairs') [0, 1, 2].forEach((i) => tone(330 + i * 70, 0.05, 'triangle', 0.05, i * 0.07));
     else if (kind === 'door') { tone(196, 0.07, 'triangle', 0.06); tone(131, 0.1, 'triangle', 0.05, 0.07); }
     else if (kind === 'jingle') [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.11, 'square', 0.03, i * 0.09));
+    else if (kind === 'knock') [0, 0.17].forEach((w) => tone(140, 0.06, 'triangle', 0.09, w));
   }
   function renderSoundBtn() {
     el.sound.textContent = soundOn ? '音 ON' : '音 OFF';
@@ -298,7 +338,8 @@
     const p = S.p;
     if (tx === p.x && ty === p.y) { interact(); return; }
     const target = hit || npcAt(tx, ty);
-    if (target || !walkable(S.map, tx, ty)) {
+    // 年度を見ているときは、部屋のドアをタップするとノックする（中へは床をタップして入る）
+    if (target || !walkable(S.map, tx, ty) || (YEAR && knockable(tx, ty))) {
       const near = (x, y) => Math.abs(x - tx) + Math.abs(y - ty) === 1;
       const across = (x, y) => {
         if (!target) return false;
@@ -341,6 +382,8 @@
       } }]);
     }
     if (ch === 'D') return dydo();
+    const room = knockable(x, y);
+    if (room) return knock(room);
     if (ch === 'w') {
       if (y < 7) return say(['窓の外に、川が見える。']);
       if (y > 8) return say(['窓の外は道路だ。']);
@@ -365,6 +408,25 @@
         say(['ガコン！ ' + first + 'を買った。', 'ピピピピ……「' + n + '」。おしい！']);
       }
     } }]);
+  }
+  // 部屋のドアをノックする
+  function knock(room) {
+    sfx('knock');
+    if (!YEAR) {
+      const inside = npcs.some((n) => visible(n) && !n.pose && labelAt(S.map, n.x, n.y) === room + '号室');
+      return say(inside ? ['コンコン…', '「開いてるよー」'] : ['コンコン…返事がない。']);
+    }
+    const head = room + '号室（' + YEAR + '年度）';
+    const names = yearRooms.byRoom[room];
+    if (names && names.length) {
+      // メッセージの窓に入るよう、4 人ずつに分ける
+      const pages = [];
+      for (let i = 0; i < names.length; i += 4) pages.push(head + '\n' + names.slice(i, i + 4).join('\n'));
+      return say(['コンコン…'].concat(pages));
+    }
+    if (yearRooms.state === 'loading') return say(['コンコン…', '（部屋割りを読み込み中だ。少し待ってから、もう一度ノックしよう）']);
+    if (yearRooms.state !== 'ok') return say(['コンコン…', '（部屋割りを読み込めなかった）']);
+    say(['コンコン…', '返事がない。', '（' + head + 'は、まだ情報がありません）']);
   }
   function talk(n) {
     if (!n.pose) n.dir = n.cat ? (S.p.x > n.x ? 'right' : S.p.x < n.x ? 'left' : n.dir) : OPP[S.p.dir];
@@ -515,7 +577,7 @@
     if (S.scene !== 'play' || !S.map) { el.hud.hidden = true; return; }
     el.hud.hidden = false;
     const place = placeName(S.map, S.p.x, S.p.y);
-    el.hudLoc.textContent = (S.map.kind === 'in' ? S.map.floor + ' ' : '') + place;
+    el.hudLoc.textContent = (YEAR ? YEAR + '年度 ' : '') + (S.map.kind === 'in' ? S.map.floor + ' ' : '') + place;
     if (S.flags.endingSeen) el.hudQuest.textContent = 'ようこそ夕照寮へ';
     else if (S.flags.questDone) el.hudQuest.textContent = '屋上へ行こう';
     else el.hudQuest.textContent = 'あいさつ ' + countGreeted() + ' / ' + TOTAL;
@@ -829,7 +891,8 @@
     S.flags = {};
     S.greeted = {};
     for (const n of npcs) n.talked = false;
-    say(WORLD.story.intro.concat(['（行きたい場所をタップするか、十字キーで移動。A ボタンで話す・調べる）']), { onEnd: () => {
+    const hint = YEAR ? ['（' + YEAR + '年度の寮です。部屋のドアを調べると、ノックできます）'] : [];
+    say(WORLD.story.intro.concat(['（行きたい場所をタップするか、十字キーで移動。A ボタンで話す・調べる）'], hint), { onEnd: () => {
       fadeTo(() => {
         S.scene = 'play';
         const st = WORLD.start;
@@ -845,6 +908,12 @@
   });
 
   function boot(data) {
+    // 部屋割りから来たときは、もどる先を部屋割りにする
+    const home = YEAR && el.top && el.top.querySelector('.logo-home');
+    if (home) {
+      home.href = '../heya/?year=' + YEAR;
+      home.textContent = '◀ 部屋割り';
+    }
     layout();
     initPetals();
     if (!(data && restore(data.game))) {
@@ -877,5 +946,5 @@
   else boot((hot && hot.data) || {});
 
   // テスト用の窓口
-  D.debug = { S, npcs, enterMap, tapTile, interact, say, advance, countGreeted, TOTAL, get VW() { return VW; }, get VH() { return VH; } };
+  D.debug = { S, npcs, enterMap, tapTile, interact, say, advance, countGreeted, TOTAL, YEAR, yearRooms, get VW() { return VW; }, get VH() { return VH; } };
 })();

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>男魂くんの1年 ― 夕照寮OB会</title>
+<meta name="description" content="夕照寮に入寮した男魂くんが、1年間の行事をミニゲームでのりきる。ファミコン風のブラウザゲーム。">
+<meta name="theme-color" content="#0d0b26">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=DotGothic16&display=swap">
+<link rel="stylesheet" href="../css/site.css">
+<link rel="stylesheet" href="../css/otoko.css">
+</head>
+<body class="otk-page">
+<header class="otk-top">
+  <a class="ob-back" href="../">◀ ホーム</a>
+  <h1 class="otk-name">男魂くんの1年</h1>
+  <button type="button" class="fc-btn otk-sound" id="otk-sound" aria-pressed="true">音 ON</button>
+</header>
+
+<main class="otk-main">
+  <section class="otk-console" aria-label="ゲーム画面とボタン">
+    <div class="otk-screen" id="otk-screen">
+      <canvas id="otk-canvas" width="256" height="224" aria-label="ゲーム画面。十字キーとAボタン・Bボタンで遊びます"></canvas>
+    </div>
+    <div class="otk-dpad" id="otk-dpad" role="group" aria-label="十字キー">
+      <span class="otk-arm otk-up"></span><span class="otk-arm otk-down"></span><span class="otk-arm otk-left"></span><span class="otk-arm otk-right"></span><span class="otk-hub"></span>
+    </div>
+    <div class="otk-mid">
+      <span class="otk-start" data-otk-key="pause" role="button" aria-label="スタート（ポーズ）"><i></i>START</span>
+    </div>
+    <div class="otk-ab">
+      <span class="otk-btn otk-b" data-otk-key="b" role="button" aria-label="Bボタン">B</span>
+      <span class="otk-btn otk-a" data-otk-key="a" role="button" aria-label="Aボタン">A</span>
+    </div>
+  </section>
+  <p class="otk-keys" id="otk-keys">
+    <span><kbd>←↑↓→</kbd> 移動</span>
+    <span><kbd>Z</kbd>・<kbd>A</kbd>・<kbd>Enter</kbd> Aボタン</span>
+    <span><kbd>X</kbd>・<kbd>B</kbd>・<kbd>Shift</kbd> Bボタン</span>
+    <span><kbd>Esc</kbd>・<kbd>P</kbd> ポーズ</span>
+    <span><kbd>M</kbd> 音</span>
+  </p>
+</main>
+
+<footer data-ob-footer></footer>
+
+<script src="../js/site/common.js"></script>
+<script src="../js/otoko/engine.js"></script>
+<script src="../js/otoko/audio.js"></script>
+<script src="../js/otoko/chars.js"></script>
+<script src="../js/otoko/games/nomu.js"></script>
+<script src="../js/otoko/games/nise.js"></script>
+<script src="../js/otoko/games/gyudon.js"></script>
+<script src="../js/otoko/games/deisui.js"></script>
+<script src="../js/otoko/games/conveni.js"></script>
+<script src="../js/otoko/games/zombie.js"></script>
+<script src="../js/otoko/games/gakusai.js"></script>
+<script src="../js/otoko/games/setsubun.js"></script>
+<script src="../js/otoko/games/unko.js"></script>
+<script src="../js/otoko/games/kippu.js"></script>
+<script src="../js/otoko/main.js"></script>
+</body>
+</html>

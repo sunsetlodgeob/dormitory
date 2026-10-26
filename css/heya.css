@@ -1,0 +1,291 @@
+/*
+ * 夕照寮OB会サイト ― 部屋割りのページ
+ * 寮の地図は、寮さんぽと同じドット絵（js/art.js）。その上に部屋ごとの札を重ねる。
+ * 札の大きさは、1 マスが画面で何 px か（--t）に合わせる。
+ */
+body.heya .ob-top,
+body.heya .ob-main,
+body.heya .ob-footer { max-width: 1040px; }
+body.heya.has-panel .ob-footer { padding-bottom: 200px; } /* 下のウインドウで注記が隠れないように */
+
+/* ── 年度・見かた・寮さんぽへ ── */
+.heya-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  padding: 10px 12px;
+}
+.heya-year { display: flex; align-items: stretch; gap: 6px; }
+.heya-step { padding: 8px 11px; font-size: 13px; }
+.heya-select {
+  font: 17px/1 var(--font-pixel);
+  color: var(--fc-yellow);
+  background: var(--fc-black);
+  border: 2px solid var(--fc-white);
+  border-radius: 0;
+  padding: 7px 10px;
+  min-width: 8.2em;
+  cursor: pointer;
+}
+.heya-select option { color: var(--fc-white); background: var(--fc-navy); }
+.heya-views { display: flex; gap: 6px; }
+.heya-walk { margin-left: auto; background: var(--fc-red); }
+.heya-walk::after { content: "▶"; font-size: 11px; }
+.heya-walk:hover { color: var(--fc-yellow-2); }
+
+.heya-summary {
+  margin: 4px 5px 10px;
+  font: 15px/1.5 var(--font-pixel);
+  color: var(--fc-gray);
+}
+.heya-summary strong { font-weight: normal; color: var(--fc-yellow); margin-right: 2px; }
+
+/* ── 寮の地図 ── */
+.heya-map-view { --t: 16; }
+.heya-map-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 5px 8px;
+}
+.heya-hint { margin: 0; font-size: 13px; color: var(--muted); }
+.heya-zoom { flex: none; padding: 7px 10px; font-size: 13px; }
+
+.heya-maps {
+  background: var(--fc-black);
+  border: 3px solid var(--fc-white);
+  box-shadow: 0 0 0 3px var(--fc-black), 0 0 0 5px var(--fc-white);
+  margin: 0 5px;
+  padding: 8px 6px 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-color: var(--fc-gray-2) var(--fc-black);
+}
+.heya-stack { display: grid; gap: 10px; }
+.heya-floor { min-width: 0; }
+.heya-floor-head {
+  position: sticky;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  margin: 0 0 4px;
+  font: 13px/1 var(--font-pixel);
+  font-weight: normal;
+  color: var(--fc-gray);
+  letter-spacing: 0.04em;
+}
+.heya-floor-tag {
+  font-size: 15px;
+  color: var(--fc-black);
+  background: var(--fc-yellow);
+  padding: 3px 6px 2px;
+  letter-spacing: 0.06em;
+}
+.heya-map { position: relative; }
+.heya-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+/* 共用部の名前（食堂・トイレなど） */
+.heya-area {
+  position: absolute;
+  display: flex;
+  align-items: flex-start;
+  padding: 2px;
+  pointer-events: none;
+}
+.heya-area span {
+  font: calc(var(--t) * 0.6px) / 1.25 var(--font-pixel);
+  color: var(--fc-white);
+  background: rgba(0, 0, 0, 0.62);
+  padding: 0 3px;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+/* 部屋（押すと、下に住人が出る） */
+.heya-room {
+  position: absolute;
+  margin: 0;
+  padding: 2px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--fc-white);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  -webkit-tap-highlight-color: transparent;
+}
+.heya-room.is-south { flex-direction: column-reverse; } /* 下の並びは窓が下なので、札も下に */
+.heya-room::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 2px solid transparent;
+  pointer-events: none;
+}
+.heya-room.no-data { background: rgba(8, 6, 32, 0.5); }
+.heya-room.no-data:hover { background: rgba(8, 6, 32, 0.2); }
+.heya-room.has-data::after { border-color: var(--fc-yellow); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.6); }
+.heya-room.has-data:hover::after { border-color: var(--fc-yellow-2); }
+.heya-room.is-sel::after {
+  border-color: var(--fc-white);
+  border-width: 3px;
+  box-shadow: 0 0 0 2px var(--fc-black), inset 0 0 0 1px var(--fc-black);
+  animation: heya-blink 0.9s steps(2, jump-none) infinite;
+}
+.heya-room:focus-visible { outline: 3px solid var(--fc-sky); outline-offset: 1px; z-index: 2; }
+@keyframes heya-blink { 50% { border-color: var(--fc-yellow); } }
+
+.heya-room-no {
+  font: calc(var(--t) * 0.62px) / 1 var(--font-pixel);
+  padding: 2px 3px 1px;
+  background: var(--fc-black);
+  color: var(--fc-gray);
+  letter-spacing: 0.02em;
+}
+.heya-room.has-data .heya-room-no { color: var(--fc-black); background: var(--fc-yellow); }
+.heya-room-names {
+  position: relative;
+  z-index: 1; /* 名札は部屋の枠より上に */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  max-width: calc(100% + 14px);
+}
+.heya-room.is-south .heya-room-names { flex-direction: column-reverse; }
+.heya-tag {
+  display: block;
+  max-width: 100%;
+  font: calc(var(--t) * 0.7px) / 1.3 var(--font-pixel);
+  color: var(--fc-white);
+  background: var(--fc-blue);
+  border: 1px solid var(--fc-white);
+  padding: 0 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.heya-tag-more { color: var(--fc-yellow-2); }
+
+/* スマホで全体を見ているとき：名前は下のウインドウで読む */
+.is-compact .heya-room-names,
+.is-compact .heya-area { display: none; }
+.is-compact .heya-room { padding: 1px 0; }
+.is-compact .heya-room-no { font-size: max(7px, calc(var(--t) * 1.25px)); padding: 1px 1px 0; }
+.is-compact .heya-room::after { border-width: 1px; }
+.is-compact .heya-room.is-sel::after { border-width: 2px; box-shadow: 0 0 0 1px var(--fc-black); }
+.is-compact .heya-floor-head { font-size: 12px; }
+
+.heya-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 18px;
+  margin: 14px 5px 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.heya-legend > span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; } /* 色の見本と説明を離さない */
+.heya-key { flex: none; width: 14px; height: 14px; }
+.heya-key-on { border: 2px solid var(--fc-yellow); background: #6b5a3a; }
+.heya-key-off { border: 1px solid var(--fc-gray-2); background: #2a2440; }
+
+/* ── 一覧表 ── */
+.heya-list { padding: 12px 14px; }
+.heya-list-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 6px 22px;
+  align-items: start;
+}
+.heya-list-floor h2 { margin: 0 0 4px; font-size: 18px; }
+.heya-list .fc-table th[scope="row"] { width: 4.2em; color: var(--fc-yellow); }
+.heya-list .fc-table thead th { font-size: 12px; color: var(--fc-gray); }
+.heya-list tr.no-data th[scope="row"] { color: var(--fc-gray); }
+.heya-list-name { display: inline-block; margin-right: 0.6em; }
+.heya-unknown { color: var(--fc-gray-2); font-family: var(--font-pixel); }
+.heya-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.heya-form { margin: 16px 5px 0; font-size: 13px; color: var(--muted); }
+
+.heya-retry { margin-left: 8px; padding: 6px 10px; font-size: 13px; }
+
+/* ── 部屋の情報（ゲームのメッセージ風のウインドウ） ── */
+.heya-panel {
+  position: fixed;
+  z-index: 20;
+  left: 50%;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  width: min(520px, calc(100% - 42px));
+  max-height: 60vh;
+  overflow-y: auto;
+  background: var(--fc-blue);
+  border: 3px solid var(--fc-white);
+  box-shadow: 0 0 0 3px var(--fc-blue), 0 0 0 5px var(--fc-white), 0 10px 0 5px rgba(0, 0, 0, 0.45);
+  padding: 12px 18px 14px;
+}
+.heya-panel:focus { outline: none; }
+.heya-panel.is-pop { animation: heya-pop 0.18s steps(3, end); }
+@keyframes heya-pop { from { clip-path: inset(0 0 100% 0); } to { clip-path: inset(0 0 0 0); } }
+.heya-panel-title {
+  margin: 0 0 6px;
+  padding-right: 34px; /* ✕ と重ならないように */
+  font: 18px/1.3 var(--font-pixel);
+  color: var(--fc-yellow);
+  letter-spacing: 0.04em;
+}
+.heya-panel-names {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 22px;
+  font: 18px/1.6 var(--font-pixel);
+}
+.heya-panel-names li::before { content: "▶ "; font-size: 11px; color: var(--fc-yellow-2); vertical-align: 2px; }
+.heya-panel-none { margin: 0; font-size: 15px; }
+.heya-panel-form { margin-top: 10px; padding: 7px 12px; font-size: 14px; }
+.heya-panel-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 36px;
+  height: 36px;
+  font: 18px/1 var(--font-pixel);
+  color: var(--fc-white);
+  background: transparent;
+  border: 2px solid transparent;
+  cursor: pointer;
+}
+.heya-panel-close:hover { border-color: var(--fc-white); }
+
+@media (max-width: 600px) {
+  .ob-title { font-size: 20px; }
+  .heya-bar { gap: 8px 8px; }
+  .heya-year { flex: 1 1 100%; }
+  .heya-select { flex: 1; }
+  .heya-views { flex: 1 1 auto; }
+  .heya-views .fc-btn { flex: 1; justify-content: center; }
+  .heya-walk { flex: 1 1 100%; margin-left: 0; justify-content: center; }
+  .heya-maps { padding: 6px 3px 8px; }
+  .heya-map-tools { align-items: flex-end; }
+  .heya-panel-title { font-size: 17px; }
+  .heya-panel-names { font-size: 17px; }
+}

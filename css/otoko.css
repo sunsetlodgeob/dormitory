@@ -1,0 +1,234 @@
+/*
+ * 男魂くんの1年 ― ゲームのページの見た目
+ *  画面（canvas）の大きさは js/otoko/engine.js の fit() が決める（端末の画素の整数倍）。
+ *  スマホでは画面の下に十字キーと A・B、横持ちでは画面の左右に置く。
+ *  パソコン（マウス）ではボタンを隠して、キーの説明を出す。
+ */
+body.otk-page {
+  overscroll-behavior-y: none;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(60, 28, 108, 0.55), transparent 60%),
+    var(--fc-night);
+}
+
+/* ── 上のバー ── */
+.otk-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 8px 10px 6px;
+}
+.otk-top .ob-back { padding: 7px 9px; font-size: 13px; }
+.otk-name {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font: 18px/1.2 var(--font-pixel);
+  font-weight: normal;
+  color: var(--fc-yellow);
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.otk-sound { flex: none; padding: 7px 10px; font-size: 13px; }
+
+/* ── 画面とボタン ── */
+.otk-main { max-width: 1100px; margin: 0 auto; padding: 0 2px; }
+.otk-console {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-areas:
+    "screen screen screen"
+    "dpad mid ab";
+  align-items: center;
+  justify-items: center;
+  row-gap: 16px;
+  padding-bottom: 10px;
+  touch-action: manipulation;
+}
+.otk-screen {
+  grid-area: screen;
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+}
+#otk-canvas {
+  display: block;
+  width: 256px;
+  height: 224px;
+  background: #000;
+  image-rendering: crisp-edges;
+  image-rendering: pixelated;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 0 0 2px #000, 0 0 0 4px #2c2840, 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.otk-dpad, .otk-mid, .otk-ab {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 十字キー */
+.otk-dpad {
+  grid-area: dpad;
+  position: relative;
+  width: 144px;
+  height: 144px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #24203a 0 60%, transparent 61%);
+}
+.otk-arm, .otk-hub {
+  position: absolute;
+  background: #141220;
+  box-shadow: inset 0 2px 0 #3a3550;
+}
+.otk-hub { left: 50px; top: 50px; width: 44px; height: 44px; box-shadow: none; }
+.otk-hub::after {
+  content: "";
+  position: absolute;
+  inset: 12px;
+  border-radius: 50%;
+  background: #0a0912;
+}
+.otk-up { left: 50px; top: 8px; width: 44px; height: 46px; border-radius: 6px 6px 0 0; }
+.otk-down { left: 50px; top: 90px; width: 44px; height: 46px; border-radius: 0 0 6px 6px; }
+.otk-left { left: 8px; top: 50px; width: 46px; height: 44px; border-radius: 6px 0 0 6px; }
+.otk-right { left: 90px; top: 50px; width: 46px; height: 44px; border-radius: 0 6px 6px 0; }
+.otk-arm::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border: 7px solid transparent;
+  transform: translate(-50%, -50%);
+}
+.otk-up::after { border-bottom-color: #5a5470; margin-top: -4px; }
+.otk-down::after { border-top-color: #5a5470; margin-top: 4px; }
+.otk-left::after { border-right-color: #5a5470; margin-left: -4px; }
+.otk-right::after { border-left-color: #5a5470; margin-left: 4px; }
+.otk-dpad[data-dir~="up"] .otk-up,
+.otk-dpad[data-dir~="down"] .otk-down,
+.otk-dpad[data-dir~="left"] .otk-left,
+.otk-dpad[data-dir~="right"] .otk-right { background: #2e2a48; }
+.otk-dpad[data-dir~="up"] .otk-up::after { border-bottom-color: var(--fc-yellow); }
+.otk-dpad[data-dir~="down"] .otk-down::after { border-top-color: var(--fc-yellow); }
+.otk-dpad[data-dir~="left"] .otk-left::after { border-right-color: var(--fc-yellow); }
+.otk-dpad[data-dir~="right"] .otk-right::after { border-left-color: var(--fc-yellow); }
+
+/* START */
+.otk-mid { grid-area: mid; display: flex; align-items: center; justify-content: center; }
+.otk-start {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 8px;
+  font: 11px/1 var(--font-pixel);
+  letter-spacing: 0.1em;
+  color: var(--fc-gray);
+  cursor: pointer;
+}
+.otk-start i {
+  display: block;
+  width: 46px;
+  height: 14px;
+  border-radius: 7px;
+  background: #3a3550;
+  box-shadow: inset 0 -2px 0 #1c1a2c, 0 0 0 2px #0a0912;
+}
+.otk-start.is-down i { background: #5a5470; box-shadow: inset 0 2px 0 #1c1a2c, 0 0 0 2px #0a0912; }
+
+/* A・B */
+.otk-ab {
+  grid-area: ab;
+  display: flex;
+  gap: 14px;
+  align-items: flex-end;
+  padding: 6px 2px 0;
+}
+.otk-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  font: 700 26px/1 var(--font-body); /* 本物のコントローラーのような、太い字 */
+  color: #fff;
+  background: radial-gradient(circle at 35% 30%, #f05a5a, #c41e2a 60%);
+  box-shadow: 0 5px 0 #6e0a12, 0 0 0 3px #0a0912;
+  text-shadow: 0 2px 0 #6e0a12;
+  cursor: pointer;
+}
+.otk-a { margin-bottom: 30px; }
+.otk-btn.is-down { transform: translateY(4px); box-shadow: 0 1px 0 #6e0a12, 0 0 0 3px #0a0912; filter: brightness(1.15); }
+
+/* キーボードの説明（パソコン） */
+.otk-keys {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 16px;
+  margin: 6px auto 0;
+  padding: 0 12px;
+  font: 13px/1.6 var(--font-pixel);
+  color: var(--muted);
+}
+.otk-keys kbd {
+  display: inline-block;
+  padding: 0 5px;
+  border: 1px solid var(--fc-gray-2);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  font: inherit;
+  color: var(--fc-white);
+  background: var(--fc-navy);
+}
+
+/* パソコン（マウス）ではボタンを隠す。タッチしたら出す */
+@media (hover: hover) and (pointer: fine) {
+  body:not(.otk-touch) .otk-dpad,
+  body:not(.otk-touch) .otk-mid,
+  body:not(.otk-touch) .otk-ab { display: none; }
+  body:not(.otk-touch) .otk-console { row-gap: 0; }
+}
+@media (hover: none), (pointer: coarse) {
+  .otk-keys { display: none; }
+}
+body.otk-touch .otk-keys { display: none; }
+
+/* 横持ちのスマホ：画面の左右にボタン */
+@media (orientation: landscape) and (max-height: 540px) {
+  .otk-top { padding-block: 4px 2px; }
+  .otk-name { font-size: 15px; }
+  .otk-console {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "dpad screen ab"
+      "mid screen ab";
+    column-gap: 8px;
+    row-gap: 0;
+    padding-inline: max(4px, env(safe-area-inset-left)) max(4px, env(safe-area-inset-right));
+  }
+  .otk-ab { flex-direction: column-reverse; align-items: center; gap: 16px; }
+  .otk-a { margin-bottom: 0; }
+  .otk-b { margin-right: 30px; }
+}
+
+/* 小さいスマホ */
+@media (max-width: 370px) {
+  .otk-dpad { transform: scale(0.92); }
+  .otk-btn { width: 58px; height: 58px; }
+  .otk-name { font-size: 15px; }
+}

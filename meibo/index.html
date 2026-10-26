@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>名簿 ― 夕照寮OB会</title>
+<meta name="description" content="夕照寮の寮生の名簿。入学した年度ごとに、名前を並べています。">
+<meta name="theme-color" content="#0d0b26">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Crect width='16' height='16' fill='%230d0b26'/%3E%3Crect x='3' y='2' width='10' height='12' fill='%23fcfcfc'/%3E%3Crect x='4' y='3' width='8' height='10' fill='%230000bc'/%3E%3Crect x='5' y='5' width='6' height='1' fill='%23f8b800'/%3E%3Crect x='5' y='7' width='6' height='1' fill='%23fcfcfc'/%3E%3Crect x='5' y='9' width='6' height='1' fill='%23fcfcfc'/%3E%3Crect x='5' y='11' width='4' height='1' fill='%23fcfcfc'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=DotGothic16&display=swap">
+<link rel="stylesheet" href="../css/site.css">
+<link rel="stylesheet" href="../css/meibo.css">
+</head>
+<body class="meibo">
+<header class="ob-top">
+  <a class="ob-back" href="../">◀ ホーム</a>
+  <h1 class="ob-title">名簿<small>入学した年度ごとの、寮生の名前</small></h1>
+</header>
+
+<main class="ob-main">
+  <p class="ob-notice" id="mb-sample" hidden>いまはサンプル（架空の名前）を表示しています。本番の名簿は準備中です。</p>
+  <div class="ob-notice ob-error mb-error" id="mb-error" role="alert" hidden>
+    <span id="mb-error-text">名簿を読み込めませんでした。時間をおいて、もう一度ためしてください。</span>
+    <button type="button" class="fc-btn" id="mb-retry">もう一度読み込む</button>
+  </div>
+
+  <div class="fc-window mb-bar" id="mb-bar">
+    <div class="mb-search">
+      <label class="mb-label" for="mb-q">名前でさがす</label>
+      <span class="mb-search-box">
+        <input type="search" id="mb-q" placeholder="例：夕照" autocomplete="off" enterkeyhint="search" disabled>
+        <button type="button" class="mb-clear" id="mb-clear" aria-label="さがす文字を消す" hidden>✕</button>
+      </span>
+    </div>
+    <label class="mb-jump">
+      <span class="mb-label">年度へとぶ</span>
+      <select id="mb-year" disabled>
+        <option value="">― 年度 ―</option>
+      </select>
+    </label>
+    <p class="mb-count" id="mb-count" aria-live="polite">読み込み中…</p>
+  </div>
+
+  <div class="mb-loading" id="mb-loading" role="status">
+    <span class="mb-blink" aria-hidden="true">▶</span> 名簿を読み込んでいます…
+  </div>
+
+  <div class="mb-list" id="mb-list"></div>
+
+  <div class="mb-empty" id="mb-empty" hidden>
+    <p id="mb-empty-text"></p>
+    <button type="button" class="fc-btn" id="mb-empty-clear">さがすのをやめる</button>
+  </div>
+
+  <section class="fc-window mb-note" aria-labelledby="mb-note-title">
+    <h2 id="mb-note-title">名簿について</h2>
+    <p>名簿に載せたくない方・まちがいを見つけた方は、OB会までご連絡ください。</p>
+    <p class="mb-contact" id="mb-contact" hidden>連絡先：<a id="mb-mail" href="#"></a></p>
+    <p class="mb-form" id="mb-form" hidden><a class="fc-btn" id="mb-form-link" href="#" target="_blank" rel="noopener">名簿への登録はこちら ▶</a></p>
+    <p class="mb-updated" id="mb-updated" hidden></p>
+  </section>
+</main>
+
+<a class="fc-btn mb-top" id="mb-top" href="#" hidden aria-label="ページの上へもどる">▲ 上へ</a>
+
+<footer data-ob-footer></footer>
+
+<script src="../js/site/config.js"></script>
+<script src="../js/site/sample.js"></script>
+<script src="../js/site/data.js"></script>
+<script src="../js/site/common.js"></script>
+<script src="../js/meibo.js"></script>
+</body>
+</html>

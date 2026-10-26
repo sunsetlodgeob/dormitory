@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>年表 ― 夕照寮OB会</title>
+<meta name="description" content="夕照寮の事件簿を、年度ごとの年表にしました。見るには Google でのログインが必要です。">
+<meta name="theme-color" content="#0d0b26">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Crect width='16' height='16' fill='%230d0b26'/%3E%3Crect x='2' y='3' width='12' height='10' fill='%23fce0a8'/%3E%3Crect x='1' y='2' width='2' height='12' fill='%23ac7c00'/%3E%3Crect x='13' y='2' width='2' height='12' fill='%23ac7c00'/%3E%3Crect x='4' y='5' width='8' height='1' fill='%23000'/%3E%3Crect x='4' y='7' width='8' height='1' fill='%23000'/%3E%3Crect x='4' y='9' width='5' height='1' fill='%23000'/%3E%3Crect x='10' y='9' width='2' height='2' fill='%23f83800'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=DotGothic16&display=swap">
+<link rel="stylesheet" href="../css/site.css">
+<link rel="stylesheet" href="../css/nenpyo.css">
+</head>
+<body class="nenpyo">
+<header class="ob-top">
+  <a class="ob-back" href="../">◀ ホーム</a>
+  <h1 class="ob-title">年表<small>寮の事件簿を、年度ごとに</small></h1>
+</header>
+
+<main class="ob-main">
+  <p class="ob-notice" id="np-demo" hidden>デモ表示です（サンプルの事件）。本番では Google でログインした寮生だけが見られます。</p>
+
+  <!-- 設定がまだのとき -->
+  <section class="fc-window np-gate np-setup" id="np-setup" aria-labelledby="np-setup-title" hidden>
+    <h2 id="np-setup-title">年表は準備中です</h2>
+    <p>ログインのしくみを、いま用意しています。もうしばらくお待ちください。</p>
+    <p class="np-small">幹事の方へ：<code>js/site/config.js</code> の <code>GOOGLE_CLIENT_ID</code> が空です。<code>docs/site/SETUP.md</code> を見て設定してください。</p>
+  </section>
+
+  <!-- ログイン -->
+  <section class="fc-window np-gate np-login" id="np-login" aria-labelledby="np-login-title" hidden>
+    <svg class="np-lock" viewBox="0 0 12 13" width="48" height="52" shape-rendering="crispEdges" aria-hidden="true">
+      <rect x="3" y="0" width="6" height="1" fill="#fcfcfc"/>
+      <rect x="2" y="1" width="1" height="4" fill="#bcbcbc"/><rect x="9" y="1" width="1" height="4" fill="#7c7c7c"/>
+      <rect x="0" y="5" width="12" height="8" fill="#ac7c00"/>
+      <rect x="1" y="5" width="10" height="7" fill="#f8b800"/>
+      <rect x="1" y="5" width="10" height="1" fill="#fce0a8"/>
+      <rect x="5" y="7" width="2" height="2" fill="#000"/><rect x="5.5" y="9" width="1" height="2" fill="#000"/>
+    </svg>
+    <h2 id="np-login-title">ログインが必要です</h2>
+    <p>年表（寮の事件簿）は、見る権限のある寮生だけが見られます。</p>
+    <p>OB会のスプレッドシートを共有されている Google アカウントで、ログインしてください。</p>
+    <div class="np-gbtn" id="np-gbtn"></div>
+    <div class="np-status" id="np-status" role="status" aria-live="polite" hidden></div>
+    <button type="button" class="fc-btn np-reload" id="np-reload" hidden>ページを読み込みなおす</button>
+    <p class="np-small">ログインの情報は、このページを開いている間だけ使います。保存はしません。</p>
+  </section>
+
+  <div class="np-loading" id="np-loading" role="status" hidden>
+    <span class="np-blink" aria-hidden="true">▶</span> 読み込んでいます…
+  </div>
+
+  <!-- 年表 -->
+  <section class="np-board" id="np-board" aria-label="事件簿の年表" tabindex="-1" hidden>
+    <div class="np-user" id="np-user" hidden>
+      <span class="np-user-text"><span class="np-user-dot" aria-hidden="true"></span><span id="np-user-text">ログイン中</span></span>
+      <button type="button" class="fc-btn np-logout" id="np-logout">ログアウト</button>
+    </div>
+
+    <div class="fc-window np-bar">
+      <div class="np-bar-row">
+        <div class="np-search">
+          <label class="np-label" for="np-q">ことばでさがす</label>
+          <span class="np-search-box">
+            <input type="search" id="np-q" placeholder="例：学祭" autocomplete="off" enterkeyhint="search">
+            <button type="button" class="np-clear" id="np-clear" aria-label="さがす文字を消す" hidden>✕</button>
+          </span>
+        </div>
+        <label class="np-jump">
+          <span class="np-label">年度へとぶ</span>
+          <select id="np-year"><option value="">― 年度 ―</option></select>
+        </label>
+      </div>
+      <div class="np-tagbox">
+        <span class="np-label" id="np-tags-label">タグでしぼる</span>
+        <div class="np-tags" id="np-tags" role="group" aria-labelledby="np-tags-label"></div>
+      </div>
+      <div class="np-bar-foot">
+        <p class="np-count" id="np-count" aria-live="polite"></p>
+        <a class="fc-btn np-post" id="np-post" href="#" target="_blank" rel="noopener" hidden>事件を投稿する ▶</a>
+      </div>
+    </div>
+
+    <div class="np-timeline" id="np-timeline"></div>
+
+    <div class="np-empty" id="np-empty" hidden>
+      <p id="np-empty-text">当てはまる事件はありません。</p>
+      <button type="button" class="fc-btn" id="np-reset">しぼりこみをやめる</button>
+    </div>
+
+    <section class="fc-window np-tail" id="np-tail" hidden>
+      <p>ほかにも覚えている事件があれば、投稿してください。幹事が確かめてから年表に載せます。</p>
+      <p><a class="fc-btn" id="np-post2" href="#" target="_blank" rel="noopener">事件を投稿する ▶</a></p>
+    </section>
+  </section>
+</main>
+
+<a class="fc-btn np-top" id="np-top" href="#" hidden aria-label="ページの上へもどる">▲ 上へ</a>
+
+<footer data-ob-footer></footer>
+
+<script src="../js/site/config.js"></script>
+<script src="../js/site/sample.js"></script>
+<script src="../js/site/data.js"></script>
+<script src="../js/site/common.js"></script>
+<script src="../js/nenpyo.js"></script>
+</body>
+</html>

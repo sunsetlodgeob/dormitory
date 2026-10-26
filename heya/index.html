@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>部屋割り ― 夕照寮OB会</title>
+<meta name="description" content="夕照寮の年度ごとの部屋割り。ドット絵の寮の地図と一覧表で、だれがどの部屋にいたかを見られます。">
+<meta name="theme-color" content="#0d0b26">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=DotGothic16&display=swap">
+<link rel="stylesheet" href="../css/site.css">
+<link rel="stylesheet" href="../css/heya.css">
+</head>
+<body class="heya">
+<header class="ob-top">
+  <a class="ob-back" href="../">◀ ホーム</a>
+  <h1 class="ob-title">部屋割り<small>年度をえらんで、部屋をのぞこう</small></h1>
+</header>
+
+<main class="ob-main">
+  <p class="ob-notice" id="heya-sample" hidden>いまはサンプル（架空の名前）を表示しています</p>
+  <div class="ob-notice ob-error" id="heya-error" hidden>
+    <span>部屋割りを読み込めませんでした。時間をおいて、もう一度ためしてください。</span>
+    <button type="button" class="fc-btn heya-retry" id="heya-retry">もう一度読み込む</button>
+  </div>
+
+  <div class="fc-window heya-bar">
+    <div class="heya-year" id="heya-year" role="group" aria-label="年度">
+      <button type="button" class="fc-btn heya-step" id="year-prev" aria-label="前の年度" disabled>◀</button>
+      <select class="heya-select" id="year-select" aria-label="年度をえらぶ" disabled></select>
+      <button type="button" class="fc-btn heya-step" id="year-next" aria-label="次の年度" disabled>▶</button>
+    </div>
+    <div class="heya-views" role="group" aria-label="見かたの切りかえ">
+      <button type="button" class="fc-btn" id="view-map" aria-pressed="true">寮の地図</button>
+      <button type="button" class="fc-btn" id="view-list" aria-pressed="false">一覧表</button>
+    </div>
+    <a class="fc-btn heya-walk" id="walk-link" href="../sanpo/">この年度の寮を歩く</a>
+  </div>
+
+  <p class="heya-summary" id="heya-summary" aria-live="polite">読み込み中…</p>
+
+  <section class="heya-map-view" id="map-view" aria-label="寮の地図">
+    <div class="heya-map-tools">
+      <p class="heya-hint">部屋をえらぶと、名前が出ます。</p>
+      <button type="button" class="fc-btn heya-zoom" id="heya-zoom" hidden>拡大する</button>
+    </div>
+    <div class="heya-maps" id="heya-maps">
+      <div class="heya-stack" id="heya-stack"></div>
+    </div>
+    <p class="heya-legend">
+      <span><span class="heya-key heya-key-on"></span>住んでいた人がわかる部屋</span>
+      <span><span class="heya-key heya-key-off"></span>まだわからない部屋</span>
+    </p>
+  </section>
+
+  <section class="heya-list-view" id="list-view" aria-label="部屋割りの一覧表" hidden>
+    <div class="fc-window heya-list" id="heya-list"></div>
+  </section>
+
+  <p class="heya-form" id="heya-form" hidden></p>
+</main>
+
+<div class="heya-panel" id="heya-panel" role="dialog" aria-labelledby="panel-title" tabindex="-1" hidden>
+  <h2 class="heya-panel-title" id="panel-title"></h2>
+  <div class="heya-panel-body" id="panel-body"></div>
+  <button type="button" class="heya-panel-close" id="panel-close" aria-label="とじる">✕</button>
+</div>
+
+<footer data-ob-footer></footer>
+
+<script src="../js/site/config.js"></script>
+<script src="../js/site/sample.js"></script>
+<script src="../js/site/data.js"></script>
+<script src="../js/site/common.js"></script>
+<script src="../js/world.js"></script>
+<script src="../js/art.js"></script>
+<script src="../js/heya.js"></script>
+</body>
+</html>

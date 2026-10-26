@@ -1,0 +1,305 @@
+/*
+ * 夕照寮OB会サイト ― 年表（nenpyo/）の見た目
+ * 共通の色・ウインドウ・ボタンは css/site.css。
+ * 左に点線の「道」を引き、年度の看板と事件のカードを並べる。
+ */
+
+/* ── ログイン・準備中のウインドウ ── */
+.np-gate {
+  width: calc(100% - 10px);
+  max-width: 640px;
+  margin: 24px auto 28px;
+  text-align: center;
+  padding: 20px 18px 16px;
+}
+.np-gate h2 { font-size: 21px; margin: 6px 0 12px; }
+.np-gate p { margin: 0 0 8px; word-break: auto-phrase; text-wrap: pretty; }
+.np-lock { display: block; margin: 0 auto; image-rendering: pixelated; animation: np-bob 1.6s steps(2) infinite; }
+@keyframes np-bob { 50% { transform: translateY(-3px); } }
+.np-gbtn {
+  display: flex;
+  justify-content: center;
+  min-height: 48px;
+  margin: 18px auto 12px;
+  max-width: 320px;
+}
+.np-status {
+  margin: 4px auto 12px;
+  padding: 10px 12px;
+  max-width: 480px;
+  border: 2px solid var(--fc-white);
+  background: var(--fc-night);
+  font-size: 14px;
+  text-align: left;
+}
+.np-status p { margin: 0; word-break: auto-phrase; }
+.np-status .np-status-sub { margin-top: 6px; font-size: 13px; color: var(--fc-gray); overflow-wrap: anywhere; }
+.np-status.is-error { border-color: var(--fc-red); color: #ffd0c4; }
+.np-status.is-busy { border-style: dashed; border-color: var(--fc-yellow); color: var(--fc-yellow-2); text-align: center; }
+.np-status.is-busy p::after { content: "▮"; margin-left: 4px; animation: np-blink 0.8s steps(1) infinite; }
+.np-status.is-ok { border-color: var(--fc-lime); color: var(--fc-lime); text-align: center; }
+.np-reload { margin: 0 auto 12px; }
+.np-small { font-size: 12px; color: var(--fc-gray); }
+.np-setup .np-small { margin-top: 14px; overflow-wrap: anywhere; }
+.np-setup code { font-family: ui-monospace, Menlo, Consolas, monospace; color: var(--fc-yellow-2); }
+
+.np-loading {
+  font: 16px/1.6 var(--font-pixel);
+  padding: 24px 8px;
+  text-align: center;
+}
+.np-blink { color: var(--fc-yellow); animation: np-blink 0.8s steps(1) infinite; }
+@keyframes np-blink { 50% { opacity: 0; } }
+
+/* ── ログイン中の帯 ── */
+.np-board:focus { outline: none; }
+.np-user {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px 12px;
+  margin: 0 5px 8px;
+  font-size: 13px;
+  color: var(--fc-gray);
+}
+.np-user-text { display: inline-flex; align-items: flex-start; gap: 6px; min-width: 0; overflow-wrap: anywhere; }
+/* 長いメールアドレスで折り返しても、印は 1 行目の横に置く */
+.np-user-dot { flex: none; width: 8px; height: 8px; margin-top: 0.55em; background: var(--fc-lime); box-shadow: 0 0 0 2px var(--fc-green); }
+.np-logout { font-size: 13px; padding: 6px 10px; }
+
+/* ── さがす・しぼる ── */
+.np-bar { padding: 12px 14px 10px; }
+.np-bar-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 12px;
+  align-items: end;
+}
+.np-label {
+  display: block;
+  font: 12px/1.4 var(--font-pixel);
+  color: var(--fc-yellow-2);
+  letter-spacing: 0.06em;
+  margin-bottom: 3px;
+}
+.np-search, .np-jump { display: block; min-width: 0; }
+.np-search-box { position: relative; display: block; }
+.np-bar input,
+.np-bar select {
+  width: 100%;
+  height: 40px;
+  font: 16px/1 var(--font-pixel);
+  color: var(--fc-white);
+  background: var(--fc-night);
+  border: 2px solid var(--fc-white);
+  border-radius: 0;
+  padding: 0 10px;
+  caret-color: var(--fc-yellow);
+}
+.np-bar input { padding-right: 38px; -webkit-appearance: none; appearance: none; }
+.np-bar input::-webkit-search-cancel-button { display: none; }
+.np-bar input::placeholder { color: var(--fc-gray-2); }
+.np-bar input:focus, .np-bar select:focus { outline: none; border-color: var(--fc-yellow); }
+.np-bar select {
+  min-width: 11em;
+  padding-right: 30px;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, var(--fc-yellow) 50%), linear-gradient(-45deg, transparent 50%, var(--fc-yellow) 50%);
+  background-position: right 16px top 17px, right 10px top 17px;
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+}
+.np-bar input:disabled, .np-bar select:disabled { opacity: 0.6; }
+.np-clear {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  background: transparent;
+  color: var(--fc-gray);
+  font: 16px/1 var(--font-pixel);
+  cursor: pointer;
+}
+.np-clear:hover { color: var(--fc-yellow); }
+.np-tagbox { margin-top: 10px; }
+.np-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.np-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 3px 10px;
+  font: 14px/1.2 var(--font-pixel);
+  color: var(--fc-white);
+  background: var(--fc-night);
+  border: 2px solid var(--fc-white);
+  cursor: pointer;
+}
+.np-chip small { font-size: 11px; color: var(--fc-gray); }
+.np-chip:hover { color: var(--fc-yellow); border-color: var(--fc-yellow); }
+.np-chip[aria-pressed="true"] { background: var(--fc-white); color: var(--fc-blue); border-color: var(--fc-white); }
+.np-chip[aria-pressed="true"] small { color: var(--fc-blue-2); }
+/* 選んでいる印。「/ ""」で、読み上げでは「▶」を読まない */
+.np-chip[aria-pressed="true"]::before { content: "▶"; content: "▶" / ""; font-size: 10px; }
+.np-chip.is-small { min-height: 28px; padding: 2px 8px; font-size: 13px; background: transparent; border-color: var(--fc-sky); color: var(--fc-sky); }
+.np-chip.is-small:hover { color: var(--fc-yellow); border-color: var(--fc-yellow); }
+.np-chip.is-small[aria-pressed="true"] { background: var(--fc-sky); color: var(--fc-night); border-color: var(--fc-sky); }
+.np-bar-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-top: 10px;
+}
+.np-count { margin: 0; font: 13px/1.5 var(--font-pixel); letter-spacing: 0.04em; }
+.np-post { font-size: 14px; padding: 8px 12px; background: var(--fc-red); }
+.np-post:hover { color: var(--fc-yellow-2); }
+
+/* ── 年表（左の点線の道） ── */
+.np-timeline {
+  position: relative;
+  padding: 4px 5px 0 38px;
+}
+.np-timeline.is-empty { padding-left: 5px; }
+.np-timeline.is-empty::before { content: none; }
+.np-timeline::before {
+  content: "";
+  position: absolute;
+  left: 19px;
+  top: 30px;
+  bottom: 24px;
+  width: 4px;
+  background: repeating-linear-gradient(to bottom, var(--fc-gray-2) 0 8px, transparent 8px 14px);
+}
+.np-year { position: relative; margin: 22px 0 6px; scroll-margin-top: 14px; }
+.np-year:first-child { margin-top: 6px; }
+.np-year-head {
+  position: relative;
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  margin: 0 0 14px -38px;
+  padding: 5px 14px 5px 12px;
+  background: var(--fc-blue);
+  border: 3px solid var(--fc-white);
+  box-shadow: 4px 4px 0 var(--fc-black);
+  font: 21px/1.3 var(--font-pixel);
+  font-weight: normal;
+  color: var(--fc-yellow);
+  letter-spacing: 0.06em;
+}
+.np-year.is-flash .np-year-head { animation: np-flash 0.9s steps(2) 2; }
+@keyframes np-flash { 50% { background: var(--fc-red); } }
+.np-year-era { font-size: 13px; color: var(--fc-gray); letter-spacing: 0.02em; }
+.np-year-count { font-size: 13px; color: var(--fc-white); }
+.np-events { list-style: none; margin: 0; padding: 0; }
+.np-ev { position: relative; margin: 0 0 14px; }
+/* 道の上の印と、カードへの線 */
+.np-ev::before {
+  content: "";
+  position: absolute;
+  left: -25px;
+  top: 18px;
+  width: 12px;
+  height: 12px;
+  background: var(--fc-yellow);
+  box-shadow: 2px 2px 0 var(--fc-black);
+  z-index: 1;
+}
+.np-ev::after {
+  content: "";
+  position: absolute;
+  left: -13px;
+  top: 23px;
+  width: 13px;
+  height: 2px;
+  background: var(--fc-white);
+}
+.np-card {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px 14px 12px 12px;
+  background: var(--fc-navy);
+  border: 2px solid var(--fc-white);
+  box-shadow: 4px 4px 0 var(--fc-black);
+}
+.np-month {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 54px;
+  height: 54px;
+  background: var(--fc-red);
+  border: 2px solid var(--fc-white);
+  font: 13px/1 var(--font-pixel);
+  color: var(--fc-white);
+  text-align: center;
+}
+.np-month b { font-size: 24px; font-weight: normal; line-height: 1; margin-bottom: 2px; }
+.np-month.is-unknown { background: var(--fc-gray-2); font-size: 13px; line-height: 1.25; }
+.np-card-main { min-width: 0; }
+.np-ev-title {
+  margin: 2px 0 6px;
+  font: 18px/1.45 var(--font-pixel);
+  font-weight: normal;
+  color: var(--fc-yellow-2);
+  letter-spacing: 0.03em;
+  overflow-wrap: anywhere;
+}
+.np-ev-body {
+  margin: 0 0 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 15px;
+  line-height: 1.8;
+}
+.np-ev-tags { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.np-card mark { background: var(--fc-yellow); color: var(--fc-black); padding: 0 1px; }
+
+.np-empty { text-align: center; padding: 18px 8px 8px; font-family: var(--font-pixel); }
+.np-empty p { margin: 0 0 12px; word-break: auto-phrase; }
+.np-none { text-align: center; color: var(--muted); padding: 20px 0; font-family: var(--font-pixel); }
+.np-tail { margin-top: 30px; font-size: 14px; }
+.np-tail p { margin: 0 0 10px; word-break: auto-phrase; }
+
+/* ── 上へもどる ── */
+.np-top {
+  position: fixed;
+  right: max(12px, env(safe-area-inset-right));
+  bottom: max(14px, env(safe-area-inset-bottom));
+  z-index: 20;
+  font-size: 13px;
+  padding: 8px 10px;
+  box-shadow: 3px 3px 0 var(--fc-black);
+}
+
+/* ── スマホ ── */
+@media (max-width: 560px) {
+  .np-gate { padding: 18px 12px 14px; }
+  .np-gate h2 { font-size: 19px; }
+  .np-gate p { font-size: 14px; text-align: left; }
+  .np-gate .np-small { font-size: 12px; }
+  .np-bar { padding: 10px 10px 8px; }
+  .np-bar select { min-width: 0; width: 8.6em; }
+  .np-chip { min-height: 30px; font-size: 13px; padding: 2px 8px; }
+  .np-timeline { padding-left: 28px; }
+  .np-timeline::before { left: 11px; }
+  .np-year-head { margin-left: -28px; font-size: 19px; padding: 4px 10px; }
+  .np-ev::before { left: -21px; top: 16px; width: 10px; height: 10px; }
+  .np-ev::after { left: -11px; top: 20px; width: 11px; }
+  .np-card { grid-template-columns: 44px minmax(0, 1fr); gap: 10px; padding: 10px 10px 10px 8px; }
+  .np-month { width: 44px; height: 46px; font-size: 12px; }
+  .np-month b { font-size: 20px; }
+  .np-month.is-unknown { font-size: 11px; }
+  .np-ev-title { font-size: 16px; }
+  .np-ev-body { font-size: 14px; line-height: 1.75; }
+}
