@@ -1,9 +1,10 @@
 /*
- * 3月 追いコン「うんこをよけろ」 ― 先輩たちが投げてくるうんこを、30秒よけきれ
- *  川ぞいの道を、男魂くんが画面の上へ走る（道は自動で流れる）。
- *  うしろ（画面の下）から先輩たちが追いかけてきて、うんこを投げてくる。
- *  落ちる所には地面に影が出て、落ちる直前ほど大きく濃くなる。十字キーで上下左右に動いてよける。
- *  当たったらしっぱい。30秒にげきればクリア。時間がたつほど投げる数がふえ、ときどき速い「金のうんこ」が来る。
+ * 3月 追いコン「うんこをよけろ」 ― 寮までの最後のひと走り。先輩たちが投げてくるうんこを、よけきって寮へ飛びこめ
+ *  「全裸で切符」のつづき。切符を買って、夜の川ぞいの道まで帰ってきた男魂くん（全裸のまま）を、
+ *  待ちぶせしていた卒業する先輩たちが追いかけてくる。男魂くんは画面の上（寮のほう）へ走る（道は自動で流れる）。
+ *  うしろ（画面の下）から、うんこが飛んでくる。落ちる所には地面に影が出て、落ちる直前ほど大きく濃くなる。十字キーで上下左右に動いてよける。
+ *  当たったらしっぱい。30秒にげきると、寮の玄関が見えてきて、中へ飛びこんでクリア。
+ *  時間がたつほど投げる数がふえ、ときどき速い「金のうんこ」が来る。
  *  スマホは十字キーのほか、画面をおさえた所へ走っていく。
  */
 (function () {
@@ -67,16 +68,16 @@
 
   OTK.register({
     id: 'unko',
-    order: 9,
+    order: 10,
     month: 3,
     event: '追いコン',
     title: 'うんこをよけろ',
     goal: 'うんこを\nよけろ！',
-    howto: ['十字キー：にげる', '影が出た所に落ちてくる', '30秒にげきればクリア'],
+    howto: ['十字キー：にげる', '影が出た所に落ちてくる', '30秒にげきれば寮に着く'],
     note: 'うんこは（たぶん）おもちゃです。',
     time: 30,
     timeout: 'win',
-    timeoutMsg: '30秒にげきった！\n先輩方、ご卒業\nおめでとうございます！',
+    timeoutMsg: '寮ににげきった！\n先輩方、ご卒業\nおめでとうございます！',
     bgm: 'tense',
     create(api) {
       const P = api.P, W = api.W, H = api.H;
@@ -96,6 +97,12 @@
       let thrown = 0, dodged = 0, goldN = 0;
       const golds = [api.rnd(9.2, 10.4), api.rnd(16.8, 18), api.rnd(23.4, 24.6)];
       let say = null; // 先輩の吹き出し { who, str, t }
+      let gateY = null; // 寮の門の線（画面の y）。最後の 1.6 秒で見えてくる
+      let inT = 0; // 玄関に入ってからの時間
+      let greeted = false;
+      const GATE_T = 28.4, GATE_Y = 92;
+      // はじめに、先輩たちが下から飛び出してくる（待ちぶせ）
+      const rise = (i) => (api.time < 0.7 ? Math.round(((0.7 - api.time) / 0.7) * (40 + i * 6)) : 0);
 
       function talk(who, str, sec) { say = { who, str, t: sec || 1.2 }; }
       function pop(str, x, y, col, sec, size) { fx.push({ str, x, y, col: col || P.white, t: 0, dur: sec || 0.7, size: size || 12 }); }
@@ -203,15 +210,20 @@
         g.R(x - 2, y - 12, 4, 12, P.dbrown);
         g.R(x - 1, y - 12, 1, 12, P.brown);
         g.shadow(x, y, 9);
-        g.disc(x, y - 22, 14, '#e890b8');
-        g.disc(x - 6, y - 26, 8, P.lpink);
-        g.disc(x + 5, y - 18, 7, '#f0a8c8');
+        g.disc(x, y - 22, 14, '#a85878'); // 夜桜
+        g.disc(x - 6, y - 26, 8, '#d888a8');
+        g.disc(x + 5, y - 18, 7, '#c87098');
         for (let i = 0; i < 9; i++) {
           const a = hash(k, i) * Math.PI * 2, r = 4 + hash(k, i + 20) * 9;
-          g.R(x + Math.cos(a) * r, y - 22 + Math.sin(a) * r * 0.8, 1, 1, i % 3 ? P.white : P.rose);
+          g.R(x + Math.cos(a) * r, y - 22 + Math.sin(a) * r * 0.8, 1, 1, i % 3 ? '#f8d0e0' : P.white);
         }
       }
       function lamp(g, x, y) {
+        // 街灯の光だまり（道の上）
+        g.ctx.save();
+        g.ctx.globalAlpha = 0.16;
+        g.oval(x - 34, y + 4, 40, 16, P.lyellow);
+        g.ctx.restore();
         g.shadow(x, y, 4);
         g.R(x - 1, y - 30, 3, 30, P.dgray);
         g.R(x, y - 30, 1, 30, P.gray);
@@ -225,21 +237,45 @@
         g.R(x + 1, y - 4, 2, 4, P.xdgray);
         g.R(x + 15, y - 4, 2, 4, P.xdgray);
       }
-      function signboard(g, x, y) {
-        // 「追いコン」の立て看板（スタートした場所）
-        g.shadow(x + 26, y, 22);
-        g.R(x + 6, y - 10, 2, 10, P.dbrown);
-        g.R(x + 44, y - 10, 2, 10, P.dbrown);
-        g.R(x - 1, y - 31, 54, 22, P.black);
-        g.R(x, y - 30, 52, 20, P.white);
-        g.R(x, y - 30, 52, 3, P.red);
-        g.text('追いコン', x + 26, y - 25, { size: 12, align: 'center', col: P.ink });
+      function drawDorm(g, gy) {
+        // ゴールの夕照寮（gy：門の線）。玄関に明かり
+        const top = 12, bot = gy - 14, L = RIVER + 10, R = W - 14;
+        if (bot > top) {
+          g.R(L, top, R - L, bot - top, P.ink);
+          g.R(L + 2, top, R - L - 4, bot - top - 1, '#9c9ca4');
+          for (let f = 0; f < 3; f++) {
+            for (let i = 0; i < 8; i++) {
+              const wx = L + 8 + i * 22, wy = bot - 26 - f * 20;
+              if (wy < top - 10) continue;
+              if (f === 0 && i >= 1 && i <= 4) continue; // 表札と玄関
+              const lit = hash(i, f + 7) < 0.6;
+              g.R(wx, wy, 14, 11, P.ink);
+              g.R(wx + 1, wy + 1, 12, 9, lit ? '#f8d878' : '#1c2448');
+            }
+          }
+          // 表札と玄関（明るい）
+          g.R(56, bot - 30, 52, 20, P.ink);
+          g.R(57, bot - 29, 50, 18, P.cream);
+          g.text('夕照寮', 82, bot - 29, { align: 'center', col: P.ink });
+          g.R(112, bot - 28, 32, 28, P.ink);
+          g.R(114, bot - 26, 28, 26, '#f8e0a0');
+          g.R(127, bot - 26, 2, 26, '#c8a060');
+          g.R(108, bot - 31, 40, 3, '#5c5c68');
+        }
+        // 塀と門
+        g.R(L, gy - 14, R - L, 14, '#5c5c64');
+        g.R(L, gy - 14, 100 - L, 10, '#7c786c');
+        g.R(156, gy - 14, R - 156, 10, '#7c786c');
+        g.R(L, gy - 14, 100 - L, 2, '#a8a49c');
+        g.R(156, gy - 14, R - 156, 2, '#a8a49c');
+        g.R(92, gy - 24, 8, 22, P.lgray);
+        g.R(156, gy - 24, 8, 22, P.lgray);
       }
 
       function drawGround(g) {
         const off = scroll;
-        // 草（左右）
-        g.R(0, 12, W, H - 12, '#209838');
+        // 草（左右）。夜
+        g.R(0, 12, W, H - 12, '#1c4c2c');
         // 草むら
         const S = 16;
         const base = Math.floor(off / S);
@@ -250,40 +286,40 @@
             const side = i < 1 ? [RIVER + 8, PATH_L - 4] : [PATH_R + 4, W - 4];
             const gx = side[0] + hash(id, i + 7) * (side[1] - side[0]);
             const gy = y + hash(id, i + 11) * S;
-            g.R(gx, gy, 1, 2, P.dgreen);
-            g.R(gx + 2, gy - 1, 1, 3, P.dgreen);
-            if (hash(id, i + 31) < 0.2) g.R(gx + 1, gy - 2, 2, 2, i % 2 ? P.lyellow : P.white); // 小さい花
+            g.R(gx, gy, 1, 2, '#2c6c3c');
+            g.R(gx + 2, gy - 1, 1, 3, '#2c6c3c');
+            if (hash(id, i + 31) < 0.15) g.R(gx + 1, gy - 2, 2, 2, i % 2 ? '#c8b860' : P.lgray); // 小さい花
           }
         }
         // 川
-        g.R(0, 12, RIVER, H - 12, P.mblue);
+        g.R(0, 12, RIVER, H - 12, '#141c48');
         for (let k = -1; k <= 14; k++) {
           const id = base - k;
           const y = k * S + ((off * 1.25) % S) + 12;
           const rx = 3 + hash(id, 3) * (RIVER - 14);
-          g.R(rx, y + hash(id, 4) * 10, 6 + hash(id, 5) * 5, 1, P.sky);
-          if (hash(id, 6) < 0.5) g.R(rx + 9 - hash(id, 8) * 6, y + 6 + hash(id, 9) * 6, 3, 1, P.lsky);
+          g.R(rx, y + hash(id, 4) * 10, 6 + hash(id, 5) * 5, 1, '#2c3c7c');
+          if (hash(id, 6) < 0.5) g.R(rx + 9 - hash(id, 8) * 6, y + 6 + hash(id, 9) * 6, 3, 1, '#c8b860'); // 街灯がうつる
         }
         // 石の岸
-        g.R(RIVER, 12, 6, H - 12, P.dgray);
+        g.R(RIVER, 12, 6, H - 12, '#4c4c58');
         for (let k = -1; k <= 30; k++) {
           const y = k * 8 + (off % 8) + 12;
-          g.R(RIVER, y, 6, 1, P.xdgray);
-          g.R(RIVER + ((k & 1) ? 3 : 1), y + 1, 1, 7, P.xdgray);
-          g.R(RIVER + 1, y + 2, 2, 1, P.gray);
+          g.R(RIVER, y, 6, 1, '#2c2c34');
+          g.R(RIVER + ((k & 1) ? 3 : 1), y + 1, 1, 7, '#2c2c34');
+          g.R(RIVER + 1, y + 2, 2, 1, '#6c6c78');
         }
         // 道
-        g.R(PATH_L, 12, PATH_R - PATH_L, H - 12, '#e8c890');
-        g.R(PATH_L, 12, 2, H - 12, P.tan);
-        g.R(PATH_R - 2, 12, 2, H - 12, P.tan);
+        g.R(PATH_L, 12, PATH_R - PATH_L, H - 12, '#a8946c');
+        g.R(PATH_L, 12, 2, H - 12, '#7c6c4c');
+        g.R(PATH_R - 2, 12, 2, H - 12, '#7c6c4c');
         for (let k = -1; k <= 14; k++) {
           const id = base - k;
           const y = k * S + (off % S) + 12;
           for (let i = 0; i < 4; i++) {
             const px = PATH_L + 6 + hash(id, i + 40) * (PATH_R - PATH_L - 12);
             const py = y + hash(id, i + 50) * S;
-            g.R(px, py, 2, 1, P.tan);
-            if (hash(id, i + 60) < 0.3) g.R(px + 1, py - 1, 1, 1, '#f8e0b0');
+            g.R(px, py, 2, 1, '#8c7850');
+            if (hash(id, i + 60) < 0.3) g.R(px + 1, py - 1, 1, 1, '#c8b48c');
           }
         }
         // 右がわの木と街灯・ベンチ（下へ流れる）
@@ -299,10 +335,10 @@
         }
       }
 
-      const sprOf = (kind, dir, run, v) => {
+      const sprOf = (kind, dir, run, v, naked) => {
         const f = Math.floor(run * 9) % 4;
         const side = dir === 'left' || dir === 'right';
-        return { img: api.person(kind, { dir, frame: f % 2, variant: v }), flip: !side && f >= 2 };
+        return { img: api.person(kind, { dir, frame: f % 2, variant: v, naked }), flip: !side && f >= 2 };
       };
 
       function drawMe(g) {
@@ -311,7 +347,7 @@
           const x = me.hitBy.x, y = me.hitBy.y;
           const wob = me.hitT < 0.3 ? Math.round(Math.sin(me.hitT * 50) * 2) : 0;
           g.shadow(x, y, 7);
-          g.sprite(api.person('otoko', { dir: 'down' }), x - 8 + wob, y - 24);
+          g.sprite(api.person('otoko', { dir: 'down', naked: true }), x - 8 + wob, y - 24);
           g.sprite(art(me.hitBy.gold), x - 7 + wob, y - 33);
           for (let i = 0; i < 3; i++) {
             const a = api.time * 6 + (i * Math.PI * 2) / 3;
@@ -319,13 +355,20 @@
           }
           return;
         }
-        if (me.y < -30) return;
-        const s = sprOf('otoko', me.face, me.run, 0);
+        if (me.y < -30 || inT > 0.6) return;
+        // 全裸（「全裸で切符」のつづき）。手には買ってきた切符
+        const s = sprOf('otoko', me.face, me.run, 0, true);
+        const bob = Math.floor(me.run * 9) % 2;
         g.shadow(me.x, me.y, 7);
-        g.sprite(s.img, me.x - 8, me.y - 24 - (Math.floor(me.run * 9) % 2), { flip: s.flip });
+        g.sprite(s.img, me.x - 8, me.y - 24 - bob, { flip: s.flip, alpha: 1 - inT / 0.6 });
+        if (inT === 0) {
+          const hx = me.face === 'left' ? me.x - 11 : me.x + 4;
+          g.R(hx, me.y - 15 - bob, 7, 5, P.black);
+          g.R(hx + 1, me.y - 14 - bob, 5, 3, '#f8e8c0');
+        }
       }
       function drawSenpai(g, s, i) {
-        const y = s.y + s.fall;
+        const y = s.y + s.fall + rise(i);
         if (y - 24 > H) return;
         const sp = sprOf('senpai', 'up', s.run, s.v);
         g.shadow(s.x + 8, y, 7);
@@ -371,13 +414,15 @@
         get dodged() { return dodged; },
         get goldN() { return goldN; },
         get scroll() { return scroll; },
+        get gateY() { return gateY; }, // 寮の門の線（見えてくるまでは null）
+        get inT() { return inT; }, // 玄関に入ってからの時間
         AREA, HIT_X, HIT_Y, SPEED,
 
         update(dt) {
           const t = T();
           const done = !!api.ended;
           // 道が流れる（当たったら止まる）
-          speed = api.approach(speed, me.hit ? 0 : SCROLL, 160 * dt);
+          speed = api.approach(speed, me.hit || (gateY != null && gateY >= GATE_Y) ? 0 : SCROLL, 160 * dt);
           scroll += speed * dt;
           // 男魂くん
           if (!done && !me.hit) {
@@ -397,15 +442,21 @@
             me.face = dx < 0 ? 'left' : dx > 0 ? 'right' : 'up';
             me.run += dt * (dy > 0 ? 0.6 : dy < 0 ? 1.4 : 1);
           } else if (me.safe) {
-            // にげきったら、上へ走っていく
+            // にげきったら、寮の玄関へ走っていく（門のまん中まで寄ってから、中へ）
             me.vx = 0;
-            me.y -= 70 * dt;
+            const gy = gateY == null ? 0 : gateY;
+            me.x = api.approach(me.x, 128, 70 * dt);
+            me.y = api.approach(me.y, Math.abs(me.x - 128) > 24 ? gy + 6 : gy - 16, 80 * dt);
             me.face = 'up';
             me.run += dt * 1.4;
           } else {
             me.vx = me.vy = 0;
           }
           if (me.hit) me.hitT += dt;
+          // 寮が見えてくる（門の線が画面の上から下りてきて、y 92 で止まる）
+          if (gateY == null && t >= GATE_T && !me.hit) gateY = -12;
+          if (gateY != null) gateY = Math.min(GATE_Y, gateY + speed * dt);
+          if (me.safe && gateY != null && gateY >= GATE_Y && Math.abs(me.x - 128) < 1 && me.y <= gateY - 15) inT += dt;
 
           // 先輩たち：男魂くんの左右に合わせて少しずつ動く
           const shift = (me.x - 128) * 0.45;
@@ -416,6 +467,11 @@
             s.run += dt * (me.hit ? 0 : me.safe ? 0.5 : 1);
           });
 
+          // 待ちぶせの先輩たち
+          if (!greeted && t > 0.15) {
+            greeted = true;
+            talk(1, 'おかえり〜！', 1.2);
+          }
           // 投げる予定
           if (!done && !me.hit) {
             if (golds.length && t >= golds[0]) {
@@ -470,13 +526,13 @@
           me.safe = true;
           talk(1, '弾切れだ…', 1.6);
           api.sfx('fanfare');
-          api.win(api.def.timeoutMsg, { wait: 1.2 });
+          api.win(api.def.timeoutMsg, { wait: 2.2 });
         },
 
         draw(g) {
           drawGround(g);
-          // スタートの看板
-          if (scroll < 120) signboard(g, PATH_R + 1, 200 + scroll);
+          // ゴールの寮
+          if (gateY != null) drawDorm(g, gateY);
 
           // 地面の影（落ちる所）。落ちる直前ほど大きく濃い
           poops.forEach((p) => {

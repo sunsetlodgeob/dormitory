@@ -1,14 +1,20 @@
 /*
- * ミニゲーム「うんこをよけろ」（unko）と「全裸で切符」（kippu）の確認
+ * ミニゲーム「全裸で切符」（kippu）と「うんこをよけろ」（unko）の確認
  *   node tests/e2e/games-unko-kippu.test.js
  *   SHOTS_DIR=/tmp/shots node tests/e2e/games-unko-kippu.test.js   … スクリーンショットも撮る（リポジトリの外に）
- *   ONLY=unko node tests/e2e/games-unko-kippu.test.js              … 片方だけ
+ *   ONLY=unko node tests/e2e/games-unko-kippu.test.js              … 片方だけ（kippu／unko）
  *   NO_PHONE=1 …スマホの確認をとばす　DEBUG=1 …ボットの動きを表示　PORT=8835 …ポートを変える
  * ふつうの操作（キーボード・画面のボタン・画面のタッチ）で、クリアとしっぱいの両方にたどり着けること、
  * パソコンとスマホの大きさでエラーが出ないこと、2 回しっぱいしたあとは少し易しくなることを確かめる。
- * unko のボットは、地面の影（落ちる所と残り時間）だけを見てよける。
- * kippu のボットは、決まった道すじで歩く人たちの動きを、ゲームの visibleAt で先読みして、見られない時に進む
- * （人はいつも同じ道を歩くので、遊ぶ人が見て覚えれば分かることと同じ）。
+ *
+ * kippu（長いかくれんぼ）：
+ *   ボットは、人の動きの予定（ゲームの visibleAt：その時刻にその場所が光の中か）から、見られない道すじを
+ *   「場所 × 時刻」のマス目で探して（幅優先）、そのとおりに歩く（人はいつも同じ道を歩くので、遊ぶ人が見て覚えれば分かることと同じ）。
+ *   - 通しで遊ぶ（キーボードのイベントを 1 コマごとに送り、早送りで）：行き → 券売機 → 帰り → 寮の手前でクリア。チェックポイントを順に通る
+ *   - 一部は本物のキーボード・画面のボタン・タッチで（Node から押す）
+ *   - 見つかると ♥ がへってチェックポイントへもどる。♥ がなくなるとしっぱい。もう一度遊ぶと、前回のチェックポイントから
+ *   - 段ボール箱・犬（ほえると家の人が窓から見る）・電車の客・かくれ場所
+ * unko（寮までの最後のひと走り）：地面の影（落ちる所と残り時間）だけを見てよけるボット。30 秒で寮の門が見えて、玄関に入る。
  */
 const fs = require('fs');
 const path = require('path');
@@ -18,6 +24,7 @@ const PORT = Number(process.env.PORT) || 8815; // ARCH.md の割り当て（ミ�
 const SHOTS = process.env.SHOTS_DIR || '';
 const ONLY = process.env.ONLY || '';
 const NO_PHONE = !!process.env.NO_PHONE;
+const DEBUG = !!process.env.DEBUG;
 if (SHOTS) fs.mkdirSync(SHOTS, { recursive: true });
 
 function check(cond, msg) {
@@ -32,12 +39,13 @@ async function waitFor(page, fn, arg, timeout = 15000) {
 }
 const waitScene = (page, name, timeout) => waitFor(page, (n) => window.OTK && OTK.debug && OTK.debug.scene === n, name, timeout);
 // 種を決めて、説明をとばして始めなおす
-async function restart(page, id, seed) {
-  await page.evaluate(([i, s]) => { OTK.debug.speed = 1; OTK.debug.seed(s); OTK.debug.start(i, { quick: true }); }, [id, seed]);
+async function restart(page, id, seed, tries) {
+  await page.evaluate(([i, s, t]) => { OTK.debug.speed = 1; OTK.debug.seed(s); OTK.debug.start(i, { quick: true, tries: t || 0 }); }, [id, seed, tries]);
   await waitScene(page, 'play');
   await waitFor(page, () => OTK.debug.run && OTK.debug.run.phase === 'play' && OTK.debug.run.t > 0.05);
 }
 const result = (page) => page.evaluate(() => (OTK.debug.run ? { result: OTK.debug.run.result, msg: OTK.debug.run.msg } : null));
+const oneLine = (s) => String(s || '').replace(/\n/g, '');
 // 画面が真っ黒・一色だけになっていないか
 async function canvasColors(page) {
   return page.evaluate(() => {
@@ -129,13 +137,13 @@ function dirsToward(dx, dy, dead) {
 // 地面の影（落ちる所と、落ちるまでの時間）を見て、どの影からもはなれた所へ動く
 async function unkoBot(page, ctl, o) {
   o = o || {};
-  const seen = { volleyMax: 0, gold: false, pile: false, shotWind: false, shotFly: false, late: false };
+  const seen = { volleyMax: 0, gold: false, pile: false, shotWind: false, shotFly: false, late: false, gate: false };
   let goal = null;
   for (let i = 0; i < 8000; i++) {
     const s = await page.evaluate(() => {
       const g = OTK.debug.game, r = OTK.debug.run;
       return {
-        res: r.result, t: r.t, me: { x: g.me.x, y: g.me.y, hit: g.me.hit },
+        res: r.result, t: r.t, me: { x: g.me.x, y: g.me.y, hit: g.me.hit }, gateY: g.gateY,
         fly: g.poops.filter((p) => !p.landed).map((p) => ({ tx: p.tx, ty: p.ty, left: p.dur - p.t, gold: p.gold })),
         piles: g.poops.filter((p) => p.landed).length,
         wind: g.senpais.filter((sp) => sp.wind > 0).length,
@@ -147,10 +155,11 @@ async function unkoBot(page, ctl, o) {
     seen.volleyMax = Math.max(seen.volleyMax, s.fly.length);
     if (s.fly.some((p) => p.gold)) seen.gold = true;
     if (s.piles) seen.pile = true;
+    if (s.gateY != null) seen.gate = true;
     const label = o.label || 'unko';
     if (s.wind && !seen.shotWind && s.t > 3) { seen.shotWind = true; await shot(page, label + '-wind'); }
     if (s.fly.length >= 3 && !seen.shotFly) { seen.shotFly = true; await shot(page, label + '-many'); }
-    if (s.t > 25 && !seen.late) { seen.late = true; await shot(page, label + '-late'); }
+    if (s.t > 29.2 && !seen.late) { seen.late = true; await shot(page, label + '-gate'); }
     if (o.still) { await page.waitForTimeout(15); continue; }
     // 行き先を決める：どの影のだ円にも入らない所で、近い所
     const RX = s.hx + 9, RY = s.hy + 6;
@@ -197,7 +206,9 @@ async function unkoDesktop(open) {
   await waitScene(page, 'play');
   await page.waitForTimeout(500);
   await shot(page, 'unko-start');
-  check((await canvasColors(page)) > 12, '川ぞいの道と先輩たちが描けている');
+  check((await canvasColors(page)) > 12, '夜の川ぞいの道と先輩たちが描けている');
+  const def = await page.evaluate(() => ({ order: OTK.get('unko').order, title: OTK.get('unko').title }));
+  check(def.order === 10, 'unko は 1 年の 10 番目（全裸で切符のあと）');
   const ctl = keyboardCtl(page);
 
   // 十字キーで動ける
@@ -222,11 +233,16 @@ async function unkoDesktop(open) {
   check(st.thrown >= 30, 'うんこを ' + st.thrown + ' 個投げてきて、' + st.dodged + ' 個よけた');
   check(seen.volleyMax >= 3, '後半は 3 つ以上いっしょに飛んでくる（' + seen.volleyMax + '）');
   check(seen.gold && st.gold >= 2, '金のうんこが ' + st.gold + ' 回来る');
+  check(seen.gate, '最後に寮の門が見えてくる');
   await page.waitForTimeout(700);
   await shot(page, 'unko-safe');
+  await waitFor(page, () => OTK.debug.game.inT > 0, null, 5000);
+  const home = await page.evaluate(() => ({ gateY: OTK.debug.game.gateY, x: OTK.debug.game.me.x, y: OTK.debug.game.me.y }));
+  check(Math.abs(home.x - 128) < 2 && home.y < home.gateY, '寮の玄関に入っていく（' + home.x.toFixed(0) + ',' + home.y.toFixed(0) + '、門は y ' + home.gateY.toFixed(0) + '）');
+  await shot(page, 'unko-home');
   await waitScene(page, 'result', 8000);
   r = await result(page);
-  check(/にげきった/.test(r.msg), 'クリアのひとこと：' + r.msg.replace(/\n/g, ''));
+  check(/寮/.test(r.msg) && /卒業/.test(r.msg), 'クリアのひとこと：' + oneLine(r.msg));
   await page.waitForTimeout(400);
   await shot(page, 'unko-result-win');
 
@@ -274,7 +290,7 @@ async function unkoPhone(open) {
     r = await result(page);
     if (r.result === 'win') break;
   }
-  check(r.result === 'win', '画面の十字キーでよけて、にげきれる（' + tries + ' 回目）');
+  check(r.result === 'win', '画面の十字キーでよけて、寮までにげきれる（' + tries + ' 回目）');
   await shot(page, 'unko-phone-win');
   await restart(page, 'unko', 11);
   await unkoBot(page, ctl, { still: true, label: 'unko-phone-still' });
@@ -286,106 +302,209 @@ async function unkoPhone(open) {
 }
 
 // ── 全裸で切符（kippu） ─────────────────────────────────
-// 道すじ。かくれ場所から次のかくれ場所までを 1 回で歩く（とちゅうの角では止まらない）
-//  玄関 → ゴミ置き場のかげ（寮のわきの道） → （横断歩道）→ 植え込みのかげ → 自販機のかげ → 券売機で買う → もどる
-const KIPPU_ROUTE = [
-  [[80, 205], [90, 196], [90, 156], [78, 148]],
-  [[90, 136], [90, 118], [86, 108], [86, 74], [104, 72], [104, 47], [84, 47]],
-  [[119, 47]],
-  [[119, 59], [160, 59, 'buy'], [119, 59], [119, 47]],
-  [[84, 47]],
-  [[104, 47], [104, 72], [86, 74], [86, 108], [90, 118], [90, 136], [78, 148]],
-  [[90, 156], [90, 196], [80, 205], [34, 205]],
-];
-// 人の向きと視線を見て、次のかくれ場所まで見られずに行けるときだけ進む。
-// ゲームの visibleAt（その時刻に、その場所が光の中か）で、歩いている間を先読みする。
-// careless：待たずに歩く
-async function kippuBot(page, ctl, o) {
-  o = o || {};
-  const route = o.route || KIPPU_ROUTE;
-  const seen = { waited: 0, bought: false, hops: 0, shotCone: false, waits: [] };
-  let hop = -1, pi = 0, waitStart = null;
-  for (let n = 0; n < 20000; n++) {
-    const s = await page.evaluate(() => {
-      const g = OTK.debug.game, r = OTK.debug.run;
-      return { res: r.result, t: r.t, x: g.me.x, y: g.me.y, ticket: g.me.ticket, seenT: g.seenT };
-    });
-    if (s.res) { if (process.env.DEBUG) console.log('    end', JSON.stringify(s)); break; }
-    if (s.seenT > 0 && !seen.shotCone) { seen.shotCone = true; await shot(page, (o.label || 'kippu') + '-seen'); }
-    if (hop >= 0 && pi < route[hop].length) {
-      // 歩いている
-      const [tx, ty, what] = route[hop][pi];
-      const ddx = tx - s.x, ddy = ty - s.y;
-      const last = pi === route[hop].length - 1 || what === 'buy';
-      // とちゅうの角は、止まらずに次へ
-      if (!last && Math.abs(ddx) <= 2.5 && Math.abs(ddy) <= 2.5) { pi++; continue; }
-      if (Math.abs(ddx) > 1.2 || Math.abs(ddy) > 1.2) {
-        await ctl.setDir(dirsToward(ddx, ddy, 1.2));
-        await page.waitForTimeout(4);
-        continue;
+// ページの中に入れるボット。KB.plan(goal) で道すじを探し、KB.auto() で 1 コマごとにキーのイベントを送って歩く
+function installKippuBot() {
+  const KB = (window.KB = {});
+  const KEY = { left: 'ArrowLeft', right: 'ArrowRight', up: 'ArrowUp', down: 'ArrowDown', a: 'KeyZ' };
+  const C = 6; // マス目の大きさ（ドット）
+  const DT = C / 52; // 1 マス進む時間（歩く速さ 58 より少しおそく見つもる）
+  const HOR = 40; // 何秒先まで探すか
+  const M = [-0.15, 0, 0.15]; // 時刻のよゆう
+  const PAD = 3; // 場所のよゆう（ドット）
+  const g = () => OTK.debug.game;
+  // 順番に目ざす所：チェックポイント 1〜4 → 券売機（A 長おし）→ 5〜8 → ゴール
+  KB.goals = function () {
+    const G = g();
+    const list = [];
+    for (let i = 1; i <= 4; i++) list.push({ x: G.CPS[i].x, y: G.CPS[i].y, rank: i, name: 'cp' + i });
+    list.push({ x: G.BUY.x + G.BUY.w / 2, y: G.BUY.y + 6, buy: true, rank: 4.5, name: 'buy' });
+    for (let i = 5; i <= 8; i++) list.push({ x: G.CPS[i].x, y: G.CPS[i].y, rank: i, name: 'cp' + i });
+    list.push({ x: G.GOAL.x + 9, y: 120, r: 8, rank: 9, name: 'goal' });
+    return list;
+  };
+  KB.rank = () => (g().me.ticket ? Math.max(5, g().cp) : g().cp);
+  KB.plan = function (goal) {
+    const G = g(), A = G.AREAS, me = G.me;
+    const ca = G.areaAt(me.x), ga = G.areaAt(goal.x);
+    const a0 = Math.min(ca, ga), a1 = Math.max(ca, ga);
+    const X0 = A[a0].x, X1 = A[a1].x + A[a1].w, Y0 = 28;
+    const cols = Math.floor((X1 - X0) / C), rows = Math.floor((222 - Y0) / C);
+    const NC = cols * rows, N = Math.ceil(HOR / DT);
+    const cx = (c) => X0 + C / 2 + (c % cols) * C, cy = (c) => Y0 + C / 2 + Math.floor(c / cols) * C;
+    const okAt = (x, y) => !G.blocked(x, y) && !G.blocked(x - 2, y) && !G.blocked(x + 2, y) && !G.blocked(x, y - 2) && !G.blocked(x, y + 2);
+    const free = new Uint8Array(NC);
+    for (let c = 0; c < NC; c++) free[c] = okAt(cx(c), cy(c)) ? 1 : 0;
+    let start = -1, bd = 1e9;
+    for (let c = 0; c < NC; c++) if (free[c]) { const d = Math.hypot(cx(c) - me.x, cy(c) - me.y); if (d < bd) { bd = d; start = c; } }
+    const isGoal = new Uint8Array(NC);
+    for (let c = 0; c < NC; c++) if (free[c] && Math.hypot(cx(c) - goal.x, cy(c) - goal.y) <= (goal.r || 5)) isGoal[c] = 1;
+    const memo = new Uint8Array(NC * N);
+    const safe = (c, k) => {
+      const i = k * NC + c;
+      if (!memo[i]) {
+        const x = cx(c), y = cy(c), t = k * DT;
+        let ok = !G.wouldBark(x, y, t) && !G.wouldBark(x, y, t + 0.2);
+        for (const m of M) if (ok && G.visibleAt(x, y, Math.max(0, t + m), PAD) >= 0) ok = false;
+        memo[i] = ok ? 1 : 2;
       }
-      await ctl.setDir([]);
-      if (what === 'buy' && !s.ticket) {
-        await ctl.holdA(true);
-        await page.waitForTimeout(20);
-        continue;
-      }
-      await ctl.holdA(false);
-      pi++;
-      continue;
-    }
-    // かくれ場所にいる。次へ行けるか
-    if (hop + 1 >= route.length) { await page.waitForTimeout(30); continue; }
-    // 次のかくれ場所まで見られずに行けて、着いたあと（少し待てば）その次へも行けるときだけ進む
-    const ok = o.careless || (await page.evaluate(([from, next, after]) => {
-      const g = OTK.debug.game;
-      const dt = 1 / 60;
-      const bad = (x, y, t) => [-0.15, 0, 0.15, 0.3, 0.45].some((m) => g.visibleAt(x, y, t + m) >= 0);
-      // 歩いてみる（見られたら null）
-      function walk(x, y, t, pts) {
-        for (const [px, py, what] of pts) {
-          for (let k = 0; k < 2000; k++) {
-            const dx = Math.abs(px - x) > 1.2 ? Math.sign(px - x) : 0, dy = Math.abs(py - y) > 1.2 ? Math.sign(py - y) : 0;
-            if (!dx && !dy) break;
-            const nn = dx && dy ? Math.SQRT1_2 : 1;
-            x += dx * g.SPEED * nn * dt;
-            y += dy * g.SPEED * nn * dt;
-            t += dt;
-            if (bad(x, y, t)) return null;
-          }
-          if (what === 'buy') for (let k = 0; k < 1.65 / dt; k++) { t += dt; if (bad(x, y, t)) return null; }
+      return memo[i] === 1;
+    };
+    const buyK = Math.ceil(1.8 / DT); // 券売機の前で、買い終わるまで見られないこと
+    const buyOk = (c, k) => { if (k + buyK >= N) return false; for (let q = 1; q <= buyK; q++) if (!safe(c, k + q)) return false; return true; };
+    const prev = new Int32Array(NC * N).fill(-1);
+    prev[start] = start;
+    let layer = [start], found = null;
+    for (let k = 0; k < N - 1 && !found; k++) {
+      const next = [];
+      for (const c of layer) {
+        if (isGoal[c] && (!goal.buy || buyOk(c, k))) { found = [c, k]; break; }
+        const x = c % cols, y = (c / cols) | 0;
+        const nb = [c];
+        if (x > 0) nb.push(c - 1);
+        if (x < cols - 1) nb.push(c + 1);
+        if (y > 0) nb.push(c - cols);
+        if (y < rows - 1) nb.push(c + cols);
+        for (const d of nb) {
+          if (!free[d] || (d !== c && !okAt((cx(c) + cx(d)) / 2, (cy(c) + cy(d)) / 2))) continue;
+          const j = (k + 1) * NC + d;
+          if (prev[j] !== -1 || !safe(d, k + 1)) continue;
+          prev[j] = c;
+          next.push(d);
         }
-        return { x, y, t };
       }
-      const a = walk(from.x, from.y, 0.06, next);
-      if (!a) return false;
-      if (!after) return true;
-      // 着いた所で待ちながら、その次へ行ける時をさがす
-      let t = a.t;
-      for (let w = 0; w < 12; w += 0.1) {
-        if (walk(a.x, a.y, t, after)) return true;
-        for (let k = 0; k < 6; k++) { t += dt; if (bad(a.x, a.y, t)) return false; }
-      }
-      return false;
-    }, [{ x: s.x, y: s.y }, route[hop + 1], route[hop + 2] || null]));
-    if (ok) {
-      if (waitStart != null) seen.waits.push(+(s.t - waitStart).toFixed(1));
-      if (waitStart != null && process.env.DEBUG) console.log('    hop', hop + 1, 'waited', (s.t - waitStart).toFixed(1));
-      waitStart = null;
-      hop++;
-      pi = 0;
-      seen.hops++;
-      if (process.env.DEBUG) console.log('    go', hop, 't=' + s.t.toFixed(1));
-    } else {
-      if (waitStart == null) waitStart = s.t;
-      await page.waitForTimeout(25);
+      layer = next;
+      if (!layer.length) break;
     }
+    if (!found) return null;
+    const pts = [];
+    let cc = found[0];
+    for (let kk = found[1]; kk >= 0; kk--) { pts.push([cx(cc), cy(cc)]); if (kk > 0) cc = prev[kk * NC + cc]; }
+    pts.reverse();
+    return { t0: G.npcT, DT, pts, k: found[1] };
+  };
+  // いまの道すじで、押すキー（null：道すじから外れた）
+  KB.steer = function (p) {
+    const G = g(), me = G.me;
+    const k = Math.floor((G.npcT - p.t0) / p.DT);
+    const cur = p.pts[Math.min(p.pts.length - 1, Math.max(0, k))];
+    const nxt = p.pts[Math.min(p.pts.length - 1, k + 1)];
+    if (Math.hypot(me.x - cur[0], me.y - cur[1]) > C * 1.2 && Math.hypot(me.x - nxt[0], me.y - nxt[1]) > C * 1.2) return null;
+    const dx = nxt[0] - me.x, dy = nxt[1] - me.y, want = [];
+    if (dx < -0.8) want.push('left');
+    if (dx > 0.8) want.push('right');
+    if (dy < -0.8) want.push('up');
+    if (dy > 0.8) want.push('down');
+    return want;
+  };
+  KB.arrived = (goal, p) => Math.hypot(g().me.x - goal.x, g().me.y - goal.y) <= (goal.r || 5) + 1.5 && (!p || g().npcT - p.t0 >= p.k * p.DT - 0.02);
+  // 通しで遊ぶ：1 コマごとに（ゲームの update の前に）キーボードのイベントを送る。opts.until：そのゴールで止まる
+  KB.auto = function (opts) {
+    opts = opts || {};
+    const G = g();
+    const S = (KB.state = { log: [], plans: 0, fails: 0, replans: 0, caught: 0, lives: G.lives, done: false, result: null, err: null, cps: [] });
+    const goals = KB.goals();
+    let gi = goals.findIndex((q) => q.rank > KB.rank());
+    let p = null, waitUntil = -1;
+    const held = new Set();
+    const setKeys = (want) => {
+      for (const k of Object.keys(KEY)) {
+        const on = want.includes(k);
+        if (on !== held.has(k)) {
+          if (on) held.add(k);
+          else held.delete(k);
+          window.dispatchEvent(new KeyboardEvent(on ? 'keydown' : 'keyup', { code: KEY[k] }));
+        }
+      }
+    };
+    KB.release = () => setKeys([]);
+    function step() {
+      if (S.done) return;
+      const run = OTK.debug.run;
+      if (!run || run.result || G.won) { setKeys([]); S.done = true; S.result = run && run.result; return; }
+      if (G.lives < S.lives) { S.caught++; S.lives = G.lives; p = null; S.log.push('caught ' + JSON.stringify(G.stats.last)); }
+      if (G.busy) { setKeys([]); p = null; return; }
+      const goal = goals[gi];
+      if (!goal) { setKeys([]); return; }
+      if (goal.buy && G.me.ticket) { gi++; p = null; S.log.push('bought t=' + G.npcT.toFixed(1)); return; }
+      if (KB.arrived(goal, p)) {
+        if (goal.buy) { setKeys(['a']); return; }
+        S.log.push(goal.name + ' t=' + G.npcT.toFixed(1));
+        S.cps.push(G.cp);
+        if (opts.until === goal.name) { setKeys([]); S.done = true; S.result = 'until'; return; }
+        gi++;
+        p = null;
+        setKeys([]);
+        return;
+      }
+      if (!p) {
+        if (G.npcT < waitUntil) { setKeys([]); return; }
+        S.plans++;
+        p = KB.plan(goal);
+        if (!p) { S.fails++; waitUntil = G.npcT + 0.5; setKeys([]); return; }
+      }
+      const want = KB.steer(p);
+      if (!want) { p = null; S.replans++; setKeys([]); return; }
+      setKeys(want);
+    }
+    const orig = G.update;
+    G.update = function (dt) {
+      try { step(); } catch (e) { S.err = String((e && e.stack) || e); S.done = true; }
+      return orig.call(this, dt);
+    };
+  };
+}
+async function addBot(page) {
+  await page.evaluate(`(${installKippuBot.toString()})()`);
+}
+// 本物の操作（Playwright のキーボード・画面のボタン）で、次のゴールまで歩く。道すじはページの中で探す
+async function walkTo(page, ctl, name, o) {
+  o = o || {};
+  const goal = await page.evaluate((n) => { window.__kbp = null; return KB.goals().find((q) => q.name === n); }, name);
+  let planned = false;
+  for (let i = 0; i < 6000; i++) {
+    const s = await page.evaluate((gl) => {
+      const G = OTK.debug.game;
+      if (!window.__kbp && !G.busy && !OTK.debug.run.result) window.__kbp = KB.plan(gl);
+      const p = window.__kbp;
+      const r = { res: OTK.debug.run.result, busy: G.busy, ticket: G.me.ticket, lives: G.lives, x: G.me.x, y: G.me.y, has: !!p };
+      if (G.busy) { window.__kbp = null; return r; }
+      r.arrived = KB.arrived(gl, p);
+      if (p && !r.arrived) {
+        r.want = KB.steer(p);
+        if (!r.want) window.__kbp = null;
+      }
+      return r;
+    }, goal);
+    if (s.res) { await ctl.release(); return { ok: s.res === 'win' && name === 'goal', res: s.res }; }
+    if (s.busy) { await ctl.release(); await page.waitForTimeout(30); continue; }
+    if (s.has) planned = true;
+    if (goal.buy && s.ticket) { await ctl.release(); await page.evaluate(() => { window.__kbp = null; }); return { ok: true }; }
+    if (s.arrived) {
+      if (goal.buy) { await ctl.setDir([]); await ctl.holdA(true); await page.waitForTimeout(20); continue; }
+      await ctl.release();
+      await page.evaluate(() => { window.__kbp = null; });
+      return { ok: true, planned };
+    }
+    await ctl.setDir(s.want || []);
+    await page.waitForTimeout(s.has ? 4 : 120);
   }
   await ctl.release();
-  seen.waited = seen.waits.reduce((a, b) => a + b, 0);
-  const st = await page.evaluate(() => ({ ticket: OTK.debug.game.me.ticket }));
-  seen.bought = st.ticket;
-  return seen;
+  return { ok: false };
+}
+// 通しで遊ぶ（早送り）
+async function autoPlay(page, opts, timeout) {
+  await page.evaluate((o) => KB.auto(o), opts || {});
+  await page.evaluate(() => { OTK.debug.speed = 8; });
+  const t0 = Date.now();
+  let st;
+  for (;;) {
+    await page.waitForTimeout(300);
+    st = await page.evaluate(() => Object.assign({}, KB.state, { npcT: OTK.debug.game.npcT, lives: OTK.debug.game.lives, cp: OTK.debug.game.cp }));
+    if (st.done || Date.now() - t0 > (timeout || 150000)) break;
+  }
+  await page.evaluate(() => { OTK.debug.speed = 1; if (KB.release) KB.release(); });
+  if (DEBUG) console.log('    ', JSON.stringify(st));
+  return st;
 }
 
 async function kippuDesktop(open) {
@@ -401,64 +520,213 @@ async function kippuDesktop(open) {
   await waitScene(page, 'play');
   await page.waitForTimeout(500);
   await shot(page, 'kippu-start');
-  check((await canvasColors(page)) > 16, '夜の町と駅が描けている');
-  // かくれ場所（玄関・ゴミ置き場のかげ・植え込みのかげ・自販機のかげ）は、いつ見ても視線が届かない
+  check((await canvasColors(page)) > 16, '夜の寮の前が描けている');
+  const info = await page.evaluate(() => {
+    const g = OTK.debug.game, d = OTK.get('kippu');
+    return { order: d.order, time: d.time, lives: g.lives, cp: g.cp, area: g.area, areas: g.AREAS.map((a) => a.name), w: g.WORLD_W, cps: g.CPS.length };
+  });
+  check(info.order === 9 && info.time === null, 'kippu は 1 年の 9 番目（うんこの前）。時間制限なし');
+  check(info.lives === 3 && info.cp === 0 && info.area === 0, 'はじめは ♥3、寮の玄関前から');
+  check(info.areas.length === 5 && info.w >= 1280, '地図は横に長い（' + info.w + ' ドット）：' + info.areas.join(' → '));
+  // かくれ場所（チェックポイント）は、行き・帰りとも、いつ見ても視線が届かない（人がぶつかってもこない）
   const spots = await page.evaluate(() => {
     const g = OTK.debug.game;
-    return [[34, 205], [78, 148], [84, 47], [119, 47]].map(([x, y]) => {
+    const out = [];
+    for (let i = 0; i < g.CPS.length; i++) {
+      g.warp(i);
+      const c = g.CPS[i];
       let n = 0;
-      for (let t = 0; t < 90; t += 1 / 60) if (g.visibleAt(x, y, t) >= 0) n++;
-      return n;
-    });
+      for (let t = 0; t < 90; t += 1 / 30) if (g.visibleAt(c.x, c.y, t, 2) >= 0) n++;
+      out.push(n);
+    }
+    g.warp(0);
+    return out;
   });
-  check(spots.every((n) => n === 0), 'かくれ場所（玄関・ゴミ置き場・植え込み・自販機のかげ）には視線が届かない（' + spots.join(' ') + '）');
-  const ctl = keyboardCtl(page);
+  check(spots.every((n) => n === 0), 'チェックポイントのかくれ場所 ' + spots.length + ' か所には、視線が届かない（' + spots.join(' ') + '）');
+  await restart(page, 'kippu', 3);
+  await addBot(page);
 
-  // クリア：視線をよけて券売機へ行き、A を長おしして、玄関へもどる（3 回まで）
-  let seen, r, t, tries = 0;
-  for (const sd of [3, 12, 14]) {
-    if (tries++) await restart(page, 'kippu', sd);
-    seen = await kippuBot(page, ctl);
-    await waitFor(page, () => OTK.debug.run.result, null, 5000);
-    r = await result(page);
-    t = await page.evaluate(() => OTK.debug.run.t);
-    if (r && r.result === 'win') break;
-  }
-  check(seen.bought, '券売機の前で A を長おしすると、切符が買える');
-  check(r && r.result === 'win', '見られずに玄関へもどると、クリア（' + tries + ' 回目、' + t.toFixed(1) + ' 秒）');
-  check(seen.waited > 1, '人が通りすぎるのを待った（' + seen.waited.toFixed(1) + ' 秒くらい）');
-  await page.waitForTimeout(600);
-  await shot(page, 'kippu-home');
+  // 本物のキーボードで：寮の玄関前 → 川ぞいの道のチェックポイント
+  const ctl = keyboardCtl(page);
+  const w1 = await walkTo(page, ctl, 'cp1');
+  const s1 = await page.evaluate(() => ({ cp: OTK.debug.game.cp, area: OTK.debug.game.area, lives: OTK.debug.game.lives, cam: OTK.debug.game.camX }));
+  check(w1.ok && s1.cp === 1 && s1.area === 1, 'キーボードで、見られずに川ぞいの道へ（チェックポイント ' + s1.cp + '、♥' + s1.lives + '）');
+  check(s1.cam >= 250, '画面が横にスクロールした（' + s1.cam.toFixed(0) + '）');
+  await page.waitForTimeout(400);
+  await shot(page, 'kippu-kawa');
+
+  // 本物のキーボードで：駅前から、券売機の前で Z を長おしして切符を買い、コインロッカーのかげへ
+  await page.evaluate(() => OTK.debug.game.warp(4));
+  await page.waitForTimeout(300);
+  await shot(page, 'kippu-eki');
+  const w2 = await walkTo(page, ctl, 'buy');
+  const s2 = await page.evaluate(() => ({ ticket: OTK.debug.game.me.ticket, cp: OTK.debug.game.cp, train: OTK.debug.game.trainT }));
+  check(w2.ok && s2.ticket && s2.cp === 5, '券売機の前で Z を長おしすると、切符が買える（帰りになる）');
+  check(s2.train > 0, '切符を買うと、電車が着く');
+  await shot(page, 'kippu-bought');
+  const w3 = await walkTo(page, ctl, 'cp5');
+  check(w3.ok, 'コインロッカーのかげにかくれる');
+  await waitFor(page, () => OTK.debug.game.NPCS.some((n, i) => n.who === 'passenger' && OTK.debug.game.poseOf(i, OTK.debug.game.npcT)), null, 6000);
+  await page.waitForTimeout(800);
+  await shot(page, 'kippu-passengers');
+  const pax = await page.evaluate(() => OTK.debug.game.NPCS.filter((n, i) => n.who === 'passenger' && OTK.debug.game.poseOf(i, OTK.debug.game.npcT)).length);
+  const safe = await page.evaluate(() => ({ lives: OTK.debug.game.lives, seen: OTK.debug.game.seenT }));
+  check(pax >= 2 && safe.lives === 3, '改札から電車の客が出てくる（' + pax + ' 人）。かげにいれば見つからない');
+
+  // 本物のキーボードで：帰りの川ぞいの道 → 寮の手前でクリア
+  await page.evaluate(() => OTK.debug.game.warp(8));
+  await page.waitForTimeout(300);
+  const w4 = await walkTo(page, ctl, 'goal');
+  await waitFor(page, () => OTK.debug.run.result, null, 5000);
+  let r = await result(page);
+  check(w4.ok && r.result === 'win', '切符を持って、川ぞいの道の寮の手前まで来るとクリア');
+  check(/切符/.test(r.msg) && /帰る/.test(r.msg), 'クリアのひとこと：' + oneLine(r.msg));
+  await page.waitForTimeout(1300);
+  await shot(page, 'kippu-goal');
   await waitScene(page, 'result', 8000);
-  r = await result(page);
-  check(/切符/.test(r.msg), 'クリアのひとこと：' + r.msg.replace(/\n/g, ''));
   await page.waitForTimeout(400);
   await shot(page, 'kippu-result-win');
 
-  // しっぱい 1：待たずにまっすぐ行くと、見られる
+  // 通しで（早送り）：行き → 券売機 → 帰り。チェックポイントを順に通って、寮の手前でクリア
+  for (const sd of [3, 21]) {
+    await restart(page, 'kippu', sd);
+    await addBot(page);
+    const st = await autoPlay(page);
+    if (st.err) throw new Error(st.err);
+    r = await result(page);
+    const order = st.cps.join(',');
+    check(r.result === 'win' && order === '1,2,3,4,5,6,7,8', '種 ' + sd + '：はじめから通しでクリア（チェックポイント ' + order + '、見つかった回数 ' + st.caught + '、ゲームの中で ' + st.npcT.toFixed(0) + ' 秒）');
+    check(st.npcT > 55, '道のりが長い（先が分かっているボットでも ' + st.npcT.toFixed(0) + ' 秒かかる）');
+  }
+
+  // しっぱい：待たずに右へ歩き続けると見つかる → ♥ がへってチェックポイントへもどる → ♥ がなくなるとしっぱい
   await restart(page, 'kippu', 3);
-  await kippuBot(page, ctl, { careless: true, label: 'kippu-careless' });
-  await waitFor(page, () => OTK.debug.run.result, null, 8000);
-  r = await result(page);
-  check(r.result === 'lose' && /見/.test(r.msg), '待たずに歩くと、見られる：' + r.msg.replace(/\n/g, ''));
+  await page.evaluate(() => OTK.debug.game.warp(1));
+  const cp1 = await page.evaluate(() => ({ x: OTK.debug.game.me.x, y: OTK.debug.game.me.y }));
+  await page.keyboard.down('ArrowDown');
+  await page.waitForTimeout(900);
+  await page.keyboard.up('ArrowDown');
+  await page.keyboard.down('ArrowRight');
+  await waitFor(page, () => OTK.debug.game.caught, null, 20000);
+  await page.keyboard.up('ArrowRight');
   await page.waitForTimeout(300);
   await shot(page, 'kippu-caught');
-
-  // しっぱい 2：切符を買わずに玄関にいると、時間切れ（玄関の中は見られない）
-  await restart(page, 'kippu', 3);
-  await page.evaluate(() => { OTK.debug.speed = 8; });
-  await waitFor(page, () => OTK.debug.run.result, null, 20000);
+  const c1 = await page.evaluate(() => ({ lives: OTK.debug.game.lives, who: OTK.debug.game.stats.last.who, res: OTK.debug.run.result }));
+  check(c1.lives === 2 && !c1.res, '見つかると ♥ が 1 つへる（' + c1.who + '）。まだ続く');
+  await waitFor(page, () => !OTK.debug.game.busy, null, 5000);
+  const back = await page.evaluate(() => ({ x: OTK.debug.game.me.x, y: OTK.debug.game.me.y, cp: OTK.debug.game.cp }));
+  check(back.cp === 1 && Math.abs(back.x - cp1.x) < 0.5 && Math.abs(back.y - cp1.y) < 0.5, 'チェックポイント（川ぞいの道の入り口）からやりなおし');
+  await shot(page, 'kippu-respawn');
+  await page.evaluate(() => { OTK.debug.speed = 3; });
+  for (let n = 0; n < 2; n++) {
+    await page.keyboard.down('ArrowDown');
+    await page.waitForTimeout(300);
+    await page.keyboard.up('ArrowDown');
+    await page.keyboard.down('ArrowRight');
+    await waitFor(page, () => OTK.debug.game.caught, null, 20000);
+    await page.keyboard.up('ArrowRight');
+    await waitFor(page, () => !OTK.debug.game.busy || OTK.debug.run.result, null, 8000);
+  }
   await page.evaluate(() => { OTK.debug.speed = 1; });
+  await waitFor(page, () => OTK.debug.run.result, null, 5000);
   r = await result(page);
-  check(r.result === 'lose' && /時間切れ/.test(r.msg), '玄関にいれば見られないが、60秒で時間切れ');
-
-  // 買わずに玄関にもどってもクリアにならない
+  check(r.result === 'lose' && /見/.test(r.msg), '♥ がなくなると、しっぱい：' + oneLine(r.msg));
+  await waitScene(page, 'result', 8000);
+  await page.waitForTimeout(600);
+  await shot(page, 'kippu-result-lose');
+  // もう一度遊ぶ（しっぱいのあと）：前回のチェックポイントから
+  await page.keyboard.press('KeyZ');
+  await waitScene(page, 'play', 8000);
+  await waitFor(page, () => OTK.debug.run && OTK.debug.run.t > 0.05);
+  const re = await page.evaluate(() => ({ tries: OTK.debug.api.tries, resumed: OTK.debug.game.resumed, cp: OTK.debug.game.cp, lives: OTK.debug.game.lives, area: OTK.debug.game.area }));
+  check(re.tries === 1 && re.resumed === 1 && re.cp === 1 && re.area === 1 && re.lives === 3, 'しっぱいのあとのもう一度は、前回のチェックポイント（川ぞいの道）から ♥3 で');
+  await page.waitForTimeout(500);
+  await shot(page, 'kippu-resume');
   await restart(page, 'kippu', 3);
-  const back = await page.evaluate(() => { const g = OTK.debug.game; return g.me.ticket; });
-  check(!back, 'はじめは切符を持っていない（玄関にいてもクリアにならない）');
-  await page.waitForTimeout(400);
-  check(!(await result(page)).result, '切符なしで玄関にいても、終わらない');
+  check((await page.evaluate(() => OTK.debug.game.cp)) === 0, 'はじめからのときは、寮の玄関前から');
 
+  const errs = realErrors(errors);
+  check(!errs.length, 'エラーなし' + (errs.length ? '：' + errs.join('\n') : ''));
+  await page.context().close();
+}
+
+// 段ボール箱・犬・自転車のベル
+async function kippuGimmicks(open) {
+  console.log('全裸で切符（段ボール箱・犬）');
+  const { page, errors } = await open('game/?play=kippu&quick=1&seed=4', { wait: 300 });
+  await waitScene(page, 'play');
+  await waitFor(page, () => OTK.debug.run.t > 0.05);
+  // 段ボール箱：商店街。A でかぶる。かぶって止まっていれば、光の中でも見つからない。ぬぐと見つかる
+  await page.evaluate(() => { const g = OTK.debug.game; g.warp(3); g.me.x = g.boxes[0].x + 4; g.me.y = g.boxes[0].y; });
+  await page.waitForTimeout(200);
+  await page.keyboard.press('KeyZ');
+  await page.waitForTimeout(100);
+  const on = await page.evaluate(() => !!OTK.debug.game.me.box);
+  check(on, 'A で段ボール箱をかぶる');
+  // 箱ごと、しばらく光の中になる所へ移す
+  const spot = await page.evaluate(() => {
+    // 光のくさびの中で、人からはなれている（ぶつからない）所
+    const g = OTK.debug.game, a = g.AREAS[3];
+    const far = (x, y, t) => g.NPCS.every((n, i) => { const p = g.poseOf(i, g.npcT + t); return !p || p.hide || Math.hypot(p.x - x, p.y - y) > 20; });
+    for (let y = 96; y < 180; y += 4) {
+      for (let x = a.x + 30; x < a.x + a.w - 30; x += 4) {
+        if (g.blocked(x, y)) continue;
+        let all = true;
+        for (let t = 0; t <= 1.6; t += 0.05) if (g.visibleAt(x, y, t) < 0 || !far(x, y, t)) { all = false; break; }
+        if (all) return { x, y };
+      }
+    }
+    return null;
+  });
+  check(!!spot, '商店街に、しばらく見られる所がある');
+  await page.evaluate((p) => { const g = OTK.debug.game; g.me.x = p.x; g.me.y = p.y; }, spot);
+  await page.waitForTimeout(1000);
+  await shot(page, 'kippu-box');
+  const b1 = await page.evaluate(() => ({ seen: OTK.debug.game.seenT, caught: !!OTK.debug.game.caught, lives: OTK.debug.game.lives }));
+  check(b1.seen === 0 && !b1.caught, '箱をかぶって止まっていれば、光の中でも見つからない');
+  await page.keyboard.press('KeyZ');
+  await waitFor(page, () => OTK.debug.game.caught, null, 3000);
+  check(true, '箱をぬぐと、見つかる');
+  await waitFor(page, () => !OTK.debug.game.busy, null, 5000);
+
+  // 犬：住宅街。起きている犬に近づくと、ほえて、家の人が窓から見る
+  await page.evaluate(() => OTK.debug.game.warp(2));
+  await waitFor(page, () => OTK.debug.game.dogAwake, null, 20000);
+  await page.evaluate(() => { const g = OTK.debug.game; g.me.x = g.DOG.x - 60; g.me.y = 99; });
+  await page.keyboard.down('ArrowRight');
+  await waitFor(page, () => OTK.debug.game.stats.barks > 0, null, 5000);
+  await page.keyboard.up('ArrowRight');
+  const d = await page.evaluate(() => ({ res: OTK.debug.game.resident, t: OTK.debug.game.npcT }));
+  check(d.res.a0 > d.t && d.res.a1 > d.res.a0 + 2, '犬がほえると、少しして家の人が窓から見る（' + (d.res.a1 - d.res.a0).toFixed(1) + ' 秒）');
+  await waitFor(page, () => OTK.debug.game.npcT > OTK.debug.game.resident.a0 + 0.1 || OTK.debug.game.caught, null, 3000);
+  const look = await page.evaluate(() => {
+    const g = OTK.debug.game, i = g.NPCS.findIndex((n) => n.alert);
+    const p = g.poseOf(i, g.npcT);
+    return p ? { x: p.x - g.DOG.x, y: p.y, a: +p.a.toFixed(2) } : null;
+  });
+  check(look && Math.abs(look.x) < 1 && look.a > 1.5 && look.a < 1.65, '窓から、家の前の道が見られている（' + JSON.stringify(look) + '）');
+  await page.waitForTimeout(300);
+  await shot(page, 'kippu-dog');
+  // 犬が寝ている間は、そっと通れる
+  const quiet = await page.evaluate(() => {
+    const g = OTK.debug.game;
+    let ok = 0;
+    for (let t = 0; t < 30; t += 0.1) if (!g.wouldBark(g.DOG.x, 100, t + 6)) ok++;
+    return ok;
+  });
+  check(quiet > 20, '犬が寝ている間は、塀の前をそっと通れる');
+
+  // 2 回しっぱいしたあと（tries 2）は少し易しい：♥ が 1 つ多い・見つかるまでが少し長い
+  const easy = await page.evaluate(() => {
+    const make = (tries) => {
+      OTK.seed = 5;
+      const run = OTK.makeRun('kippu', { practice: true, tries });
+      OTK.seed = null;
+      return { lives: run.game.lives, grace: run.game.grace };
+    };
+    return { e0: make(0), e2: make(2) };
+  });
+  check(easy.e2.lives === easy.e0.lives + 1 && easy.e2.grace > easy.e0.grace, '2 回しっぱいしたあとは ♥' + easy.e2.lives + '、見つかるまで ' + easy.e0.grace.toFixed(2) + ' → ' + easy.e2.grace.toFixed(2) + ' 秒');
   const errs = realErrors(errors);
   check(!errs.length, 'エラーなし' + (errs.length ? '：' + errs.join('\n') : ''));
   await page.context().close();
@@ -473,54 +741,82 @@ async function kippuPhone(open) {
   await page.touchscreen.tap(cv.x + cv.width / 2, cv.y + cv.height / 2);
   await waitScene(page, 'play', 8000);
   await waitFor(page, () => OTK.debug.run.t > 0.2);
-  // 画面をおさえた所へ歩く（右の方をおさえる）
-  const before = await page.evaluate(() => OTK.debug.game.me.x);
-  await page.mouse.move(cv.x + cv.width * (60 / 256), cv.y + cv.height * (198 / 224));
+  await shot(page, 'kippu-phone-start');
+  // 画面をおさえた所へ歩く（下の方をおさえる）
+  const before = await page.evaluate(() => OTK.debug.game.me.y);
+  await page.mouse.move(cv.x + cv.width * (78 / 256), cv.y + cv.height * (150 / 224));
   await page.mouse.down();
   await page.waitForTimeout(300);
   await page.mouse.up();
-  const after = await page.evaluate(() => OTK.debug.game.me.x);
-  check(after > before + 8, '画面をおさえた所へ歩く（' + before.toFixed(0) + ' → ' + after.toFixed(0) + '）');
-  await shot(page, 'kippu-phone-start');
+  const after = await page.evaluate(() => OTK.debug.game.me.y);
+  check(after > before + 8, '画面をおさえた所へ歩く（y ' + before.toFixed(0) + ' → ' + after.toFixed(0) + '）');
+  await restart(page, 'kippu', 5);
+  await addBot(page);
   const ctl = await padCtl(page);
-  let seen, r, tries = 0;
-  for (const sd of [5, 16, 11]) {
-    if (tries++) await restart(page, 'kippu', sd);
-    seen = await kippuBot(page, ctl, { label: 'kippu-phone' });
-    await waitFor(page, () => OTK.debug.run.result, null, 5000);
-    r = await result(page);
-    if (r.result === 'win') break;
-  }
-  check(seen.bought && r.result === 'win', '画面の十字キーと A ボタンで、切符を買ってもどれる（' + tries + ' 回目）');
+  // 画面の十字キーで：寮の玄関前 → 川ぞいの道
+  const w1 = await walkTo(page, ctl, 'cp1');
+  const s1 = await page.evaluate(() => ({ cp: OTK.debug.game.cp, lives: OTK.debug.game.lives }));
+  check(w1.ok && s1.cp === 1, '画面の十字キーで、見られずに川ぞいの道へ（♥' + s1.lives + '）');
+  // 画面の十字キーと A ボタンで、切符を買う
+  await page.evaluate(() => OTK.debug.game.warp(4));
+  const w2 = await walkTo(page, ctl, 'buy');
+  const t2 = await page.evaluate(() => OTK.debug.game.me.ticket);
+  check(w2.ok && t2, '画面の A ボタンを長おしして、切符が買える');
+  await shot(page, 'kippu-phone-bought');
+  // 帰りの最後（画面の十字キー）
+  await page.evaluate(() => OTK.debug.game.warp(8));
+  const w3 = await walkTo(page, ctl, 'goal');
+  await waitFor(page, () => OTK.debug.run.result, null, 5000);
+  let r = await result(page);
+  check(w3.ok && r.result === 'win', '画面の十字キーで、寮の手前までもどってクリア');
   await shot(page, 'kippu-phone-win');
 
-  // 券売機の前で、券売機を指でおさえ続けても買える（駅員さんが見ていない時に、券売機の前へ移して試す）
+  // 券売機を指でおさえ続けても買える（駅員さんが見ていない時に、券売機の前へ移して試す）
   await restart(page, 'kippu', 5);
+  await page.evaluate(() => OTK.debug.game.warp(4));
   await waitFor(page, () => {
     const g = OTK.debug.game;
-    for (let t = 0; t < 2.5; t += 0.05) if (g.visibleAt(160, 56, t) >= 0) return false;
+    for (let t = 0; t < 2.5; t += 0.05) if (g.visibleAt(g.BUY.x + 20, g.BUY.y + 6, t) >= 0) return false;
     return true;
   }, null, 20000);
-  await page.evaluate(() => { const me = OTK.debug.game.me; me.x = 160; me.y = 56; });
-  await page.mouse.move(cv.x + cv.width * (166 / 256), cv.y + cv.height * (40 / 224));
+  const touch = await page.evaluate(() => { const g = OTK.debug.game; g.me.x = g.BUY.x + 20; g.me.y = g.BUY.y + 6; return { x: g.BUY.x + 20 - g.camX, y: 50 }; });
+  await page.mouse.move(cv.x + cv.width * (touch.x / 256), cv.y + cv.height * (touch.y / 224));
   await page.mouse.down();
   await page.waitForTimeout(1900);
   await page.mouse.up();
-  const touchBuy = await page.evaluate(() => ({ ticket: OTK.debug.game.me.ticket, x: OTK.debug.game.me.x, y: OTK.debug.game.me.y, res: OTK.debug.run.result }));
-  check(touchBuy.ticket && !touchBuy.res, '券売機を指でおさえ続けると、切符が買える（その間は動かない：' + touchBuy.x.toFixed(0) + ',' + touchBuy.y.toFixed(0) + '）');
+  const tb = await page.evaluate(() => ({ ticket: OTK.debug.game.me.ticket, x: OTK.debug.game.me.x, y: OTK.debug.game.me.y, res: OTK.debug.run.result }));
+  check(tb.ticket && !tb.res, '券売機を指でおさえ続けると、切符が買える（その間は動かない：' + tb.x.toFixed(0) + ',' + tb.y.toFixed(0) + '）');
+  // 男魂くんをタップすると、段ボール箱をかぶる
   await restart(page, 'kippu', 5);
-  await kippuBot(page, ctl, { careless: true, label: 'kippu-phone-careless' });
-  await waitFor(page, () => OTK.debug.run.result, null, 8000);
+  const tap = await page.evaluate(() => { const g = OTK.debug.game; g.warp(3); g.me.x = g.boxes[0].x + 3; g.me.y = g.boxes[0].y; return { x: g.me.x - g.camX, y: g.me.y - 10 }; });
+  await page.waitForTimeout(100);
+  await page.touchscreen.tap(cv.x + cv.width * (tap.x / 256), cv.y + cv.height * (tap.y / 224));
+  await page.waitForTimeout(150);
+  check(await page.evaluate(() => !!OTK.debug.game.me.box), '男魂くんをタップすると、段ボール箱をかぶる');
+  await shot(page, 'kippu-phone-box');
+
+  // しっぱい：待たずに歩き続けると見つかり、♥ がなくなる
+  await restart(page, 'kippu', 5);
+  await page.evaluate(() => { OTK.debug.game.warp(1); OTK.debug.speed = 3; });
+  for (let n = 0; n < 3; n++) {
+    await ctl.setDir(['down']);
+    await page.waitForTimeout(250);
+    await ctl.setDir(['right']);
+    await waitFor(page, () => OTK.debug.game.caught, null, 20000);
+    await ctl.release();
+    await waitFor(page, () => !OTK.debug.game.busy || OTK.debug.run.result, null, 8000);
+  }
+  await page.evaluate(() => { OTK.debug.speed = 1; });
+  await waitFor(page, () => OTK.debug.run.result, null, 5000);
   r = await result(page);
-  check(r.result === 'lose', '待たずに歩くと見られる');
+  check(r.result === 'lose', '見つかり続けると、しっぱい');
   const errs = realErrors(errors);
   check(!errs.length, 'エラーなし' + (errs.length ? '：' + errs.join('\n') : ''));
   await page.context().close();
 }
 
-// 2 回しっぱいしたあと（tries 2）は少し易しくなる
+// 2 回しっぱいしたあと（tries 2）は少し易しくなる（うんこ）
 // 時間を止めて比べたいので、OTK.makeRun で 1 回ぶんを作って、手で進めて調べる。
-// ふつうの入り口（OTK.debug.start の tries）でも同じになることも確かめる
 async function easyMode(open) {
   console.log('2 回しっぱいしたあとの易しさ');
   const { page, errors } = await open('game/?play=unko&quick=1&seed=1', { wait: 300 });
@@ -540,16 +836,13 @@ async function easyMode(open) {
       for (let i = 0; i < 600 && !run.game.poops.length; i++) run.update(1 / 60);
       return run.game.poops[0].dur;
     };
-    // 切符：光の中にいて見つかるまでの時間
-    const kippu = (tries) => make('kippu', tries).game.grace;
-    return { fly0: fly(0), fly2: fly(2), k0: kippu(0), k2: kippu(2) };
+    return { fly0: fly(0), fly2: fly(2) };
   });
   check(r.fly2 > r.fly0 + 0.1, 'うんこ：影が長く出る（' + r.fly0.toFixed(2) + ' → ' + r.fly2.toFixed(2) + ' 秒）');
-  check(r.k2 > r.k0, '切符：見つかるまでが少し長い（' + r.k0.toFixed(2) + ' → ' + r.k2.toFixed(2) + ' 秒）');
   await page.evaluate(() => { OTK.debug.speed = 1; OTK.debug.seed(5); OTK.debug.start('kippu', { quick: true, tries: 2 }); });
   await page.waitForFunction(() => OTK.debug.scene === 'play' && OTK.debug.current === 'kippu');
-  const g2 = await page.evaluate(() => [OTK.debug.api.tries, OTK.debug.game.grace]);
-  check(g2[0] === 2 && g2[1] === r.k2, 'OTK.debug.start(id, { tries: 2 }) でも同じ易しさ（' + g2.join('・') + '）');
+  const g2 = await page.evaluate(() => [OTK.debug.api.tries, OTK.debug.game.maxLives]);
+  check(g2[0] === 2 && g2[1] === 4, 'OTK.debug.start(id, { tries: 2 }) でも同じ易しさ（tries ' + g2[0] + '・♥' + g2[1] + '）');
   const errs = realErrors(errors);
   check(!errs.length, 'エラーなし' + (errs.length ? '：' + errs.join('\n') : ''));
   await page.context().close();
@@ -557,13 +850,14 @@ async function easyMode(open) {
 
 withSite(PORT, async ({ open }) => {
   await easyMode(open);
+  if (!ONLY || ONLY === 'kippu') {
+    await kippuDesktop(open);
+    await kippuGimmicks(open);
+    if (!NO_PHONE) await kippuPhone(open);
+  }
   if (!ONLY || ONLY === 'unko') {
     await unkoDesktop(open);
     if (!NO_PHONE) await unkoPhone(open);
-  }
-  if (!ONLY || ONLY === 'kippu') {
-    await kippuDesktop(open);
-    if (!NO_PHONE) await kippuPhone(open);
   }
   console.log('ぜんぶ ok');
 }).catch((e) => { console.error(e); process.exit(1); });

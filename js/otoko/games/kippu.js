@@ -110,7 +110,7 @@
         ['backs2', 0, 196, 384, 28],
       ],
       lights: [[94, 84, 26], [228, 84, 52], [40, 160, 30], [300, 160, 30]],
-      go: [10, 92], back: [372, 94],
+      go: [10, 92], back: [372, 186],
       box: [110, 188],
     },
     {
@@ -297,12 +297,12 @@
       steps: [{ to: [300, 156], speed: 18 }, { look: UP, dur: 1.4 }, { look: LEFT, dur: 0.5 }, { to: [20, 156], speed: 18 }, { look: UP, dur: 1.4 }, { look: RIGHT, dur: 0.5 }],
     });
     // 犬にほえられると、家の人が窓から見る（alert）
-    add({ who: 'resident', kind: 'kyaku', v: 2, area: 2, alert: true, len: 96, half: 0.62, x: 170, y: 62, steps: [{ look: DOWN, dur: 1 }] });
+    add({ who: 'resident', kind: 'kyaku', v: 2, area: 2, alert: true, len: 92, half: 0.62, x: 170, y: 70, steps: [{ look: DOWN, dur: 1 }] }); // 視線は家の前から
     add(lurker(rnd, { v: 0, area: 2, at: [226, 98], look: LEFT, len: 70 }));
 
     // ── 商店街 ──
     // 行き：酔っぱらいがふらふら。コンビニの店員は、ときどき外を見る
-    add({ who: 'drunk', kind: 'kyaku', v: 4, area: 3, leg: 'go', len: 58, half: 0.5, x: 200, y: 140, sway: 0.35, drunk: true, steps: drunkSteps(rnd, 3, [200, 112], [{ x0: 40, x1: 344, y0: 98, y1: 116 }, { x0: 40, x1: 344, y0: 146, y1: 168 }], 16) });
+    add({ who: 'drunk', kind: 'kyaku', v: 4, area: 3, leg: 'go', len: 58, half: 0.5, x: 200, y: 140, sway: 0.35, drunk: true, steps: drunkSteps(rnd, 3, [200, 112], [{ x0: 84, x1: 344, y0: 98, y1: 116 }, { x0: 84, x1: 344, y0: 146, y1: 168 }], 16) });
     add({
       who: 'clerk', kind: 'tenin', v: 1, area: 3, leg: 'go', len: 86, half: 0.5, x: 226, y: 60, inside: true,
       steps: [{ look: LEFT, dur: 3.0, len: 40 }, { look: DOWN, dur: 2.2 }, { look: RIGHT, dur: 2.4, len: 40 }, { look: DOWN, dur: 1.8 }],
@@ -345,7 +345,7 @@
     ];
     PAX.forEach((pts, k) => {
       add({
-        who: 'passenger', kind: 'kyaku', v: [0, 2, 3, 5, 6, 1][k], area: 4, leg: 'back', once: true, delay: 2.4 + k * 0.85, len: 56, half: 0.5,
+        who: 'passenger', kind: 'kyaku', v: [0, 2, 3, 5, 6, 1][k], area: 4, leg: 'back', once: true, delay: 1.5 + k * 0.8, len: 56, half: 0.5,
         x: pts[0][0], y: pts[0][1], steps: pts.slice(1).map((p) => ({ to: p, speed: 34 })),
       });
     });
@@ -546,8 +546,8 @@
     event: '追いコン',
     title: '全裸で切符',
     goal: '見られずに\n切符を買え！',
-    howto: ['十字キー：歩く　A：箱・買う', '光（視線）に入るな。かげで待て', '駅で切符を買い、寮の近くまで'],
-    note: 'よい子はまねしないでください。\n見つかっても ♥ があるうちは、やりなおせる。',
+    howto: ['十字キー：歩く', '光（視線）に入るな', '券売機の前でA長おし'],
+    note: 'よい子はまねしないでください。',
     time: null,
     timeout: 'lose',
     bgm: 'tense',
@@ -612,26 +612,27 @@
         if (n.sway && !ps.hide && !ps.sleep) ps.a += Math.sin((t + n.off) * 2.3) * n.sway;
         return ps;
       }
-      // その人から (x, y) が見えるか（0：見えない、1：見える、2：ぶつかった）
-      function sees(n, ps, x, y) {
+      // その人から (x, y) が見えるか（0：見えない、1：見える、2：ぶつかった）。pad：テスト用のよゆう（ドット）
+      function sees(n, ps, x, y, pad) {
         if (!ps || ps.hide) return 0;
+        pad = pad || 0;
         const dx = x - ps.x, dy = y - ps.y;
         const d = Math.hypot(dx, dy);
-        if (d < n.bump) return 2;
+        if (d < n.bump + pad) return 2;
         if (ps.sleep) return 0;
         const ar = AREAS[n.area];
         if (x < ar.x || x > ar.x + ar.w) return 0;
-        if (d > (ps.len || n.len) * lenMul) return 0;
-        if (Math.abs(angDiff(Math.atan2(dy, dx), ps.a)) > n.half) return 0;
-        return rayLen(n.area, ps.x, ps.y, dx / d, dy / d, d) >= d - 0.5 ? 1 : 0;
+        if (d > (ps.len || n.len) * lenMul + pad) return 0;
+        if (Math.abs(angDiff(Math.atan2(dy, dx), ps.a)) > n.half + pad / Math.max(8, d)) return 0;
+        return rayLen(n.area, ps.x, ps.y, dx / d, dy / d, d) >= d - 0.5 - pad ? 1 : 0;
       }
-      // テスト用：今から ahead 秒後に (x, y) にいたら、だれかに見えるか（見えなければ -1）
-      function visibleAt(x, y, ahead) {
+      // テスト用：今から ahead 秒後に (x, y) にいたら、だれかに見えるか（見えなければ -1）。pad は sees と同じ
+      function visibleAt(x, y, ahead, pad) {
         const tt = npcT + (ahead || 0);
         const ar = areaAt(x);
         for (let i = 0; i < NPCS.length; i++) {
           if (NPCS[i].area !== ar) continue;
-          if (sees(NPCS[i], poseOf(i, tt), x, y)) return i;
+          if (sees(NPCS[i], poseOf(i, tt), x, y, pad)) return i;
         }
         return -1;
       }
@@ -669,7 +670,7 @@
         lastArea = c.area;
       }
       function startTrain() {
-        trainT = npcT + 2.0;
+        trainT = npcT + 0.9;
         NPCS.forEach((n) => { if (n.once) n.t0 = npcT + n.delay; });
       }
       function warp(i) {
@@ -856,7 +857,7 @@
             for (let f = 0; f < 3; f++) {
               for (let i = 0; i < 8; i++) {
                 const wx = x + 6 + i * 21, wy = TOPY + 8 + f * 17;
-                if (f === 2 && (i === 3 || i === 4)) continue;
+                if (f === 2 && i >= 3) continue; // 玄関と表札
                 const lit = (i * 7 + f * 3) % 5 < 3;
                 g.R(wx, wy, 14, 11, P.ink);
                 g.R(wx + 1, wy + 1, 12, 9, lit ? '#f8d878' : '#1c2448');
@@ -878,9 +879,9 @@
             g.R(x + 78, y + h - 18, 2, 18, '#c8a060');
             g.R(x + 60, y + h - 23, 38, 3, '#5c5c68');
             // 表札
-            g.R(x + 100, y + h - 19, 42, 15, P.ink);
-            g.R(x + 101, y + h - 18, 40, 13, P.cream);
-            g.text('夕照寮', x + 121, y + h - 19, { size: 12, align: 'center', col: P.ink });
+            g.R(x + 104, y + h - 22, 56, 20, P.ink);
+            g.R(x + 105, y + h - 21, 54, 18, P.cream);
+            g.text('夕照寮', x + 132, y + h - 21, { align: 'center', col: P.ink });
             break;
           }
           case 'house':
@@ -1631,8 +1632,14 @@
           if (api.time > 2.6 && api.time < 2.7 && !resume && areaAt(me.x) === 0) talk(AREAS[0].x + 42, TOPY + 30, '光に入るなよ。かげで待て！', 2.6);
 
           if (won) {
+            // ひと息ついたところで、うしろの植え込みがガサッ…（次のミニゲームへ）
             winT += dt;
-            me.face = winT < 0.8 ? 'left' : 'down';
+            me.face = winT < 1.2 ? 'left' : 'right';
+            if (winT >= 1.2 && winT - dt < 1.2) {
+              say = null;
+              api.sfx('hatena');
+              pop('ガサッ…', AREAS[1].x + 63, 70, P.lyellow, 1.4);
+            }
             return;
           }
           if (fade) {
@@ -1666,7 +1673,7 @@
             memo.cp = 0;
             api.sfx('fanfare');
             talk(me.x, me.y - 30, 'ふう…寮はもうすぐだ', 2.4);
-            api.win('切符ゲット！\nあとは寮に\n帰るだけ…', { wait: 2.0 });
+            api.win('切符ゲット！\nあとは寮に\n帰るだけ…', { wait: 2.4 });
           }
         },
 
@@ -1757,13 +1764,17 @@
             g.text(me.box ? (me.moving ? '' : 'A：箱をぬぐ') : 'A：箱をかぶる', me.x, me.y - 36, { size: 12, align: 'center', col: P.white, outline: P.black });
           }
           // 文字・吹き出し
-          fx.forEach((e) => g.text(e.str, e.x, e.y - (e.t / e.dur) * 8, { size: 12, align: 'center', col: e.col, outline: P.black }));
+          fx.forEach((e) => {
+            const hw = g.measure(e.str, 12) / 2 + 2;
+            g.text(e.str, api.clamp(e.x, camX + hw, camX + W - hw), e.y - (e.t / e.dur) * 8, { size: 12, align: 'center', col: e.col, outline: P.black });
+          });
           if (say) bubble(g, say.str, say.x, say.y, say.col);
           // 見られかけ・見つかった
           if (seenT > 0 && !caught && watcher >= 0 && ps[watcher]) {
             const w = ps[watcher];
             g.text(me.box ? '…箱？' : '？', w.x, w.y - 42, { col: P.yellow, outline: P.black, align: 'center' });
           }
+          if (won && winT >= 1.3) g.text('？', me.x + 8, me.y - 40, { col: P.yellow, outline: P.black, align: 'center' });
           if (caught && g.blink(4) && ps[caught.i]) {
             const w = ps[caught.i];
             g.text('！', w.x + 11, w.y - 30, { col: P.red, outline: P.white, align: 'center' });
