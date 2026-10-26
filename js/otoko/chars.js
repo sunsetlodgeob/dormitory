@@ -529,7 +529,7 @@
       p(3, 13, 3, 2, L.topCol);
       p(0, 13, 2, 2, sk);
     } else if (step) {
-      p(6, 12, 2, 2, sleeveShort ? L.topCol : top);
+      p(6, 12, 2, 2, sleeveShort && !naked ? L.topCol : top);
       p(5, 14, 2, 2, sleeveShort ? sk : top);
       p(4, 16, 2, 1, hand);
     } else {

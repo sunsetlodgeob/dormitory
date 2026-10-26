@@ -143,23 +143,23 @@ withSite(PORT, async ({ browser, base }) => {
 
     // カードのタグを押してもしぼれる
     await press(page, '#np-timeline .np-chip[data-tag="学祭"]', phone);
-    assert.deepStrictEqual(await cardTitles(page), ['学祭で模擬店'], tag + ': カードのタグでしぼれない');
+    assert.deepStrictEqual(await cardTitles(page), ['学祭でホストクラブ'], tag + ': カードのタグでしぼれない');
     assert.strictEqual(await page.getAttribute('#np-tags .np-chip[data-tag="学祭"]', 'aria-pressed'), 'true');
     await press(page, '#np-tags .np-chip[data-tag=""]', phone);
     assert.strictEqual((await cardTitles(page)).length, sample.length);
 
     // ことばでさがす（見つかった所に印）
-    await page.fill('#np-q', '焼きそば');
-    assert.deepStrictEqual(await cardTitles(page), ['学祭で模擬店'], tag + ': 本文でさがせない');
-    assert.strictEqual(await page.textContent('#np-timeline mark'), '焼きそば', tag + ': 見つかった所に印がない');
+    await page.fill('#np-q', 'ジュース');
+    assert.deepStrictEqual(await cardTitles(page), ['学祭でホストクラブ'], tag + ': 本文でさがせない');
+    assert.strictEqual(await page.textContent('#np-timeline mark'), 'ジュース', tag + ': 見つかった所に印がない');
     await page.fill('#np-q', 'ｂｂｑ');
     assert.deepStrictEqual(await cardTitles(page), ['屋上でBBQ'], tag + ': 全角・小文字でさがせない');
     // タグとことばを両方 → 当てはまらない → しぼりこみをやめる
-    await page.fill('#np-q', '焼きそば');
+    await page.fill('#np-q', 'ジュース');
     await press(page, '#np-tags .np-chip[data-tag="新歓"]', phone);
     assert.ok(await page.isVisible('#np-empty'), tag + ': 当てはまらないときの表示がない');
     const empty = await page.textContent('#np-empty-text');
-    assert.ok(empty.includes('焼きそば') && empty.includes('新歓'), tag + ': 当てはまらない理由が出ていない: ' + empty);
+    assert.ok(empty.includes('ジュース') && empty.includes('新歓'), tag + ': 当てはまらない理由が出ていない: ' + empty);
     await shot(page, tag + '-empty');
     await press(page, '#np-reset', phone);
     assert.strictEqual((await cardTitles(page)).length, sample.length);

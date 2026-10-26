@@ -120,6 +120,7 @@
     note: '',
     time: 50,
     timeout: 'lose',
+    naked: true, // 結果の画面でも全裸
     timeoutMsg: '時間切れ。\n全裸は寒すぎた。\nみんな部屋に帰った。',
     bgm: 'tense',
     create(api) {

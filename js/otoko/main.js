@@ -273,7 +273,7 @@
   };
   const FLAVOR = {
     nomu: '桜がさいている。新歓の季節だ。', nise: '新歓は、まだ終わらない。', gyudon: 'つゆ。金がない。', deisui: '夏。夜は長い。',
-    conveni: 'まだ夏休み。暑い。', zombie: '秋。キノコの季節。', gakusai: '学祭の季節。', setsubun: 'さむい。豆がある。',
+    conveni: 'まだ夏休み。暑い。', zombie: '秋。キノコの季節。', gakusai: '学祭の季節。', setsubun: 'さむい。豆がある。服はない。',
     kippu: '別れの季節。', unko: '追いコンの夜は、つづく。',
   };
 
