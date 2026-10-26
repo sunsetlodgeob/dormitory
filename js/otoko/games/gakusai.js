@@ -77,7 +77,7 @@
       function pickKind() {
         if (spawned < 3) return 'joshi'; // 最初は女子から
         const r = api.rnd();
-        if (r < 0.1) return 'oba';
+        if (r < 0.1) return groups.some((o) => o.kind === 'oba') ? 'joshi' : 'oba'; // とりのおばちゃんは 1 人だけ（もう画面にいたら、女子に）
         if (r < 0.26) return 'danshi';
         return 'joshi';
       }

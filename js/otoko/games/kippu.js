@@ -3,8 +3,8 @@
  *  夜の町を、横に長い地図で歩く。行き：寮の玄関前 → 川ぞいの道 → 住宅街 → 商店街 → 駅前（券売機）。
  *  切符を買うと「帰り」になり、人の動きが変わる。帰り：駅前 → 商店街 → 住宅街 → 川ぞいの道の、寮の手前まで来ればクリア。
  *  （寮までの最後のひと走りは、次のミニゲーム「うんこをよけろ」。ここで寮に入ってしまうと、話がつながらない）
- *  画面は、いまいる場所（エリア）の中を横にスクロールする。人はエリアの外を見ない。
- *  人が見ている所は光のくさび（視線）で見え、建物・塀・植え込み・車などのうしろで止まる。
+ *  画面は、いまいる場所（エリア）の中を横にスクロールする（入り口では、となりを 16 ドットだけ見せる）。人はエリアの外を見ない。
+ *  人が見ている所は黄色い光のくさび（視線）で見え、建物・塀・植え込み・車などのうしろで止まる（街灯の白い明かりは飾り）。
  *  光の中にいると少しの間（0.35秒）「？」が出て、そのあと見つかる。ぶつかっても見つかる。
  *  見つかると ♥ が 1 つへり、最後のチェックポイント（エリアの入り口のかくれ場所）からやりなおし。♥ がなくなるとしっぱい。時間制限はない。
  *  しっぱいして、もう一度遊ぶとき（api.tries > 0）は、前回たどりついたチェックポイントから始める。
@@ -12,6 +12,7 @@
  *    犬（近づくとほえて、家の人が窓から見る。寝ている間はそっと通れる）、酔っぱらい（ふらふら歩く）、コンビニの店員、
  *    おまわりさん（視線が長い）、駅員さん、カメラを持ってひそむ先輩（出てくる前にレンズが光る）、電車から降りてくる人たち。
  *  段ボール箱（商店街）：A でかぶる・ぬぐ。かぶって止まっていれば見つからない。動くとあやしまれる（見つかるまでが長くなる）。
+ *    はじめて商店街に入ると説明が出て、近くまで来ると箱の上に A が点滅する。
  *  券売機の前で A を長おし（1.6秒）すると切符が買える。
  *  男魂くんは全裸（「男魂」の札とモザイクつき）。
  *  人の動きは時間だけで決まる（犬にほえられたときの家の人だけは別）。visibleAt で、少し先の時刻に見られるかを調べられる（テスト用）。
@@ -29,6 +30,7 @@
   const BOX_SPEED = 0.55; // 箱をかぶって歩く速さ（ふつうの何倍か）
   const BOX_RATE = 0.3; // 箱をかぶって動いているとき、「？」が進む速さ（ふつうの何倍か）
   const TOPY = 24; // 地図の上のはし（その上は ♥ などの帯）
+  const CAM_PEEK = 16; // エリアの入り口で、となりのエリアを見せる幅
   const RIGHT = 0, DOWN = Math.PI / 2, LEFT = Math.PI, UP = -Math.PI / 2;
   const DR = Math.PI / 4, DL = Math.PI * 0.75, UR = -Math.PI / 4, UL = -Math.PI * 0.75;
 
@@ -281,7 +283,7 @@
         steps: [{ to: [214, y], speed: 20 }, { look: UP, dur: 2.0 }, { to: [104, y], speed: 20 }, { look: UP, dur: 1.6 }, { to: [44, y], speed: 20 }, { look: RIGHT, dur: 1.0 }, { to: [300, y], speed: 24 }, { look: LEFT, dur: 1.0 }],
       });
     });
-    add(lurker(rnd, { v: 1, area: 1, at: [130, 124], look: DR, len: 66 }));
+    add(lurker(rnd, { v: 3, area: 1, at: [130, 124], look: DR, len: 66 })); // 先輩D（「帰り道で、写真もとってやる」）
     add(lurker(rnd, { v: 4, area: 1, at: [244, 118], look: RIGHT, len: 66 }));
 
     // ── 住宅街 ──
@@ -316,7 +318,7 @@
       ],
     });
     add({
-      who: 'drunk', kind: 'kyaku', v: 4, area: 3, leg: 'back', len: 52, half: 0.5, x: 344, y: 183, sit: true, drunk: true,
+      who: 'drunk', kind: 'kyaku', v: 4, area: 3, leg: 'back', len: 52, half: 0.5, x: 344, y: 183, sit: true, bump: 7, drunk: true,
       steps: [{ sleep: 5.0 }, { look: LEFT, dur: 1.4, snap: true }, { look: DL, dur: 1.0 }, { sleep: 6.0 }, { look: UP, dur: 1.2, snap: true }],
     });
     add({
@@ -545,11 +547,12 @@
     month: 3,
     event: '追いコン',
     title: '全裸で切符',
-    goal: '見られずに\n切符を買え！',
-    howto: ['十字キー：歩く', '光（視線）に入るな', '券売機の前でA長おし'],
-    note: 'よい子はまねしないでください。',
+    goal: '見られずに\n切符を買ってこい！',
+    howto: ['黄色い視線に入るな', '駅の券売機でA長おし', '寮の近くまでもどれ'],
+    note: '見つかっても、♥ があれば続く。\nよい子はまねしないでください。',
     time: null,
     timeout: 'lose',
+    naked: true, // 結果の画面でも全裸
     bgm: 'tense',
     create(api) {
       const P = api.P, W = api.W, H = api.H;
@@ -582,6 +585,7 @@
       let camX = 0;
       let say = null; // 吹き出し { x, y, str, t, col }
       let banner = null; // エリアの名前 { str, sub, t }
+      let bannerNext = null; // 少しあとに出す帯 { at, str, sub }
       let hint = null; // 画面の下の小さい説明 { str, t }
       let trainT = -1; // 電車が着いた時刻
       let tickT = 0;
@@ -637,7 +641,7 @@
         return -1;
       }
       const dogAwake = (t) => {
-        const [aw, sl] = me.ticket ? [9, 3] : [6, 5];
+        const [aw, sl] = me.ticket ? [9, 3] : [5, 6]; // 行きは、少し長く寝ている
         return ((t + 2) % (aw + sl)) < aw;
       };
       // テスト用：今から ahead 秒後に (x, y) にいたら、犬がほえるか（pad：よゆう）
@@ -666,6 +670,7 @@
         seenT = 0;
         watcher = -1;
         caught = null;
+        say = null;
         camX = camTarget();
         lastArea = c.area;
       }
@@ -682,6 +687,7 @@
         }
         for (let k = 0; k <= i; k++) if (!stats.cps.includes(k)) stats.cps.push(k);
         banner = { str: AREAS[CPS[i].area].name, sub: me.ticket ? '帰り' : '行き', t: 0 };
+        bannerNext = null;
         (me.ticket ? entered.back : entered.go).add(CPS[i].area);
         fade = null;
       }
@@ -704,9 +710,13 @@
         }
       }
 
+      // 画面は、いまいるエリアの中だけ。ただし入り口（はしから 48 ドット）では、男魂くんが画面のはしに切れないように、
+      // となりのエリアを少し（いちばんはしで 16 ドット）見せる
       function camTarget() {
         const a = AREAS[areaAt(me.x)];
-        return api.clamp(me.x - W / 2, a.x, a.x + a.w - W);
+        const kl = api.clamp(1 - (me.x - a.x) / 48, 0, 1), kr = api.clamp(1 - (a.x + a.w - me.x) / 48, 0, 1);
+        const lo = a.x - CAM_PEEK * kl, hi = a.x + a.w - W + CAM_PEEK * kr;
+        return api.clamp(api.clamp(me.x - W / 2, lo, Math.max(lo, hi)), 0, WORLD_W - W);
       }
 
       // ── 描く道具 ──
@@ -811,7 +821,7 @@
               g.R(rx, ry, 6 + (i % 4), 1, i % 3 ? '#2c3c7c' : '#5c6cac');
             }
             // 街灯が川にうつる
-            [76, 208].forEach((lx) => { for (let j = 0; j < 4; j++) g.R(x0 + lx - 2 + ((j * 3) % 5), 194 + j * 7, 5, 1, '#c8b860'); });
+            [76, 208].forEach((lx) => { for (let j = 0; j < 4; j++) g.R(x0 + lx - 2 + ((j * 3) % 5), 194 + j * 7, 5, 1, '#a8b4d0'); });
             break;
           case 'jutaku':
             tiles(g, x0, 80, a.w, 20, '#55555d', '#4c4c54', 10, 10); // 上の歩道
@@ -844,7 +854,7 @@
           default:
             g.R(x0, TOPY, a.w, H - TOPY, P.dgray);
         }
-        a.lights.forEach(([lx, ly, r]) => glow(g, x0 + lx, ly, r, P.lyellow, 0.1));
+        a.lights.forEach(([lx, ly, r]) => glow(g, x0 + lx, ly, r, '#d8e4f8', 0.1)); // 街灯の明かり（白。黄色いのは視線だけ）
       }
 
       // ── 物 ──
@@ -1036,7 +1046,7 @@
             g.R(x + 1, y - 34, 3, 38, '#5c5c68');
             g.R(x + 2, y - 34, 1, 38, '#8c8c98');
             g.R(x - 3, y - 38, 11, 4, '#3c3c48');
-            g.R(x - 2, y - 35, 9, 2, P.lyellow);
+            g.R(x - 2, y - 35, 9, 2, '#e8f0fc');
             break;
           }
           case 'bench': {
@@ -1346,10 +1356,11 @@
           return;
         }
         if (n.sit) {
-          const img = api.person(n.kind, { dir: ps.sleep ? 'down' : dir, frame: 0, variant: n.v });
+          const zzz = ps.sleep && !isCaught; // ぶつかられたら、目をさまして、こっちを見る
+          const img = api.person(n.kind, { dir: zzz ? 'down' : dir, frame: 0, variant: n.v });
           g.ctx.drawImage(img, 0, 0, 16, 18, x - 8, y - 18, 16, 18);
-          if (n.drunk) drunkMark(g, x - 8, y - 23, dir);
-          if (ps.sleep) g.text('zzz', x + 6, y - 30 - (Math.floor(api.time * 2) % 2) * 2, { size: 12, col: P.lsky, outline: P.black });
+          if (n.drunk) drunkMark(g, x - 8, y - 23, zzz ? 'down' : dir);
+          if (zzz) g.text('zzz', x + 6, y - 30 - (Math.floor(api.time * 2) % 2) * 2, { size: 12, col: P.lsky, outline: P.black });
           if (ps.heart && !isCaught) {
             const hy = y - 30 - Math.round(Math.abs(Math.sin(api.time * 3)) * 3);
             if (n.kind === 'joshi') heart(g, x + 4, hy, P.pink);
@@ -1474,10 +1485,12 @@
         // 箱：A（B）で、かぶる・ぬぐ。スマホは男魂くんをタップ
         const tap = api.input.tap;
         const tapMe = tap && Math.abs(tap.x + camX - me.x) < 12 && tap.y > me.y - 28 && tap.y < me.y + 6;
-        if (tapMe) touch.box = true;
-        if (!pt.down) touch.box = false;
         const near = boxes.find((b) => b !== me.box && api.dist(b.x, b.y, me.x, me.y) < 14);
-        if ((api.input.pressed('a') || api.input.pressed('b') || tapMe) && !inBuy && (me.box || near)) {
+        const boxAct = (api.input.pressed('a') || api.input.pressed('b') || tapMe) && !inBuy && (me.box || near);
+        // 箱のための指（そのまま、おさえていても歩かない）。箱がない所では、男魂くんの上から指をずらしても歩ける
+        if (tapMe && boxAct) touch.box = true;
+        if (!pt.down) touch.box = false;
+        if (boxAct) {
           if (me.box) {
             me.box.x = me.x;
             me.box.y = me.y;
@@ -1509,9 +1522,10 @@
             cp = CP_BUY;
             stats.cps.push(CP_BUY);
             api.sfx('ok');
-            pop('切符ゲット！', me.x, me.y - 34, P.yellow, 1.6);
-            talk(me.x, me.y - 30, 'よし！ あとは帰るだけ…', 2.2);
-            banner = { str: '帰り道', sub: '寮の近くまで もどれ', t: 0 };
+            pop('切符ゲット！', me.x, me.y - 34, P.yellow, 1.4);
+            // 「帰り道」の帯は、「切符ゲット！」が消えてから（文字がかさならないように）
+            banner = null;
+            bannerNext = { at: npcT + 1.5, str: '帰り道', sub: '寮の近くまで もどれ！' };
             entered.back.add(4);
             startTrain();
           }
@@ -1530,8 +1544,10 @@
           }
           if (!blocked(nx, me.y)) me.x = nx;
           else if (!dy) me.y = slide(me.x, me.y, nx, 'y', step); // 角に少しかかっただけなら、すべって回りこむ
-          if (!blocked(me.x, ny)) me.y = ny;
-          else if (!dx) me.x = slide(me.x, me.y, ny, 'x', step);
+          if (dy) {
+            if (!blocked(me.x, ny)) me.y = ny;
+            else if (!dx) me.x = slide(me.x, me.y, ny, 'x', step);
+          }
           me.face = dx < 0 ? 'left' : dx > 0 ? 'right' : dy < 0 ? 'up' : 'down';
           me.walk += dt;
           me.moving = true;
@@ -1546,10 +1562,12 @@
         const ai = areaAt(me.x);
         if (ai === lastArea) return;
         lastArea = ai;
+        if (say && areaAt(say.x) !== ai) say = null; // ほかのエリアの人の吹き出しは消す（寮の窓の先輩など）
         const set = me.ticket ? entered.back : entered.go;
         if (!set.has(ai)) {
           set.add(ai);
           banner = { str: AREAS[ai].name, sub: me.ticket ? '帰り' : '', t: 0 };
+          if (AREAS[ai].box && !me.ticket) showHint('段ボール箱がある（A でかぶれる）', 3);
         }
         // チェックポイント（先へ進んだときだけ）
         const want = me.ticket ? CPS.findIndex((c, k) => k > CP_BUY && c.area === ai) : ai;
@@ -1628,10 +1646,11 @@
           for (let i = fx.length - 1; i >= 0; i--) { fx[i].t += dt; if (fx[i].t > fx[i].dur) fx.splice(i, 1); }
           if (say) { say.t -= dt; if (say.t <= 0) say = null; }
           if (banner) { banner.t += dt; if (banner.t > 2.4) banner = null; }
+          if (bannerNext && npcT >= bannerNext.at) { banner = { str: bannerNext.str, sub: bannerNext.sub, t: 0 }; bannerNext = null; }
           if (hint) { hint.t -= dt; if (hint.t <= 0) hint = null; }
           camX = api.approach(camX, camTarget(), Math.max(2, Math.abs(camTarget() - camX) * 10 * dt));
           if (api.time < 0.05 && !resume && !say) talk(AREAS[0].x + 42, TOPY + 30, '切符、たのんだぞ！', 2.4);
-          if (api.time > 2.6 && api.time < 2.7 && !resume && areaAt(me.x) === 0) talk(AREAS[0].x + 42, TOPY + 30, '光に入るなよ。かげで待て！', 2.6);
+          if (api.time > 2.6 && api.time < 2.7 && !resume && areaAt(me.x) === 0) talk(AREAS[0].x + 42, TOPY + 30, '黄色いのが視線だ。物かげで待て！', 2.8);
 
           if (won) {
             // ひと息ついたところで、うしろの植え込みがガサッ…（次のミニゲームへ）
@@ -1741,13 +1760,21 @@
             if (n.bike && p.hide && p.left < 1.3) {
               const nx = p.seg.i + 1 < n.plan.segs.length ? n.plan.segs[p.seg.i + 1] : n.plan.segs[0];
               const ar = AREAS[n.area];
-              const ex = api.clamp(nx.x0, Math.max(camX, ar.x) + 22, Math.min(camX + W, ar.x + ar.w) - 22);
-              const from = nx.x0 < ex ? 'left' : 'right'; // 自転車が来る側
-              const lo = Math.max(camX, ar.x), hi = Math.min(camX + W, ar.x + ar.w);
-              const tx = api.clamp(ex, lo + 42, hi - 42);
-              g.text('チリンチリン', tx, nx.y0 - 30 - (g.blink(4) ? 1 : 0), { size: 12, align: 'center', col: P.lyellow, outline: P.black });
-              arrow(g, from === 'left' ? lo + 12 : hi - 12, nx.y0 - 8, P.lyellow, from === 'left' ? 'right' : 'left');
-              if (!n.rang || n.rang !== p.seg) { n.rang = p.seg; if (areaAt(me.x) === n.area) api.sfx('ring'); }
+              const here = areaAt(me.x) === n.area;
+              // となりのエリアの入り口のそば（40 ドット）にいるときも、そちらの画面のはしに出す
+              const edge = !here && (Math.abs(me.x - ar.x) < 40 ? 'left' : Math.abs(me.x - (ar.x + ar.w)) < 40 ? 'right' : null);
+              if (here) {
+                const lo = Math.max(camX, ar.x), hi = Math.min(camX + W, ar.x + ar.w);
+                const ex = api.clamp(nx.x0, lo + 22, hi - 22);
+                const from = nx.x0 < ex ? 'left' : 'right'; // 自転車が来る側
+                const tx = api.clamp(ex, lo + 42, hi - 42);
+                g.text('チリンチリン', tx, nx.y0 - 30 - (g.blink(4) ? 1 : 0), { size: 12, align: 'center', col: P.lyellow, outline: P.black });
+                arrow(g, from === 'left' ? lo + 12 : hi - 12, nx.y0 - 8, P.lyellow, from === 'left' ? 'right' : 'left');
+              } else if (edge) {
+                const tx = edge === 'left' ? camX + W - 40 : camX + 40;
+                g.text('チリンチリン', tx, nx.y0 - 30 - (g.blink(4) ? 1 : 0), { size: 12, align: 'center', col: P.lyellow, outline: P.black });
+              }
+              if ((here || edge) && n.rang !== p.seg) { n.rang = p.seg; api.sfx('ring'); }
             }
           });
 
@@ -1763,7 +1790,13 @@
           } else if (!me.ticket && inRect(me.x, me.y, BUY) && !caught) {
             g.text('A長おしで買う', me.x, me.y - 44, { size: 12, align: 'center', col: P.white, outline: P.black });
           }
-          // 箱の説明
+          // 箱の説明（近くまで来たら、箱の上に A が点滅する）
+          if (!caught && !api.ended && g.blink(2)) {
+            boxes.forEach((b) => {
+              const d = api.dist(b.x, b.y, me.x, me.y);
+              if (b !== me.box && d >= 14 && d < 56) g.text('A', b.x, b.y - 30, { size: 12, align: 'center', col: P.yellow, outline: P.black });
+            });
+          }
           const near = boxes.find((b) => b !== me.box && api.dist(b.x, b.y, me.x, me.y) < 14);
           if ((near || me.box) && !caught && !api.ended) {
             g.text(me.box ? (me.moving ? '' : 'A：箱をぬぐ') : 'A：箱をかぶる', me.x, me.y - 36, { size: 12, align: 'center', col: P.white, outline: P.black });
@@ -1792,9 +1825,11 @@
             ctx.save();
             ctx.globalAlpha = Math.max(0, k);
             const bw = Math.max(g.measure(banner.str, 16), g.measure(banner.sub || '', 12)) + 24;
-            g.R(W / 2 - bw / 2, 30, bw, banner.sub ? 36 : 22, '#000000b0');
-            g.text(banner.str, W / 2, 33, { align: 'center', col: P.white });
-            if (banner.sub) g.text(banner.sub, W / 2, 51, { size: 12, align: 'center', col: P.lyellow });
+            // 男魂くんにかぶるときは、少し下に出す（券売機の前など）
+            const by = me.y < 104 && Math.abs(me.x - camX - W / 2) < bw / 2 + 10 ? 112 : 30;
+            g.R(W / 2 - bw / 2, by, bw, banner.sub ? 36 : 22, '#000000b0');
+            g.text(banner.str, W / 2, by + 3, { align: 'center', col: P.white });
+            if (banner.sub) g.text(banner.sub, W / 2, by + 21, { size: 12, align: 'center', col: P.lyellow });
             ctx.restore();
           }
           if (hint) {

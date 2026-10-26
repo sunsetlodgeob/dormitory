@@ -147,7 +147,7 @@ async function scripts(open) {
   const texts = (id) => (res.said[id] || []).map((x) => x[1].replace(/\n/g, '')).join('／');
   const kanri = Object.entries(res.said).filter(([, l]) => l.some((x) => x[0] === '管理人さん')).map(([id]) => id);
   check(kanri.length === 0, '管理人さんは、どの寸劇でも話さない（うしろでそうじをしているだけ）' + (kanri.length ? '：' + kanri.join('・') : ''));
-  check(!/今夜/.test(texts('opening')) && /4日後/.test(texts('opening')), '入寮の日は、まだ新歓ではない（新歓コンパは 4 日後）');
+  check(!/今夜/.test(texts('opening')) && /4日目の夜/.test(texts('opening')) && /4日目の夜/.test(texts('nomu')), '入寮の日は、まだ新歓ではない（新歓コンパは 4 日目の夜。入寮でも、飲むか吐くかでも同じ）');
   check(/1日目/.test(texts('nomu')) && /2日目/.test(texts('nise')), '新歓コンパは 2 日つづく（飲むか吐くか＝1日目、ニセ一年＝2日目）');
   const early = ['opening', 'nomu', 'nise'].filter((id) => /ニセ|3年|ドッキリ|まぎれ/.test(texts(id)));
   check(early.length === 0, 'ネタばらしより前は、だれもニセ一年のことを一年に言わない（ドッキリ）' + (early.length ? '：' + early.join('・') : ''));
@@ -155,6 +155,12 @@ async function scripts(open) {
   check(/ホストクラブ/.test(texts('gakusai')) && /お酒はなし/.test(texts('gakusai')) && !/やきそば|焼きそば/.test(texts('gakusai')), '学祭は、寮のホストクラブ（お酒はなし）');
   check(/全裸/.test(texts('kippu')) && /切符/.test(texts('kippu')) && !/うんこ/.test(texts('kippu')) && res.maps.kippu.slice(-1)[0] === 'EXT', '追いコンは切符が先。前ふりは、全裸で寮の玄関の前まで');
   check(res.maps.unko[0] === 'KAWA' && /プレゼント/.test(texts('unko')), 'うんこは、切符の帰り道（川ぞいの道）で、先輩が待ちぶせ');
+  // 川ぞいの道は、ミニゲームと同じ向き（上が植え込み、下が川）
+  const kawa = await page.evaluate(() => OTK.skit.map('KAWA').rows);
+  const rowOf = (ch) => kawa.findIndex((r) => r.includes(ch));
+  check(rowOf('h') < rowOf('-') && rowOf('-') < rowOf('f') && rowOf('f') < rowOf('~'), '川ぞいの道の寸劇は、ミニゲームと同じ向き（上から植え込み・道・手すり・川）');
+  const roof = await page.evaluate(() => OTK.SKITS.ending.steps.some((s) => [].concat(s[1]).includes('管理人さん')));
+  check(!roof, '屋上の「みんな」の中に、管理人さんはいない');
   const games = await page.evaluate(() => OTK.list().map((d) => d.id));
   check(games.indexOf('kippu') + 1 === games.indexOf('unko') && games.indexOf('unko') === games.length - 1, '追いコンは「全裸で切符」→「うんこをよけろ」の順（最後がうんこ）');
   const want = ['opening', 'ending'].concat(games);
@@ -406,6 +412,21 @@ async function flow(open, games) {
   await waitScene(page, 'calendar', 20000);
   await page.keyboard.up('z');
   check(true, '勝ったあとの寸劇のあと、次の月のカレンダー');
+
+  // 全裸で切符に勝つと、カレンダーをはさまずに「うんこをよけろ」の前ふりへ（同じ夜、同じ道のつづき）
+  const ki = games.indexOf('kippu');
+  await page.evaluate((n) => OTK.debug.story(n), ki);
+  await waitSkit(page, 'kippu');
+  await page.keyboard.press('Escape');
+  await waitScene(page, 'intro');
+  await pressUntil(page, 'Enter', 'countdown');
+  await waitScene(page, 'play');
+  await page.evaluate(() => OTK.debug.forceResult('win'));
+  await waitScene(page, 'result');
+  await page.waitForTimeout(450);
+  await page.keyboard.press('Enter');
+  seen = await trail(page, 'skit:unko');
+  check(seen.join() === 'skit:unko' && (await page.evaluate(() => OTK.debug.save.step)) === ki + 1, '全裸で切符のあとは、カレンダーなしで、すぐ「うんこ」の前ふり（' + seen.join(' → ') + '）');
 
   // 最後の 1 本に勝つ → エンディングの寸劇 → よいエンディング
   await page.evaluate((n) => OTK.debug.story(n), games.length - 1);

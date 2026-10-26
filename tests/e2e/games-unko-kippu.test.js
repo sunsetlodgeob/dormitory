@@ -586,7 +586,7 @@ async function kippuDesktop(open) {
   const w1 = await walkTo(page, ctl, 'cp1');
   const s1 = await page.evaluate(() => ({ cp: OTK.debug.game.cp, area: OTK.debug.game.area, lives: OTK.debug.game.lives, cam: OTK.debug.game.camX }));
   check(w1.ok && s1.cp === 1 && s1.area === 1, 'キーボードで、見られずに川ぞいの道へ（チェックポイント ' + s1.cp + '、♥' + s1.lives + '）');
-  check(s1.cam >= 250, '画面が横にスクロールした（' + s1.cam.toFixed(0) + '）');
+  check(s1.cam >= 230, '画面が横にスクロールした（' + s1.cam.toFixed(0) + '）');
   await page.waitForTimeout(400);
   await shot(page, 'kippu-kawa');
 
@@ -691,6 +691,24 @@ async function kippuGimmicks(open) {
   const { page, errors } = await open('game/?play=kippu&quick=1&seed=4', { wait: 300 });
   await waitScene(page, 'play');
   await waitFor(page, () => OTK.debug.run.t > 0.05);
+  // 角に少しかかっても、横に歩けば、すべって回りこむ（寮の前のゴミ置き場の下のはし。人はいったん消す）
+  const sl = await page.evaluate(() => {
+    const g = OTK.debug.game;
+    g.warp(0);
+    g.NPCS.forEach((n) => { n._leg = n.leg; n.leg = 'back'; }); // 行きなので、帰りの人は出てこない
+    g.me.x = 125;
+    g.me.y = 144;
+    return { stuck: g.blocked(120, 144), free: !g.blocked(125, 144) };
+  });
+  await page.keyboard.down('ArrowLeft');
+  await page.waitForTimeout(900);
+  await page.keyboard.up('ArrowLeft');
+  const sx = await page.evaluate(() => {
+    const g = OTK.debug.game;
+    g.NPCS.forEach((n) => { n.leg = n._leg; });
+    return { x: g.me.x, y: g.me.y, caught: !!g.caught };
+  });
+  check(sl.stuck && sl.free && sx.x < 100 && !sx.caught, '角に 1 ドットかかっても、←で回りこんで進む（x 125 → ' + sx.x.toFixed(0) + '、y ' + sx.y.toFixed(1) + '）');
   // 段ボール箱：商店街。A でかぶる。かぶって止まっていれば、光の中でも見つからない。ぬぐと見つかる
   await page.evaluate(() => { const g = OTK.debug.game; g.warp(3); g.me.x = g.boxes[0].x + 4; g.me.y = g.boxes[0].y; });
   await page.waitForTimeout(200);
@@ -785,6 +803,19 @@ async function kippuPhone(open) {
   await page.mouse.up();
   const after = await page.evaluate(() => OTK.debug.game.me.y);
   check(after > before + 8, '画面をおさえた所へ歩く（y ' + before.toFixed(0) + ' → ' + after.toFixed(0) + '）');
+  // 男魂くんの上から指をずらしても歩く（箱のない所。人はいったん消す）
+  const p0 = await page.evaluate(() => {
+    const g = OTK.debug.game;
+    g.NPCS.forEach((n) => { n.leg = 'back'; });
+    return { x: g.me.x - g.camX, y: g.me.y };
+  });
+  await page.mouse.move(cv.x + cv.width * (p0.x / 256), cv.y + cv.height * ((p0.y - 10) / 224));
+  await page.mouse.down();
+  await page.mouse.move(cv.x + cv.width * (p0.x / 256), cv.y + cv.height * ((p0.y + 40) / 224), { steps: 4 });
+  await page.waitForTimeout(700);
+  await page.mouse.up();
+  const drag = await page.evaluate(() => ({ y: OTK.debug.game.me.y, box: !!OTK.debug.game.me.box }));
+  check(drag.y > p0.y + 10 && !drag.box, '男魂くんの上から指をずらしても、そちらへ歩く（y ' + p0.y.toFixed(0) + ' → ' + drag.y.toFixed(0) + '）');
   await restart(page, 'kippu', 5);
   await addBot(page);
   const ctl = await padCtl(page);
@@ -823,8 +854,9 @@ async function kippuPhone(open) {
   check(tb.ticket && !tb.res, '券売機を指でおさえ続けると、切符が買える（その間は動かない：' + tb.x.toFixed(0) + ',' + tb.y.toFixed(0) + '）');
   // 男魂くんをタップすると、段ボール箱をかぶる
   await restart(page, 'kippu', 5);
-  const tap = await page.evaluate(() => { const g = OTK.debug.game; g.warp(3); g.me.x = g.boxes[0].x + 3; g.me.y = g.boxes[0].y; return { x: g.me.x - g.camX, y: g.me.y - 10 }; });
-  await page.waitForTimeout(100);
+  await page.evaluate(() => { const g = OTK.debug.game; g.warp(3); g.NPCS.forEach((n) => { n.leg = 'back'; }); g.me.x = g.boxes[0].x + 3; g.me.y = g.boxes[0].y; });
+  await page.waitForTimeout(400); // 画面（カメラ）が追いつくまで（人はいったん消しておく）
+  const tap = await page.evaluate(() => { const g = OTK.debug.game; return { x: g.me.x - g.camX, y: g.me.y - 10 }; });
   await page.touchscreen.tap(cv.x + cv.width * (tap.x / 256), cv.y + cv.height * (tap.y / 224));
   await page.waitForTimeout(150);
   check(await page.evaluate(() => !!OTK.debug.game.me.box), '男魂くんをタップすると、段ボール箱をかぶる');

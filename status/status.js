@@ -23,15 +23,15 @@ window.OB_STATUS = {
   // ミニゲーム（id は game/?play=<id> で直接遊べる）
   games: [
     { id: 'nomu', month: 4, event: '新歓', title: '飲むか吐くか', status: '完了' },
-    { id: 'nise', month: 4, event: '新歓', title: 'ニセ一年を見抜け', status: '完了' },
+    { id: 'nise', month: 4, event: '新歓', title: 'ニセ一年を見抜け', status: '完了', note: '毎年恒例のドッキリ。一年のふりをした 3年生を、一度もパシリに使うな。最後にネタばらし' },
     { id: 'gyudon', month: 6, event: '', title: '財布がない', status: '完了' },
     { id: 'deisui', month: 7, event: '', title: '同期Bをさがせ', status: '完了' },
     { id: 'conveni', month: 9, event: '', title: '全裸コンビニ', status: '完了' },
     { id: 'zombie', month: 10, event: '', title: '寮ゾンビ', status: '完了' },
-    { id: 'gakusai', month: 11, event: '学祭', title: '女子100人勧誘', status: '完了' },
+    { id: 'gakusai', month: 11, event: '学祭', title: '女子100人勧誘', status: '完了', note: '寮のホストクラブ「夕照」の呼びこみ（お酒なし。ジュースとお菓子と出し物）' },
     { id: 'setsubun', month: 2, event: '節分', title: '節分ピラミッド', status: '完了' },
     { id: 'kippu', month: 3, event: '追いコン', title: '全裸で切符', status: '完了', note: 'いちばんの見せ場。駅まで行って帰ってくる、長めのかくれんぼ' },
-    { id: 'unko', month: 3, event: '追いコン', title: 'うんこをよけろ', status: '完了', note: '寮までの最後のひと走り' },
+    { id: 'unko', month: 3, event: '追いコン', title: 'うんこをよけろ', status: '完了', note: '寮までの最後のひと走り。待ちぶせしていた先輩たちから逃げて、玄関へ' },
     { id: '', month: null, event: '', title: '行事の合間のストーリー', status: '確認中', note: 'ドット絵の寸劇 17 場面。持ち主の話（管理人さん・ニセ一年・学祭・追いコンの順番）を入れた。もう一度見てもらう' },
     { id: '', month: null, event: '', title: '男魂野球大会', status: 'あとで', note: 'タイトル画面に「準備中」で置いてある' },
     { id: '', month: null, event: '', title: '寮生ひとりひとりのドット絵', status: 'あとで', note: 'Codex に発注するかも' },
@@ -39,8 +39,8 @@ window.OB_STATUS = {
 
   // ストーリーの場面（game/?skit=<id> で、その場面から見られる）
   skits: [
-    { id: 'opening', title: '入寮', note: '寮長が玄関で出むかえ（管理人さんは、うしろでそうじ）→ 食堂で「新歓コンパは4日後だ」' },
-    { id: 'nomu', title: '4月 新歓コンパ 1日目', note: '入寮して3日。一年D が「なんか買ってこようか？」→ 4日目の夜、新歓' },
+    { id: 'opening', title: '入寮', note: '寮長が玄関で出むかえ（管理人さんは、うしろでそうじ）→ 食堂で「新歓コンパは4日目の夜だ」' },
+    { id: 'nomu', title: '4月 新歓コンパ 1日目', note: '入寮して3日。一年D が「なんか買ってこようか？」→ 4日目の夜、新歓（入寮の日にも「荷物、持とうか？」）' },
     { id: 'nise', title: '4月 新歓コンパ 2日目', note: '一年D がこき使われるたび、先輩たちが笑いをこらえる（ドッキリ）' },
     { id: 'nise_win', title: '4月 ネタばらし → 入学式', note: '「今年のニセ一年は、こいつでした〜！」→ 次の日、入学式' },
     { id: 'gyudon', title: '6月 仕送り前', note: '牛丼屋は 50円引き。財布は部屋に…' },
@@ -53,7 +53,7 @@ window.OB_STATUS = {
     { id: 'gakusai', title: '11月 学祭の作戦会議', note: 'ホストクラブ「夕照」（お酒はなし）。スーツに着がえて、目標は女子100人' },
     { id: 'setsubun', title: '2月 節分', note: '「豆は、まかれるほうだ」' },
     { id: 'kippu', title: '3月 追いコンの夜', note: '伝統の罰ゲーム「全裸で切符」→ 午前0時、玄関の前' },
-    { id: 'unko', title: '3月 川ぞいの帰り道', note: '卒業する先輩 3 人が待ちぶせ。「最後のプレゼントだ！」' },
+    { id: 'unko', title: '3月 川ぞいの帰り道', note: '切符のすぐあと（カレンダーなし）。卒業する先輩 3 人が待ちぶせ。「最後のプレゼントだ！」' },
     { id: 'unko_win', title: '3月 寮の玄関', note: '「その切符、おれのな。あした実家に帰るんだ」' },
     { id: 'ending', title: '3月の終わり 屋上', note: '「これが『夕照』だ」→ エンディングへ' },
   ],

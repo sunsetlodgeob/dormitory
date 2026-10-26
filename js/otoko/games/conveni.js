@@ -56,6 +56,7 @@
     note: '',
     time: 35,
     timeout: 'lose',
+    naked: true, // 結果の画面でも全裸
     timeoutMsg: '時間切れ。\nつかまってしまった…',
     bgm: 'tense',
     create(api) {

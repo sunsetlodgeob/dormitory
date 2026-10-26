@@ -166,7 +166,7 @@ async function niseDesktop(open) {
   await shot(page, 'nise-intro');
   const def = await page.evaluate(() => { const d = OTK.get('nise'); return { time: d.time, howto: d.howto, goal: d.goal, note: d.note }; });
   check(def.time === null, '時間制限なし（1 人ずつの持ち時間だけ）');
-  check(def.howto.some((l) => /ニセ一年（3年生）/.test(l)) && !/OB/.test(def.howto.join('') + def.note), 'ニセ一年は、一年のふりをした 3年生（OB ではない）');
+  check(def.howto.some((l) => /ニセ一年/.test(l)) && !/3年|OB/.test(def.howto.join('') + def.goal + def.note), '説明では、ニセ一年が 3年生だとは言わない（ネタばらしまでのお楽しみ。OB でもない）');
 
   // 8 回のうち 3 回が、同じニセ一年。何番目か・セリフ・先輩のようすは種ごとにかわる
   const runs = await page.evaluate(() => {
@@ -184,7 +184,7 @@ async function niseDesktop(open) {
   check(runs.every((r) => new Set(r.turns.filter((t) => t.fake).map((t) => t.v)).size === 1), 'ニセ一年は、3 回とも同じ人（何度もパシリを買って出る）');
   check(runs.every((r) => { const re = r.turns.filter((t) => !t.fake); return new Set(re.map((t) => t.who)).size === 5 && !re.some((t) => t.v === r.turns.find((x) => x.fake).v); }), '本物の一年は 5 人（ニセ一年とは別の顔）');
   check(runs.every((r) => !r.turns[0].fake && fakes(r).every((i, k, a) => !k || i - a[k - 1] > 1)), '1 回目はいつも本物。ニセ一年は続けては来ない');
-  check(runs.every((r) => r.turns.every((t) => t.v !== 3)), '寸劇の一年D（ichinen の 3）と同じ顔は出ない（寸劇からは、だれがニセ一年かわからない）');
+  check(runs.every((r) => r.turns.every((t) => (t.fake ? t.v === 3 : t.v !== 3))), 'ニセ一年は寸劇の一年D と同じ顔（ichinen の 3。ネタばらしの 3年生とつながる）。本物はほかの顔');
   check(new Set(runs.map((r) => fakes(r).join())).size >= 5, 'ニセ一年が何番目に来るかは、毎回ちがう');
   check(new Set(runs.map((r) => r.turns.find((t) => t.fake).text)).size >= 8, 'ニセ一年のセリフも、毎回ちがう');
   const pools = runs[0].pools;
@@ -192,10 +192,10 @@ async function niseDesktop(open) {
   check(runs.every((r) => r.turns.every((t) => (t.fake ? (tellTalk(t) || pools.REACTS.includes(t.react)) && pools.FAKE_OFFER.includes(t.offer) : !tellTalk(t) && !t.react && !pools.FAKE_OFFER.includes(t.offer)))),
     'ニセ一年が来るたび、ぼろ（くわしすぎるセリフか、うしろの先輩のようす）が必ず 1 つはある。本物にはない');
   check(new Set([].concat(...runs.map((r) => r.turns.map((t) => t.react).filter(Boolean)))).size === 3, '先輩のようすは 3 とおり（笑いをこらえる・目をそらす・スマホでとる）');
-  check(pools.FAKE_TALK.some((t) => /去年/.test(t)) && pools.FAKE_TALK.some((t) => /寮長/.test(t)) && pools.FAKE_TALK.some((t) => /オリエン|入学式/.test(t)) && pools.FAKE_TALK.some((t) => /号室|風呂|自販機/.test(t)),
+  check(pools.FAKE_TALK.some((t) => /去年/.test(t)) && pools.FAKE_TALK.some((t) => /寮長/.test(t)) && pools.FAKE_TALK.some((t) => /オリエン|入学式/.test(t)) && pools.FAKE_TALK.some((t) => /号室|ダイドー|冷蔵庫/.test(t)),
     '3年生のぼろ：去年を知っている・寮長になれなれしい・入学式やオリエンにうとい・寮にくわしすぎる');
   check(pools.FAKE_OFFER.some((t) => /パシ/.test(t)) && pools.FAKE_OFFER.some((t) => /買って/.test(t)) && pools.FAKE_PLAIN.some((t) => /タメ口/.test(t)), 'ニセ一年は、自分からパシリを買って出る（「タメ口でいこうぜ」）');
-  check(runs.some((r) => r.turns.some((t) => !t.fake && pools.HERRING.includes(t.talk))) && pools.HERRING.some((t) => /タメ口/.test(t)) && pools.OFFER.some((t) => /つごうか/.test(t)), '本物にも、ひっかけ（二浪・「タメ口でいいよ」・お茶をつぐ など）がいる');
+  check(runs.some((r) => r.turns.some((t) => !t.fake && pools.HERRING.includes(t.talk))) && pools.HERRING.some((t) => /覚えた/.test(t)) && !pools.HERRING.concat(pools.TALK).some((t) => /タメ口/.test(t)) && pools.OFFER.some((t) => /つごうか/.test(t)), '本物にも、ひっかけ（二浪・先輩をもう覚えた・お茶をつぐ など）がいる。「タメ口」はニセ一年だけ');
   const allText = Object.keys(pools).filter((k) => k !== 'REACTS').map((k) => [].concat(pools[k]).join('\n')).join('\n');
   check(!/OB|ナウい|昭和|テレカ|ポケベル|昔話|タダ酒/.test(allText), 'OB のぼろ（古いことば・昔の物・タダ酒）は出ない');
   check(/一年じゃ/.test(pools.REVEAL[0]) && /3年です/.test(pools.REVEAL[1]) && /使われなかった/.test(pools.WIN_LINE), 'ネタばらし「実は、一年じゃありませんでした！ 3年です！」');
@@ -220,12 +220,14 @@ async function niseDesktop(open) {
   const s0 = await look(page);
   check(s0.name === '一年' && s0.seniors.join() === 'chat,chat', '名札は「一年」だけ（名前は出さない）。本物のときは、先輩はふつうに話している');
   // ニセ一年の番で、先輩のようすが変わる
-  const seenReact = [];
+  const seenReact = [], queues = [];
   const w = await playNise(page, push, (s) => {
     if (s.fake && s.react) seenReact.push(s.seniors.includes(s.react));
+    queues.push(s);
     return smart(s);
   });
   check(seenReact.length > 0 && seenReact.every(Boolean), 'ニセ一年の番では、うしろの先輩のようすが変わる');
+  check(queues.length >= 7 && queues.every((s) => new Set(s.queue).size === s.queue.length && !s.queue.includes(s.who)), '列には、同じ人は 1 回だけ（話している人は、列にいない）');
   check(w.res === 'win' && w.used === 0 && w.refusedFake === 3 && w.hearts === 3 && w.friends === 5, 'ニセ一年だけ断ると、本物 5 人と友だちになって…');
   check(w.reveal && w.phase === 'reveal' && w.name === '3年生' && /使われなかった/.test(w.line), '…最後にネタばらし。「…きみには、使われなかったなあ」でクリア');
   check(/ニセ一年/.test(w.msg), 'クリアのひとこと（' + String(w.msg).replace(/\n/g, '') + '）');

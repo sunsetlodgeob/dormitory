@@ -11,8 +11,9 @@
  *  - ぼろ：セリフ（去年を知っている・寮にくわしすぎる・寮長になれなれしい・入学式やオリエンにうとい）と、
  *    うしろの先輩たちのようす（ニセ一年が来ると、笑いをこらえる・目をそらす・スマホでとる）。
  *    どの回も、どちらか 1 つは必ずある
- *  - 本物にも、ちょっと怪しく聞こえる人（二浪・兄が寮にいた・「タメ口でいいよ」）や、お茶をついでくれる人がいる
- *  だれがニセ一年か、何番目に来るか、セリフ、先輩のようすは、毎回ランダム。
+ *  - 本物にも、ちょっと怪しく聞こえる人（二浪・兄が寮にいた・先輩をもう覚えた）や、お茶をついでくれる人がいる
+ *  - ニセ一年の顔は、寸劇の一年D（ichinen の 3）と同じ。寸劇のネタばらし（nise_win）とつながるように
+ *  何番目に来るか、本物の顔、セリフ、先輩のようすは、毎回ランダム。
  */
 (function () {
   'use strict';
@@ -37,7 +38,7 @@
     '兄貴が、この寮に\nいたんだよね。',
     'オープンキャンパスで、\n寮も見に来たんだ。',
     '老け顔って、\nよく言われる…。',
-    'タメ口でいいよ。\n同期なんだし！',
+    '先輩の顔と名前、\nもうぜんぶ覚えた！',
   ];
   // 本物の申し出・お願い（受けると友だちになれる）
   const OFFER = [
@@ -54,13 +55,14 @@
   // ニセ一年（3年生）のぼろ：去年を知っている・寮にくわしすぎる・寮長になれなれしい・一年なら知っていることにうとい
   const FAKE_TALK = [
     '去年の新歓より…あ、\nいや、なんでもない！',
-    '風呂は、10時すぎが\nすいてるよ。',
+    '冷蔵庫、名前書かないと\n食われるよ。去年も…',
     '305号室？ あそこ、\n冬さむいんだよなあ。',
     'オリエン？ あれ、\n出なくても平気だって。',
     '入学式のスーツ？\n…あ、おれも着る着る！',
     '寮長のやつ…じゃなくて、\n寮長さん、こわいよね〜。',
     'このコール、なつかしい…\nいや、はじめて聞いた！',
-    '2階の自販機、10円\n安いの知ってた？',
+    '食堂のダイドー、当たったら\n10秒以内に押すんだぞ。',
+    '入学式、何時集合だっけ？\n…あ、いや、知ってる！',
   ];
   // ニセ一年の、ぼろのない世間話（このときは、うしろの先輩が必ず反応する）
   const FAKE_PLAIN = [
@@ -158,7 +160,7 @@
     event: '新歓',
     title: 'ニセ一年を見抜け',
     goal: 'ニセ一年を使うな！',
-    howto: ['A：受ける　B：断る', 'ニセ一年（3年生）は断れ', '本物を3人断ると負け'],
+    howto: ['A：受ける　B：断る', 'ニセ一年は断れ', '本物を3人断ると負け'], // 3年生だとは書かない（ネタばらしまでのお楽しみ）
     note: 'セリフと、うしろの先輩に注意。\nだまっていると、受けたことになる。',
     time: null,
     timeout: 'lose',
@@ -175,8 +177,8 @@
       // ── 8 回ぶんを用意する ───────────────────────────
       // 人：本物 5 人 ＋ ニセ一年 1 人（index 5）。ニセ一年は 2 回目以降に、となりあわずに 3 回来る
       const turns = (() => {
-        // 顔は毎回ランダム（寸劇の一年D と同じ顔 v3 は使わない。だれがニセ一年か、寸劇からはわからないように）
-        const vars = api.shuffle([0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]).slice(0, 6);
+        // ニセ一年は、寸劇の一年D と同じ顔（ichinen の 3。ネタばらしの 3年生とつながる）。本物は、ほかの顔からランダム
+        const vars = api.shuffle([0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]).slice(0, 5).concat([3]);
         const looks = api.shuffle([0, 1, 2, 3, 4]).slice(0, api.irnd(1, 2));
         const people = vars.map((v, i) => ({ v, fake: i === 5, deco: looks.includes(i) ? api.pick(LOOKS) : null }));
         let slots;
@@ -375,14 +377,14 @@
         g.R(222, 73, 3, 3, P.lgreen);
         SEN.forEach((s, i) => {
           const mode = seniorMode(i);
-          let dir = s.dir, dx = 0, dy = 0, text = null, phone = false;
+          let dir = s.dir, dx = 0, dy = 0, text = null, phone = false, note = false;
           // 吹き出しは、となりの先輩とかさならないように、1 人ぶんだけ
           if (mode === 'smirk') { dir = 'down'; dx = Math.floor(st.t * 16) % 2; text = 'ぷっ'; }
           else if (mode === 'away') { dir = 'up'; text = '…'; }
           else if (mode === 'film') { dir = 'down'; phone = true; text = 'じー'; }
           else if (mode === 'laugh') { dir = 'down'; dx = Math.floor(st.t * 16) % 2; text = i ? null : 'くくっ'; }
           else if (mode === 'cheer') { dir = 'down'; dy = -Math.round(Math.abs(Math.sin(st.t * 8 + i)) * 3); if (st.rStep >= 1) text = i ? '♪' : 'わはは'; }
-          else if (Math.floor(st.t / 2.6 + i * 0.5) % 3 === 0 && (st.t + i) % 2.6 < 0.9) text = '♪';
+          else if (Math.floor(st.t / 2.6 + i * 0.5) % 3 === 0 && (st.t + i) % 2.6 < 0.9) note = true; // ふつうの話（吹き出しなし。吹き出しは、ようすがおかしいときだけ）
           const img = api.person('senpai', { dir, variant: s.v });
           const x = s.x + dx, y = 58 + dy;
           g.ctx.drawImage(img, 0, 0, 16, 18, x, y, 16, 18); // 腰から下は、ちゃぶ台のかげ
@@ -393,6 +395,7 @@
             if (g.blink(2)) g.R(x + 9, y + 6, 2, 2, P.red);
           }
           if (text) bubble(g, x + 8, y - 1, text);
+          else if (note) g.text('♪', x + (i ? 0 : 12), y - 12 - Math.round(((st.t + i) % 2.6) * 4), { size: 12, col: P.white, outline: P.ink });
         });
       }
       function drawHearts(g) {
@@ -414,15 +417,23 @@
           else if (!breaking) { g.R(x0 + 6, y0 + 2, 2, 2, P.black); g.R(x0 + 4, y0 + 4, 2, 2, P.black); g.R(x0 + 6, y0 + 6, 2, 2, P.black); }
         }
       }
+      // 列にならんでいる人（同じ人は 1 回だけ。いま話している人も、列にはいない）
+      function queueOf() {
+        if (st.phase === 'reveal') return [];
+        const seen = new Set([turns[st.idx].who]);
+        const queue = [];
+        for (let k = st.idx + 1; k < N && queue.length < 6; k++) if (!seen.has(turns[k].who)) { seen.add(turns[k].who); queue.push(turns[k]); }
+        return queue;
+      }
       function drawQueue(g) {
         if (st.phase === 'reveal') return;
         const rest = N - st.idx - 1;
-        g.text('あと ' + Math.max(0, rest) + '人', 218, 21, { size: 12, align: 'center', col: P.white, outline: P.ink });
-        for (let j = Math.min(rest, 6) - 1; j >= 0; j--) {
+        g.text('あと ' + Math.max(0, rest) + '回', 218, 21, { size: 12, align: 'center', col: P.white, outline: P.ink });
+        const queue = queueOf();
+        for (let j = queue.length - 1; j >= 0; j--) {
           const x = 187 + (j + st.qShift) * 10;
-          const p = turns[st.idx + 1 + j];
           g.shadow(x + 8, 117, 6);
-          g.sprite(api.person('ichinen', { dir: 'left', variant: p.v }), x, 94);
+          g.sprite(api.person('ichinen', { dir: 'left', variant: queue[j].v }), x, 94);
         }
       }
       function drawHero(g) {
@@ -520,6 +531,8 @@
             reveal: st.reveal, rStep: st.rStep, choice: st.choice, fake: !!(p && p.fake), react: p ? p.react : null,
             seniors: [seniorMode(0), seniorMode(1)], timeLeft: st.timeT, line: st.line, name: st.reveal && st.puffT < 0.2 ? FAKE_NAME : NAME,
             fakeTurns: turns.map((t, i) => (t.fake ? i : -1)).filter((i) => i >= 0),
+            who: p ? p.who : -1,
+            queue: queueOf().map((t) => t.who),
           };
         },
         update(dt) {

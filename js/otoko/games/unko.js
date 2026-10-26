@@ -77,6 +77,8 @@
     note: 'うんこは（たぶん）おもちゃです。',
     time: 30,
     timeout: 'win',
+    chain: true, // 全裸で切符のすぐあと（同じ夜・同じ道）。1年の流れでは、カレンダーをはさまない
+    naked: true, // 結果の画面でも全裸
     timeoutMsg: '寮ににげきった！\n先輩方、ご卒業\nおめでとうございます！',
     bgm: 'tense',
     create(api) {
@@ -87,7 +89,8 @@
       const gap = (t) => api.lerp(1.3, 0.68, Math.min(1, t / 26)) + (easy ? 0.18 : 0);
 
       const me = { x: 128, y: 140, vx: 0, vy: 0, run: 0, face: 'up', hit: false, hitT: 0, hitBy: null, safe: false };
-      const senpais = SENPAI_X.map((x, i) => ({ x, y: SENPAI_Y[i], v: [0, 3, 5][i], run: i * 0.3, wind: 0, windDur: 0, gold: false, fall: 0 }));
+      // 寸劇で待ちぶせしていた 3 人（左から先輩C・先輩B・先輩D。まん中の先輩B が「おかえり〜！」）
+      const senpais = SENPAI_X.map((x, i) => ({ x, y: SENPAI_Y[i], v: [0, 4, 3][i], run: i * 0.3, wind: 0, windDur: 0, gold: false, fall: 0 }));
       const volleys = []; // ふりかぶっている投げ（まだ手に持っている）
       const poops = []; // 飛んでいる・落ちたうんこ
       const fx = []; // 「ボトッ」などの文字
@@ -309,17 +312,17 @@
           g.R(RIVER + 1, y + 2, 2, 1, '#6c6c78');
         }
         // 道
-        g.R(PATH_L, 12, PATH_R - PATH_L, H - 12, '#a8946c');
-        g.R(PATH_L, 12, 2, H - 12, '#7c6c4c');
-        g.R(PATH_R - 2, 12, 2, H - 12, '#7c6c4c');
+        g.R(PATH_L, 12, PATH_R - PATH_L, H - 12, '#6c6250'); // 夜のじゃり道（全裸で切符の川ぞいの道と同じ色あい）
+        g.R(PATH_L, 12, 2, H - 12, '#4c4438');
+        g.R(PATH_R - 2, 12, 2, H - 12, '#4c4438');
         for (let k = -1; k <= 14; k++) {
           const id = base - k;
           const y = k * S + (off % S) + 12;
           for (let i = 0; i < 4; i++) {
             const px = PATH_L + 6 + hash(id, i + 40) * (PATH_R - PATH_L - 12);
             const py = y + hash(id, i + 50) * S;
-            g.R(px, py, 2, 1, '#8c7850');
-            if (hash(id, i + 60) < 0.3) g.R(px + 1, py - 1, 1, 1, '#c8b48c');
+            g.R(px, py, 2, 1, '#5c5444');
+            if (hash(id, i + 60) < 0.3) g.R(px + 1, py - 1, 1, 1, '#847a64');
           }
         }
         // 右がわの木と街灯・ベンチ（下へ流れる）

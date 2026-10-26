@@ -274,7 +274,7 @@
   const FLAVOR = {
     nomu: '桜がさいている。新歓の季節だ。', nise: '新歓は、まだ終わらない。', gyudon: 'つゆ。金がない。', deisui: '夏。夜は長い。',
     conveni: 'まだ夏休み。暑い。', zombie: '秋。キノコの季節。', gakusai: '学祭の季節。', setsubun: 'さむい。豆がある。',
-    kippu: '別れの季節。追いコンの夜。', unko: '追いコンの夜は、つづく。',
+    kippu: '別れの季節。', unko: '追いコンの夜は、つづく。',
   };
 
   // ── タイトル ─────────────────────────────────────
@@ -500,7 +500,13 @@
     const gid = id.replace(/_win$/, '');
     const step = games().findIndex((d) => d.id === gid);
     if (step < 0) return () => Title();
-    if (won) return step + 1 >= total() ? () => withSkit('ending', GoodEnd) : () => Calendar(step + 1);
+    if (won) {
+      if (step + 1 >= total()) return () => withSkit('ending', GoodEnd);
+      // 前のミニゲームのすぐあとの話（chain：全裸で切符 → うんこ）は、カレンダーをはさまずに、そのまま次の前ふりへ
+      const nx = games()[step + 1];
+      if (nx.chain && !noSkits && OTK.skit && OTK.skit.has(nx.id)) return () => Skit(nx.id, skitNext(nx.id));
+      return () => Calendar(step + 1);
+    }
     return () => Intro({ mode: 'story', id: gid, step, tries: 0 });
   }
 
@@ -807,11 +813,12 @@
         g.wrap(res.msg || '', W - 44, 16).slice(0, 3).forEach((l, i) => g.text(l, W / 2, by + 52 + i * 19, { align: 'center' }));
         // 男魂くんの反応
         const hy = by + 114;
+        const naked = !!(OTK.get(ctx.id) || {}).naked; // 全裸のミニゲームは、結果の画面でも全裸
         if (win) {
           const j = Math.abs(Math.sin(t * 6)) * 6;
-          hero(W / 2 - 8, hy - Math.round(j), 'down', t, { still: true });
+          hero(W / 2 - 8, hy - Math.round(j), 'down', t, { still: true, naked });
         } else {
-          hero(W / 2 - 8, hy + 1, 'up', t, { still: true });
+          hero(W / 2 - 8, hy + 1, 'up', t, { still: true, naked });
         }
         let hint;
         if (ctx.mode === 'story') hint = 'Aでつぎへ';
