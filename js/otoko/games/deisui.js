@@ -1,11 +1,13 @@
 /*
- * 7月「同期Bをさがせ」 ― 泥酔して消えた同期Bを、電車でさがす
- *  金沢八景から、上り（横浜方面）か下り（浦賀方面）のどこかの駅で、同期Bが寝ている。どちらかはランダム。
- *  八景と同期Bの間の駅には、同期Bが脱いでいった物（カバン → シャツ → くつ下 → ズボン）が落ちている。
- *  落とし物があれば、その先にいる。何もない駅の先にはいない。
- *  ←→ で電車に乗って、となりの駅へ（終電までの本数にかぎりがある）。A で駅をさがす。
- *  同期Bのいる駅をさがしたらクリア（新聞紙をかぶって、パンツ一丁でベンチで寝ている）。
- *  ほかの駅にも、新聞紙をかぶって寝ている知らないおじさんがいることがある（足もとを見るとわかる）。
+ * 7月「同期Bをさがせ」 ― 泥酔して消えた同期Bを、終電までに電車でさがす
+ *  いまは 23:40、終電は 0:40。となりの駅へ乗るのも、駅をさがすのも、1 回 5 分（だから 12 回うごける）。
+ *  制限時間はこの時計だけ（本物の秒数の制限はない）。時計が 0:40 になったら終電がなくなって、しっぱい。
+ *  同期Bは、金沢八景から上り（横浜方面）か下り（浦賀方面）に 2〜5 駅のどこか。どちらかはランダム。
+ *  同期Bは乗ったまま 1 枚ずつ脱いで、駅のホームにすてていった（くつした → シャツ → ズボン → パンツ一丁）。
+ *  だから、さがした駅の落とし物で、あと何駅かがわかる：くつした＝あと 3 駅以上、シャツ＝あと 2 駅、ズボン＝つぎの駅。
+ *  同期Bの駅では、待合室のベンチで、パンツ一丁で寝ている。反対側の駅と、同期Bより先の駅には何もない。
+ *  かしこくやれば（となりの駅をさがして、落とし物を見て、まっすぐ乗る）、いちばん運が悪くても 11 回（55 分）で見つかる。
+ *  何も考えずに全部の駅をさがしたり、はしまで乗ったりすると、終電に間に合わない。
  */
 (function () {
   'use strict';
@@ -13,39 +15,61 @@
   // ── 路線（おもな駅だけ。左が上り＝横浜方面、右が下り＝浦賀方面） ─────────
   const STATIONS = ['横浜', '上大岡', '杉田', '能見台', '金沢文庫', '金沢八景', '追浜', '汐入', '横須賀中央', '堀ノ内', '浦賀'];
   const HOME = 5; // 金沢八景
-  const SX = (i) => 18 + i * 22; // 路線図の駅の x
-  const LINE_Y = 40; // 路線図の線の y
-  const MAP_Y = 24, SCENE_Y = 109; // 路線図の上はし・駅の場面の上はし
-  const PLAT_Y = 184; // ホームの上面
-  const BENCH_X = 134, BENCH_W = 76, SEAT_Y = 174;
-  const ME_X = 46, ME_Y = 146;
-  const RIDE = 1.1; // 1 駅ぶん乗る時間（秒）
-  const LOOK = 0.7; // さがす時間（秒）
+  const DISTS = [2, 3, 4, 5]; // 同期Bは、八景から何駅目にいるかもしれないか
+  const STEP_MIN = 5; // 1 回うごく（乗る・さがす）と、5 分
+  const START = 23 * 60 + 40; // 23:40
+  const LAST = 24 * 60 + 40; // 0:40（終電）
+  const RIDE = 1.1; // 1 駅ぶん乗るアニメーション（秒）。その間に時計が 5 分すすむ
+  const LOOK = 0.9; // さがすアニメーション（秒）。同じく 5 分
 
-  // 落とし物（八景に近い方から順に脱いでいった）。絵は 10×8 ドット
-  const ITEMS = [
-    {
-      id: 'bag', name: 'カバン', msg: 'カバンだ！ この先か…',
-      pal: { k: '#503000', b: '#ac7c00', y: '#f8b800' },
-      rows: ['...kkkk...', '..k....k..', '.kkkkkkkk.', '.bbbbbbbb.', '.bbbyybbb.', '.bbbbbbbb.', '.bbbbbbbb.', '.kkkkkkkk.'],
-    },
-    {
-      id: 'shirt', name: 'シャツ', msg: 'シャツだ！ まだ先か…',
-      pal: { s: '#a4e4fc', c: '#fcfcfc', w: '#3cbcfc' },
-      rows: ['..ss..ss..', '.ssscccss.', 'ssssssssss', 'ssssssssss', '..sswsss..', '..ssssss..', '..sswsss..', '..ssssss..'],
-    },
-    {
-      id: 'socks', name: 'くつ下', msg: 'くつ下だ！ まだ先か…',
+  // 画面のわりふり
+  const SX = (i) => 18 + i * 22; // 路線図の駅の x
+  const STAT_Y = 12, MAP_Y = 34, LINE_Y = 50, SCENE_Y = 119; // 時計の帯・路線図・線・駅の場面の上はし
+  const PLAT_Y = 188; // ホームの上面
+  const LEG_Y = 208; // 下の「脱いだ順」の帯
+  const ROOM = { x: 76, y: 151, w: 112, h: 37 }; // 待合室
+  const ME_X = 36, ME_Y = 152;
+  const EKIIN_X = 192; // 八景の駅員さん
+  const TAP_L = 72, TAP_R = 190; // 駅の場面のタップ：これより左は上り、右は下り、間（待合室）はさがす
+
+  // 落とし物（八景に近い方から、くつした → シャツ → ズボン の順に脱いでいった）。絵は 10×8 ドット
+  const ITEMS = {
+    socks: {
+      name: 'くつした', msg: 'くつしただ！ まだ3駅以上先…', left: '3駅以上',
       pal: { r: '#f83800', w: '#d8d8d8', g: '#fcfcfc' },
       rows: ['..rrrr....', '..wwww....', '..rrrr....', '..wwww....', '..wwww....', '..wwwwwww.', '..wwwwgwww', '...wwwwww.'],
     },
-    {
-      id: 'pants', name: 'ズボン', msg: 'ズボンだ！ もう近い…！',
+    shirt: {
+      name: 'シャツ', msg: 'シャツだ！ あと2駅！', left: '2駅',
+      pal: { s: '#a4e4fc', c: '#fcfcfc', w: '#3cbcfc' },
+      rows: ['..ss..ss..', '.ssscccss.', 'ssssssssss', 'ssssssssss', '..sswsss..', '..ssssss..', '..sswsss..', '..ssssss..'],
+    },
+    pants: {
+      name: 'ズボン', msg: 'ズボンだ！ つぎの駅だ！', left: 'つぎ',
       pal: { k: '#283048', b: '#3050a0', l: '#5878c8' },
       rows: ['.kkkkkkkk.', '.bbbbbbbb.', '.blbbbbbb.', '.bbb..bbb.', '.blb..bbb.', '.bbb..blb.', '.bbb..bbb.', '.bbb..bbb.'],
     },
-  ];
-  const NOTHING = ['何もない。ハトがいるだけ。', '何もない。自販機がまぶしい。', '何もない。風がぬるい。', '何もない。ここじゃない。', '何もない。セミが鳴いている。'];
+    // 凡例のさいご（同期B本人）：水玉のパンツ
+    trunks: {
+      name: 'パンツ一丁',
+      pal: { r: '#f83800', w: '#fcfcfc', d: '#a81000' },
+      rows: ['..........', 'dddddddddd', 'rrwrrrrwrr', 'rrrrrwrrrr', 'rwrrrrrrwr', 'rrrr..rrrr', 'rrw....rrr', '..........'],
+    },
+  };
+  const ORDER = ['socks', 'shirt', 'pants', 'trunks'];
+  const NOTHING = ['何もない。ハトがいるだけ。', '何もない。自販機がまぶしい。', '何もない。風がぬるい。', '何もない。セミが鳴いている。', '何もない。ここじゃない。'];
+
+  // その駅に何があるか。side は同期Bの向き（上り -1・下り +1）、dist は八景から何駅目か
+  //  'home'（八景）・'none'（何もない）・'socks' 'shirt' 'pants'（落とし物）・'b'（同期B）
+  function what(i, side, dist) {
+    if (i === HOME) return 'home';
+    const k = (i - HOME) * side; // 同期Bのほうへ何駅目か（反対側はマイナス）
+    if (k < 1 || k > dist) return 'none';
+    if (k === dist) return 'b';
+    const r = dist - k; // 同期Bまで、あと何駅
+    return r >= 3 ? 'socks' : r === 2 ? 'shirt' : 'pants';
+  }
+  const fmt = (min) => (Math.floor(min / 60) % 24) + ':' + String(min % 60).padStart(2, '0');
 
   // ── 絵（はじめて使うときに作って、使い回す） ─────────────────────
   const INK = OTK.P.ink;
@@ -129,7 +153,7 @@
   }
   function buildArt(P) {
     ART = { icon: {}, b: sleeper(P, 'b'), oji: sleeper(P, 'oji') };
-    ITEMS.forEach((it) => { ART.icon[it.id] = icon(it); });
+    Object.keys(ITEMS).forEach((id) => { ART.icon[id] = icon(ITEMS[id]); });
   }
 
   OTK.register({
@@ -138,12 +162,11 @@
     month: 7,
     event: '',
     title: '同期Bをさがせ',
-    goal: '泥酔した\n同期Bをさがせ！',
-    howto: ['←→：電車でとなりの駅へ', 'A：駅をさがす', '落とし物の先にいる！'],
-    note: '電車は終電まで。タップでも動ける。',
-    time: 45,
+    goal: '終電までに\n同期Bをさがせ！',
+    howto: ['←→：となりの駅へ（5分）', 'A：駅をさがす（5分）', '服で、あと何駅かわかる'],
+    note: 'くつした＝3駅以上・シャツ＝2駅・\nズボン＝つぎの駅。0:40で終電！',
+    time: null, // 時間の制限は、ゲームの中の時計（終電まで）だけ
     timeout: 'lose',
-    timeoutMsg: '朝になった。\n同期Bは、パンツで\n帰ってきた。',
     bgm: 'play',
     create(api) {
       const P = api.P, W = api.W, H = api.H;
@@ -153,31 +176,64 @@
       const side = api.chance(0.5) ? -1 : 1;
       const dist = api.pick([2, 3, 4, 4, 5, 5]);
       const bAt = HOME + side * dist;
-      // 八景と同期Bの間の駅に、落とし物（同期Bに近いほど、あとで脱いだ物）
-      const clueAt = {};
-      for (let k = 1; k < dist; k++) clueAt[HOME + side * k] = ITEMS[ITEMS.length - dist + k];
-      // 新聞紙をかぶって寝ている人（同期Bと、知らないおじさん）
-      const sleepers = { [bAt]: 'b' };
-      for (let i = 0; i < STATIONS.length; i++) if (i !== bAt && i !== HOME && api.chance(0.3)) sleepers[i] = 'oji';
+      const at = (i) => what(i, side, dist);
+      // 何もない駅の待合室で、知らないおじさんが寝ていることがある（ただのにぎやかし）
+      const oji = {};
+      STATIONS.forEach((s, i) => { if (at(i) === 'none' && api.chance(0.35)) oji[i] = true; });
       const flavor = {};
       STATIONS.forEach((s, i) => { flavor[i] = api.pick(NOTHING); });
+      const start = api.tries >= 1 ? START - STEP_MIN : START; // しっぱいしたら、5 分（1 回）おまけ
 
       const st = {
         cur: HOME, from: HOME, to: HOME, dir: 1,
-        trains: api.tries >= 1 ? 10 : 9, // 終電までの本数（しっぱいしたら 1 本おまけ）
-        mode: 'idle', // idle（操作を待つ）・ride（電車）・look（さがしている）・found（見つけた）
+        clock: start, // いまの時刻（分。24:00 をこえても数えつづける）
+        clock0: start, // うごきはじめの時刻
+        mode: 'idle', // idle（操作を待つ）・ride（電車）・look（さがしている）・found（見つけた）・over（終電がなくなった）
         t: 0,
-        searched: {}, // 駅 → 'none' | 'clue' | 'oji' | 'b'
-        uncovered: {}, // 新聞紙をどけた駅 → どけた時刻
-        clues: [], // 拾った落とし物の id
-        msg: '同期Bを見失った…！', msgT: 2.4,
+        searched: { [HOME]: 'home' }, // 駅 → 'home' | 'none' | 'socks' | 'shirt' | 'pants' | 'b'
+        opened: {}, // 待合室をあけた駅 → あけた時刻
+        clues: [], // 拾った落とし物
+        actions: 0, // うごいた回数
+        msg: '', msgT: 0, msgName: '', queue: [],
         pop: null, // いま見つけた落とし物（ホームに少し出しておく）
-        out: false,
+        plus: -1, // 「+5分」を出してからの秒数
+        cand: null, // 同期Bがいるかもしれない駅（わかったことから）
       };
+      // はじめに、八景の駅員さんがひとこと
+      st.queue = [
+        { name: '駅員', msg: '脱ぎながら乗ってった子？', sec: 2.4 },
+        { name: '駅員', msg: '上りか下りかは、\nわからないねえ。', sec: 3.2 },
+      ];
 
-      function say(msg, sec) {
+      function say(msg, sec, name) {
         st.msg = msg;
-        st.msgT = sec || 2.2;
+        st.msgT = sec || 2.4;
+        st.msgName = name || '';
+      }
+      function quiet() {
+        st.msgT = 0;
+        st.queue = [];
+      }
+      // わかったことから、同期Bがいるかもしれない駅をしぼる（上り・下り × 2〜5 駅の 8 とおりを、さがした駅とくらべる）
+      function narrow() {
+        const keys = Object.keys(st.searched).map(Number);
+        const set = new Set();
+        let n = 0;
+        for (const s of [-1, 1]) {
+          for (const d of DISTS) {
+            if (keys.every((i) => what(i, s, d) === st.searched[i])) { set.add(HOME + s * d); n++; }
+          }
+        }
+        st.cand = n < DISTS.length * 2 ? [...set].sort((a, b) => a - b) : null;
+      }
+      function begin(mode) {
+        st.mode = mode;
+        st.t = 0;
+        st.clock0 = st.clock;
+        st.actions++;
+        st.plus = 0;
+        st.pop = null;
+        quiet();
       }
       function move(d) {
         const to = st.cur + d;
@@ -186,97 +242,107 @@
           api.sfx('cancel');
           return;
         }
-        if (st.trains <= 0) {
-          say('もう電車がない…！', 1.6);
-          api.sfx('ng');
-          return;
-        }
-        st.trains--;
         st.from = st.cur;
         st.to = to;
         st.dir = d;
-        st.mode = 'ride';
-        st.t = 0;
-        st.msgT = 0;
-        st.pop = null;
+        begin('ride');
         api.sfx('step');
       }
       function search() {
+        if (st.cur === HOME) {
+          say('八景には、いないよ。', 1.8, '駅員');
+          api.sfx('cancel');
+          return;
+        }
         if (st.searched[st.cur]) {
           say('ここはもうさがした。', 1.4);
           api.sfx('cancel');
           return;
         }
-        st.mode = 'look';
-        st.t = 0;
-        st.msgT = 0;
+        begin('look');
         api.sfx('select');
+      }
+      // 1 回うごきおわったら、時計をきっちり 5 分すすめて、終電かどうかを見る
+      function tick() {
+        st.clock = st.clock0 + STEP_MIN;
+        if (st.clock < LAST) return false;
+        st.clock = LAST;
+        st.mode = 'over';
+        st.t = 0;
+        say('終電がなくなった…', 9);
+        api.sfx('buzzer');
+        api.lose('終電がなくなった…\n同期Bは見つからず、\n歩いて帰った。', { wait: 1.6 });
+        return true;
       }
       function lookDone() {
         const i = st.cur;
+        const res = at(i);
+        st.searched[i] = res;
+        st.opened[i] = api.time;
         st.mode = 'idle';
-        st.uncovered[i] = api.time;
-        if (i === bAt) {
-          st.searched[i] = 'b';
+        narrow();
+        if (res === 'b') {
+          st.clock = st.clock0 + STEP_MIN;
           st.mode = 'found';
           st.t = 0;
-          st.msgT = 0;
           api.sfx('power');
-          api.win('同期Bを見つけた！\nパンツ一丁で、\nベンチで寝ていた。', { wait: 1.8 });
+          api.win(st.clock >= LAST ? '同期Bを見つけた！\n終電に、ぎりぎり\n間に合った！' : '同期Bを見つけた！\nパンツ一丁で寝ていた。\n終電で、つれて帰った。', { wait: 1.8 });
           return;
         }
-        const item = clueAt[i];
-        if (item) {
-          st.searched[i] = 'clue';
-          st.clues.push(item.id);
-          st.pop = { id: item.id, at: i, t: 0 };
-          say(item.msg);
+        if (ITEMS[res]) {
+          st.clues.push(res);
+          st.pop = { id: res, at: i, t: 0 };
+          say(ITEMS[res].msg);
           api.sfx('coin');
-        } else if (sleepers[i] === 'oji') {
-          st.searched[i] = 'oji';
-          say('知らないおじさんだった。');
-          api.sfx('cancel');
         } else {
-          st.searched[i] = 'none';
-          say(flavor[i]);
+          // となりの駅に何もなければ、反対側（同期Bは 2 駅目より先なので、となりの駅には必ず落とし物がある）
+          const near = Math.abs(i - HOME) === 1;
+          if (near) say(oji[i] ? '知らないおじさんだ。…反対側か！' : '何もない。…反対側か！', 2.8);
+          else say(oji[i] ? '知らないおじさんだった。' : flavor[i]);
           api.sfx('cancel');
         }
-        stuck();
-      }
-      // 電車がもうなく、この駅もさがし終えたら、おしまい
-      function stuck() {
-        if (st.trains > 0 || !st.searched[st.cur] || st.searched[st.cur] === 'b' || st.out) return;
-        st.out = true;
-        api.after(1.2, () => {
-          if (api.ended) return; // その間に時間切れになっていたら、そちらの結果のまま
-          say('もう電車がない…！', 9);
-          api.sfx('buzzer');
-          api.lose('終電がなくなった。\n同期Bは見つからず、\n歩いて帰った…', { wait: 1.4 });
-        });
+        tick();
       }
       function arrive() {
         st.cur = st.to;
         st.mode = 'idle';
         st.t = 0;
         api.sfx('cursor');
-        stuck();
+        tick();
       }
 
       // ── 描く ──
       function drawStatus(g) {
-        g.R(0, 12, W, 12, P.black);
-        // 電車の小さい絵
-        g.R(3, 15, 11, 7, P.red);
-        g.R(4, 16, 9, 2, P.lyellow);
-        g.R(3, 20, 11, 1, P.white);
-        let x = 17;
-        x += g.text('終電まで あと', x, 12, { size: 12, col: P.white });
-        g.text(String(st.trains) + '本', x + 2, 12, { size: 12, col: st.trains <= 2 ? P.red : P.yellow });
-        // 拾った落とし物
-        const lx = W - 4 - Math.max(1, st.clues.length) * 13;
-        g.text('落とし物', lx - 4, 12, { size: 12, col: P.lgray, align: 'right' });
-        if (!st.clues.length) g.text('－', W - 10, 12, { size: 12, col: P.dgray, align: 'center' });
-        st.clues.forEach((id, k) => g.sprite(ART.icon[id], lx + k * 13, 13));
+        g.R(0, STAT_Y, W, MAP_Y - STAT_Y, P.black);
+        const left = LAST - st.clock;
+        const warn = left <= 10;
+        // 駅の時計（LED）
+        g.R(2, 13, 64, 20, P.xdgray);
+        g.R(3, 14, 62, 18, '#200800');
+        const col = st.mode === 'over' ? P.red : warn ? (g.blink(2) ? P.red : P.dred) : P.lorange;
+        g.num(fmt(st.clock).padStart(5, ' '), 5, 16, { col, scale: 3 });
+        // 終電と、のこり
+        let x = 72;
+        x += g.text('終電', x, 12, { size: 12, col: P.lgray });
+        x += g.text(fmt(LAST), x + 4, 12, { size: 12, col: P.white }) + 4;
+        if (st.plus >= 0 && st.plus < 0.9) g.text('+5分', x + 12, 12 - Math.round((st.plus / 0.9) * 3), { size: 12, col: P.yellow });
+        const rx = W - 4;
+        const w2 = g.text('分', rx, 12, { size: 12, col: P.lgray, align: 'right' });
+        const w1 = g.text(String(Math.max(0, left)), rx - w2 - 1, 12, { size: 12, col: warn ? P.red : P.yellow, align: 'right' });
+        g.text('あと', rx - w2 - w1 - 3, 12, { size: 12, col: P.lgray, align: 'right' });
+        // 1 回ぶん（5 分）ずつの目もり
+        const n = Math.round((LAST - start) / STEP_MIN);
+        const gap = 1, sw = Math.floor((W - 4 - 72 - gap * (n - 1)) / n);
+        const busy = st.mode === 'ride' || st.mode === 'look';
+        const prog = busy ? Math.min(1, st.t / (st.mode === 'ride' ? RIDE : LOOK)) : 0;
+        const rest = (LAST - (busy ? st.clock0 : st.clock)) / STEP_MIN; // うごく前の、のこり回数
+        const fill = rest <= 2 ? P.red : rest <= 4 ? P.yellow : P.lgreen;
+        for (let k = 0; k < n; k++) {
+          const sx = 72 + k * (sw + gap);
+          g.R(sx, 27, sw, 5, P.xdgray);
+          if (k < rest - 1 || (k < rest && !busy)) g.R(sx, 27, sw, 5, fill);
+          else if (k < rest && busy) g.R(sx, 27, Math.round(sw * (1 - prog)), 5, g.blink(4) ? P.white : fill);
+        }
       }
       function drawMap(g) {
         g.R(0, MAP_Y, W, SCENE_Y - MAP_Y, P.white);
@@ -288,7 +354,8 @@
           const x = SX(i);
           const isHere = i === here;
           if (isHere) g.R(x - 7, LINE_Y + 5, 14, SCENE_Y - LINE_Y - 7, riding ? P.dgray : P.red);
-          const col = isHere ? P.white : st.searched[i] ? P.gray : P.ink;
+          const s = st.searched[i];
+          const col = isHere ? P.white : s && s !== 'home' ? P.gray : P.ink;
           [...name].forEach((ch, k) => g.text(ch, x, LINE_Y + 6 + k * 12, { size: 12, col, align: 'center' }));
           // 駅の丸（八景は乗りかえの駅なので大きく）
           if (i === HOME) {
@@ -299,15 +366,18 @@
             g.disc(x, LINE_Y, 3, P.ink);
             g.disc(x, LINE_Y, 2, P.white);
           }
-          // さがした印（落とし物の絵か、×）
-          const s = st.searched[i];
-          if (s === 'clue') g.sprite(ART.icon[clueAt[i].id], x - 6, MAP_Y + 3);
-          else if (s === 'none' || s === 'oji') {
-            g.line(x - 3, MAP_Y + 5, x + 3, MAP_Y + 11, P.gray);
-            g.line(x + 3, MAP_Y + 5, x - 3, MAP_Y + 11, P.gray);
+          // さがした印（落とし物の絵か、×）と、同期Bがいるかもしれない駅（？）
+          const iy = MAP_Y + 2;
+          if (ITEMS[s]) g.sprite(ART.icon[s], x - 6, iy);
+          else if (s === 'none') {
+            g.line(x - 3, iy + 2, x + 3, iy + 8, P.gray);
+            g.line(x + 3, iy + 2, x - 3, iy + 8, P.gray);
           } else if (s === 'b') {
             g.ring(x, LINE_Y, 6, P.red);
             g.ring(x, LINE_Y, 7, P.red);
+          } else if (!s && st.cand && st.cand.includes(i)) {
+            const one = st.cand.length === 1;
+            if (!one || g.blink(2)) g.text(one ? '！' : '？', x, iy - 1, { size: 12, col: one ? P.red : P.rose, align: 'center' });
           }
         });
         if (riding) {
@@ -318,9 +388,24 @@
           g.R(x - 6, LINE_Y - 3, 13, 6, P.red);
           g.R(x - 5, LINE_Y - 2, 11, 2, P.lyellow);
           g.R(x - 6, LINE_Y + 1, 13, 1, P.white);
-        } else if (g.blink(2) && st.mode !== 'found') {
+        } else if (g.blink(2) && st.mode === 'idle') {
           g.ring(SX(st.cur), LINE_Y, 6, P.mblue);
         }
+      }
+      // 下の帯：脱いだ順と、あと何駅か
+      function drawLegend(g) {
+        g.R(0, LEG_Y, W, H - LEG_Y, P.black);
+        g.R(0, LEG_Y, W, 1, P.xdgray);
+        let x = 3;
+        const y = LEG_Y + 2;
+        x += g.text('脱いだ順', x, y, { size: 12, col: P.gray }) + 4;
+        ORDER.forEach((id, k) => {
+          if (k) x += g.text('›', x, y, { size: 12, col: P.dgray }) + 2;
+          g.sprite(ART.icon[id], x, y + 2);
+          x += 13;
+          const lab = ITEMS[id].left;
+          if (lab) x += g.text(lab, x, y, { size: 12, col: P.lyellow }) + 3;
+        });
       }
       function drawSky(g) {
         g.R(0, SCENE_Y, W, PLAT_Y - SCENE_Y, P.night);
@@ -329,92 +414,119 @@
           if ((i + Math.floor(api.time * 1.5)) % 5) g.R(sx, sy, 1, 1, i % 3 ? P.gray : P.lyellow);
         }
       }
-      function drawCity(g, off) {
+      function drawCity(g, off, base) {
         for (let k = 0; k < 9; k++) {
           const bw = 22 + ((k * 7) % 12), bh = 18 + ((k * 13) % 26);
           const bx = ((((k * 34 - off) % 306) + 306) % 306) - 26;
-          g.R(bx, PLAT_Y - bh, bw, bh, P.navy);
-          for (let wy = PLAT_Y - bh + 4; wy < PLAT_Y - 4; wy += 6)
+          g.R(bx, base - bh, bw, bh, P.navy);
+          for (let wy = base - bh + 4; wy < base - 4; wy += 6)
             for (let wx = bx + 3; wx < bx + bw - 3; wx += 5) if (((wx * 7 + wy * 3 + k) % 5) === 0) g.R(wx, wy, 2, 2, P.lyellow);
         }
       }
+      // 待合室（すりガラスで、中は見えない。さがすと戸があく）
+      function drawRoom(g, i) {
+        const { x, y, w, h } = ROOM;
+        const t0 = st.opened[i];
+        const open = i === HOME ? 1 : t0 != null ? Math.min(1, (api.time - t0) / 0.35) : 0;
+        // 屋根とわく
+        g.R(x - 3, y - 4, w + 6, 3, P.xdgray);
+        g.R(x - 3, y - 4, w + 6, 1, P.dgray);
+        g.R(x, y - 1, w, h + 1, INK);
+        // 中（明かり・ベンチ・寝ている人）
+        g.R(x + 2, y + 1, w - 4, h - 1, '#2c3450');
+        g.R(x + w / 2 - 12, y + 1, 24, 2, P.lyellow);
+        g.dither(x + w / 2 - 16, y + 3, 32, 2, P.lyellow, 0);
+        const seat = y + 24;
+        g.R(x + 10, seat, w - 20, 3, P.tan);
+        g.R(x + 10, seat + 3, w - 20, 1, P.brown);
+        g.R(x + 14, seat + 4, 2, y + h - seat - 4, P.dgray);
+        g.R(x + w - 16, seat + 4, 2, y + h - seat - 4, P.dgray);
+        const who = st.searched[i] === 'b' ? 'b' : oji[i] && open > 0 ? 'oji' : null;
+        if (who) {
+          g.sprite(who === 'b' ? ART.b : ART.oji, x + 20, seat - 22, { scale: 2 });
+          if (open >= 1) {
+            const k = (api.time * 0.8) % 1, k2 = (k + 0.5) % 1;
+            g.text('z', x + 32 + k * 8, seat - 26 - k * 12, { size: 12, col: P.lsky, outline: P.night });
+            g.text('Z', x + 28 + k2 * 8, seat - 26 - k2 * 12, { size: 12, col: P.white, outline: P.night });
+          }
+        }
+        // すりガラス（3 枚。まん中が戸。あけると左へすべって、ガラスもうすくなる）
+        const pane = Math.floor((w - 4) / 3);
+        const glass = (gx, alpha) => {
+          if (alpha <= 0) return;
+          g.ctx.save();
+          g.ctx.globalAlpha *= alpha;
+          g.R(gx, y + 1, pane, h - 1, P.lsky);
+          g.dither(gx, y + 1, pane, h - 1, P.white, 0);
+          g.ctx.restore();
+          g.R(gx, y + 1, 1, h - 1, P.gray);
+        };
+        const fade = 1 - open * 0.85;
+        glass(x + 2, fade);
+        glass(x + 2 + pane * 2, fade);
+        const dx = x + 2 + pane - Math.round(open * pane);
+        glass(dx, 1 - open);
+        g.R(dx, y + 1, 2, h - 1, P.gray);
+        g.R(dx + pane - 6, y + 16, 2, 8, P.dgray); // 取っ手
+        // 戸にはってある「待合室」（あけると見えなくなる）
+        if (open < 1) {
+          g.ctx.save();
+          g.ctx.globalAlpha *= 1 - open;
+          g.R(dx + 2, y + 13, pane - 4, 13, P.navy);
+          g.text('待合室', dx + pane / 2 + 1, y + 13, { size: 12, col: P.white, align: 'center' });
+          g.ctx.restore();
+        }
+      }
       function drawStation(g) {
+        const i = st.cur;
         drawSky(g);
-        drawCity(g, 0);
+        drawCity(g, 0, PLAT_Y);
         // 屋根と柱と蛍光灯
         g.R(0, SCENE_Y, W, 5, P.xdgray);
         g.R(0, SCENE_Y + 5, W, 1, P.dgray);
-        [24, 128, 232].forEach((x) => { g.R(x - 9, SCENE_Y + 6, 18, 2, P.white); g.dither(x - 11, SCENE_Y + 8, 22, 2, P.lyellow, 0); });
+        [24, 232].forEach((x) => { g.R(x - 9, SCENE_Y + 6, 18, 2, P.white); g.dither(x - 11, SCENE_Y + 8, 22, 2, P.lyellow, 0); });
         g.R(8, SCENE_Y + 6, 5, PLAT_Y - SCENE_Y - 6, P.dgray);
         g.R(243, SCENE_Y + 6, 5, PLAT_Y - SCENE_Y - 6, P.dgray);
-        // 駅名標（となりの駅も書いてある）
-        const i = st.cur;
-        g.R(70, 146, 3, PLAT_Y - 146, P.gray);
-        g.R(183, 146, 3, PLAT_Y - 146, P.gray);
-        g.R(43, 116, 170, 32, INK);
-        g.R(44, 117, 168, 30, P.white);
-        g.text(STATIONS[i], 128, 118, { col: INK, align: 'center' });
-        g.R(44, 135, 168, 12, P.red);
-        if (i > 0) g.text('←' + STATIONS[i - 1], 47, 135, { size: 12, col: P.white });
-        if (i < STATIONS.length - 1) g.text(STATIONS[i + 1] + '→', 209, 135, { size: 12, col: P.white, align: 'right' });
+        // 駅名標（屋根からつるしてある）
+        const cx = ROOM.x + ROOM.w / 2;
+        g.R(cx - 50, SCENE_Y + 6, 1, 1, P.gray);
+        g.R(cx + 49, SCENE_Y + 6, 1, 1, P.gray);
+        g.R(cx - 60, SCENE_Y + 7, 120, 20, INK);
+        g.R(cx - 59, SCENE_Y + 8, 118, 15, P.white);
+        g.R(cx - 59, SCENE_Y + 23, 118, 3, P.red);
+        g.text(STATIONS[i], cx, SCENE_Y + 7, { col: INK, align: 'center' });
         // ホーム
-        g.R(0, PLAT_Y, W, 24, P.gray);
+        g.R(0, PLAT_Y, W, LEG_Y - PLAT_Y, P.gray);
         g.R(0, PLAT_Y, W, 1, P.lgray);
-        g.dither(0, PLAT_Y + 1, W, 12, P.dgray, 0);
-        g.R(0, PLAT_Y + 18, W, 3, P.yellow);
-        g.R(0, PLAT_Y + 24, W, 4, P.dgray);
-        g.R(0, PLAT_Y + 28, W, H - PLAT_Y - 28, P.black);
-        g.R(0, PLAT_Y + 32, W, 1, P.dgray);
-        for (let x = 4; x < W; x += 12) g.R(x, PLAT_Y + 30, 6, 1, P.xdgray);
-        g.text('← 上り', 3, 211, { size: 12, col: P.lgray });
-        g.text('下り →', W - 3, 211, { size: 12, col: P.lgray, align: 'right' });
-        // ベンチ（青いプラスチック）
-        const bx = BENCH_X, bw = BENCH_W;
-        g.R(bx + 5, SEAT_Y - 16, 2, 16, P.dgray);
-        g.R(bx + bw - 7, SEAT_Y - 16, 2, 16, P.dgray);
-        g.R(bx, SEAT_Y - 16, bw, 4, P.mblue);
-        g.R(bx, SEAT_Y - 9, bw, 4, P.mblue);
-        g.R(bx, SEAT_Y - 16, bw, 1, P.sky);
-        g.R(bx, SEAT_Y - 9, bw, 1, P.sky);
-        g.R(bx - 2, SEAT_Y, bw + 4, 4, P.sky);
-        g.R(bx - 2, SEAT_Y + 3, bw + 4, 1, P.blue);
-        g.R(bx + 4, SEAT_Y + 4, 3, PLAT_Y + 8 - SEAT_Y - 4, P.dgray);
-        g.R(bx + bw - 7, SEAT_Y + 4, 3, PLAT_Y + 8 - SEAT_Y - 4, P.dgray);
-        drawSleeper(g, i);
-        // さっき見つけた落とし物
-        if (st.pop && st.pop.at === i) {
-          const k = Math.min(1, st.pop.t / 0.25);
-          g.shadow(116, PLAT_Y + 12, 10);
-          g.sprite(ART.icon[st.pop.id], 104, PLAT_Y - 10 - Math.round((1 - k) * 12), { scale: 2 });
-          if (g.blink(4)) { g.R(102, PLAT_Y - 14, 2, 2, P.white); g.R(128, PLAT_Y - 2, 2, 2, P.white); }
+        g.dither(0, PLAT_Y + 1, W, 10, P.dgray, 0);
+        g.R(0, PLAT_Y + 14, W, 3, P.yellow);
+        g.R(0, LEG_Y - 3, W, 3, P.dgray);
+        drawRoom(g, i);
+        // 上り・下りの矢じるし（タップでも動ける）
+        if (i > 0) g.text('◀上り', 2, PLAT_Y + 2, { size: 12, col: P.white, outline: P.xdgray });
+        if (i < STATIONS.length - 1) g.text('下り▶', W - 2, PLAT_Y + 2, { size: 12, col: P.white, outline: P.xdgray, align: 'right' });
+        // 八景には駅員さん
+        if (i === HOME) {
+          g.shadow(EKIIN_X + 16, ME_Y + 47, 10);
+          g.sprite(api.person('ekiin', { dir: 'left' }), EKIIN_X, ME_Y, { scale: 2 });
+        }
+        // 落とし物（さっき見つけたものは、とび出す）
+        const s = st.searched[i];
+        if (ITEMS[s]) {
+          const popping = st.pop && st.pop.at === i;
+          const k = popping ? Math.min(1, st.pop.t / 0.25) : 1;
+          const ix = ME_X + 38;
+          g.shadow(ix + 12, PLAT_Y + 11, 9);
+          g.sprite(ART.icon[s], ix, PLAT_Y - 8 - Math.round((1 - k) * 12), { scale: 2 });
+          if (popping && g.blink(4)) { g.R(ix - 2, PLAT_Y - 12, 2, 2, P.white); g.R(ix + 24, PLAT_Y, 2, 2, P.white); }
         }
         drawMe(g);
-      }
-      function drawSleeper(g, i) {
-        const who = sleepers[i];
-        if (!who) return;
-        const x = BENCH_X + 1, y = SEAT_Y - 22;
-        g.sprite(who === 'b' ? ART.b : ART.oji, x, y, { scale: 2 });
-        // 新聞紙（さがすと、上へ飛んでいく）
-        const off = st.uncovered[i] != null ? api.time - st.uncovered[i] : -1;
-        const ny = off > 0 ? -Math.round(off * 70) : 0;
-        if (off < 0.6) {
-          const nx = x + 18;
-          g.R(nx, y + 2 + ny, 40, 20, INK);
-          g.R(nx + 1, y + 3 + ny, 38, 18, P.lgray);
-          g.R(nx + 19, y + 3 + ny, 1, 18, P.gray);
-          for (let r = 0; r < 5; r++) {
-            g.R(nx + 3, y + 6 + r * 3 + ny, 12, 1, P.dgray);
-            g.R(nx + 21, y + 6 + r * 3 + ny, r === 0 ? 8 : 13, 1, P.dgray);
-          }
-          g.R(nx + 3, y + 5 + ny, 6, 2, INK); // 見出し
-        }
-        // いびき
-        if (st.mode !== 'ride') {
-          const k = (api.time * 0.8) % 1;
-          const k2 = (k + 0.5) % 1;
-          g.text('z', x + 14 + k * 8, y - 6 - k * 14, { size: 12, col: P.lsky, outline: P.night });
-          g.text('Z', x + 10 + k2 * 8, y - 6 - k2 * 14, { size: 12, col: P.white, outline: P.night });
+        if (st.mode === 'over') {
+          // 終電がなくなって、駅の明かりが消えた
+          g.ctx.save();
+          g.ctx.globalAlpha *= Math.min(0.6, st.t * 1.2);
+          g.R(0, SCENE_Y, W, LEG_Y - SCENE_Y, P.black);
+          g.ctx.restore();
         }
       }
       function drawMe(g) {
@@ -430,68 +542,69 @@
         g.sprite(api.person('otoko', { dir, frame }), ME_X, y, { scale: 2 });
         if (st.mode === 'look') g.text('キョロキョロ', ME_X + 16, ME_Y - 16, { size: 12, col: P.white, outline: P.black, align: 'center' });
         if (st.mode === 'found') {
-          // 吹き出し「いた！」（しっぽは左の男魂くんへ）
-          const bx = ME_X + 38, by = ME_Y + 4, bw = g.measure('いた！', 16) + 10, bh = 22;
+          // 吹き出し「いた！」（男魂くんの頭の上。しっぽは下へ）
+          const bw = g.measure('いた！', 16) + 10, bh = 22;
+          const bx = ME_X + 16 - Math.round(bw / 2), by = ME_Y - 30;
           g.R(bx + 1, by, bw - 2, bh, INK);
           g.R(bx, by + 1, bw, bh - 2, INK);
           g.R(bx + 1, by + 1, bw - 2, bh - 2, P.white);
-          g.R(bx - 3, by + 8, 4, 5, INK);
-          g.R(bx - 2, by + 9, 3, 3, P.white);
-          g.R(bx - 4, by + 10, 1, 1, INK);
+          g.R(ME_X + 13, by + bh - 1, 6, 4, INK);
+          g.R(ME_X + 14, by + bh - 2, 4, 3, P.white);
+          g.R(ME_X + 15, by + bh + 3, 2, 1, INK);
           g.text('いた！', bx + bw / 2, by + 3, { col: P.red, align: 'center' });
         }
       }
       function drawRide(g) {
         const d = st.dir;
         drawSky(g);
-        drawCity(g, api.time * 50 * d);
+        drawCity(g, api.time * 50 * d, LEG_Y - 8);
         // 架線柱（速く流れる）
         for (let k = 0; k < 3; k++) {
           const px = ((((k * 110 - api.time * 300 * d) % 330) + 330) % 330) - 20;
-          g.R(px, SCENE_Y, 4, 92, P.xdgray);
+          g.R(px, SCENE_Y, 4, LEG_Y - SCENE_Y - 8, P.xdgray);
           g.R(px - 6, SCENE_Y + 6, 16, 2, P.xdgray);
         }
         g.R(0, SCENE_Y + 3, W, 1, P.dgray); // 架線
         // 線路
-        g.R(0, 200, W, H - 200, P.xdgray);
+        g.R(0, LEG_Y - 8, W, 8, P.xdgray);
         for (let k = 0; k < 20; k++) {
           const sx = ((((k * 16 - api.time * 300 * d) % 320) + 320) % 320) - 16;
-          g.R(sx, 206, 8, 3, P.dgray);
+          g.R(sx, LEG_Y - 4, 8, 3, P.dgray);
         }
-        g.R(0, 203, W, 2, P.lgray);
+        g.R(0, LEG_Y - 7, W, 2, P.lgray);
         // 電車（ゆれる）
         const by = 134 + (Math.floor(api.time * 8) % 2);
-        g.R(10, by - 2, 236, 60, INK);
+        g.R(10, by - 2, 236, 58, INK);
         g.R(11, by - 1, 234, 4, P.lgray);
-        g.R(11, by + 3, 234, 54, P.red);
-        g.R(11, by + 34, 234, 4, P.white);
-        g.R(11, by + 50, 234, 7, P.dred);
+        g.R(11, by + 3, 234, 52, P.red);
+        g.R(11, by + 32, 234, 4, P.white);
+        g.R(11, by + 48, 234, 7, P.dred);
         const wins = [24, 60, 102, 152, 194];
         wins.forEach((wx) => {
-          g.R(wx - 1, by + 9, 30, 20, P.dred);
-          g.R(wx, by + 10, 28, 18, P.lyellow);
-          g.R(wx, by + 24, 28, 4, P.cream);
+          g.R(wx - 1, by + 8, 30, 20, P.dred);
+          g.R(wx, by + 9, 28, 18, P.lyellow);
+          g.R(wx, by + 23, 28, 4, P.cream);
         });
         // ドア
-        [90, 140, 182].forEach((dx) => { g.R(dx, by + 7, 1, 43, P.dred); g.R(dx + 9, by + 7, 1, 43, P.dred); });
+        [90, 140, 182].forEach((dx) => { g.R(dx, by + 6, 1, 42, P.dred); g.R(dx + 9, by + 6, 1, 42, P.dred); });
         // 窓の中の男魂くん（顔だけ）
         g.ctx.save();
         g.ctx.beginPath();
-        g.ctx.rect(102, by + 10, 28, 14);
+        g.ctx.rect(102, by + 9, 28, 14);
         g.ctx.clip();
-        g.sprite(api.person('otoko', { dir: d < 0 ? 'left' : 'right' }), 100, by + 6, { scale: 2 });
+        g.sprite(api.person('otoko', { dir: d < 0 ? 'left' : 'right' }), 100, by + 5, { scale: 2 });
         g.ctx.restore();
         // 行き先
-        g.R(214, by + 8, 28, 14, INK);
-        g.text(d < 0 ? '横浜' : '浦賀', 228, by + 9, { size: 12, col: P.orange, align: 'center' });
+        g.R(214, by + 7, 28, 14, INK);
+        g.text(d < 0 ? '横浜' : '浦賀', 228, by + 8, { size: 12, col: P.orange, align: 'center' });
         // 台車
         [[30, 70], [170, 210]].forEach(([a, b]) => {
-          g.R(a, by + 57, b - a, 6, P.xdgray);
-          g.disc(a + 8, by + 64, 4, INK);
-          g.disc(b - 8, by + 64, 4, INK);
+          g.R(a, by + 55, b - a, 5, P.xdgray);
+          g.disc(a + 8, by + 61, 4, INK);
+          g.disc(b - 8, by + 61, 4, INK);
         });
         const k = Math.floor(st.t / 0.3) % 2;
-        g.text(k ? 'ゴトン' : 'ガタン', k ? 176 : 80, SCENE_Y + 4, { col: P.white, outline: P.black, align: 'center' });
+        g.text(k ? 'ゴトン' : 'ガタン', k ? 176 : 80, SCENE_Y + 6, { col: P.white, outline: P.black, align: 'center' });
       }
 
       return {
@@ -499,35 +612,43 @@
         get bAt() { return bAt; },
         get side() { return side; },
         get dist() { return dist; },
-        get clueAt() { const o = {}; Object.keys(clueAt).forEach((k) => { o[k] = clueAt[k].id; }); return o; },
-        get sleepers() { return Object.assign({}, sleepers); },
+        get left() { return LAST - st.clock; }, // 終電まで、あと何分
+        // テスト用：それぞれの駅に何があるか・決まりごと
+        what: (i) => at(i),
+        rule: { what, HOME, STATIONS, DISTS, STEP_MIN, START, LAST, start },
         update(dt) {
           st.t += dt;
           if (st.msgT > 0) st.msgT -= dt;
+          if (st.plus >= 0) st.plus += dt;
           if (st.pop) st.pop.t += dt;
-          if (st.mode === 'ride') {
-            if (Math.abs(st.t - 0.45) < dt / 2) api.sfx('step');
-            if (st.t >= RIDE) arrive();
+          if (st.msgT <= 0 && st.queue.length && st.mode === 'idle') {
+            const q = st.queue.shift();
+            say(q.msg, q.sec, q.name);
+          }
+          if (st.mode === 'ride' || st.mode === 'look') {
+            const dur = st.mode === 'ride' ? RIDE : LOOK;
+            // 時計は、うごいている間に 1 分ずつすすむ（ゲームの中の時間は、この時計だけ）
+            st.clock = st.clock0 + Math.min(STEP_MIN - 1, Math.floor((st.t / dur) * STEP_MIN));
+            if (st.mode === 'ride') {
+              if (Math.abs(st.t - 0.45) < dt / 2) api.sfx('step');
+              if (st.t >= RIDE) arrive();
+            } else if (st.t >= LOOK) lookDone();
             return;
           }
-          if (st.mode === 'look') {
-            if (st.t >= LOOK) lookDone();
-            return;
-          }
-          if (st.mode !== 'idle' || api.ended || st.out) return;
+          if (st.mode !== 'idle' || api.ended) return;
           const inp = api.input;
           if (inp.pressed('left')) move(-1);
           else if (inp.pressed('right')) move(1);
           else if (inp.pressed('a')) search();
           else if (inp.tap) {
-            // タップ：路線図なら、いまの駅より左・右・その駅。下の場面なら、左右のはし・まん中とベンチ
+            // タップ：路線図なら、いまの駅より左・右・その駅。下の場面なら、左右のはしと、まん中（待合室）
             const tp = inp.tap;
-            const cx = tp.y < SCENE_Y ? SX(st.cur) : W / 2;
-            const half = tp.y < SCENE_Y ? 11 : 48;
-            const bench = tp.y >= SEAT_Y - 34 && tp.y < PLAT_Y + 12 && tp.x >= BENCH_X - 6 && tp.x < BENCH_X + BENCH_W + 6;
-            if (bench) search();
-            else if (tp.x < cx - half) move(-1);
-            else if (tp.x > cx + half) move(1);
+            if (tp.y >= LEG_Y) return;
+            const onMap = tp.y < SCENE_Y;
+            const lo = onMap ? SX(st.cur) - 11 : TAP_L;
+            const hi = onMap ? SX(st.cur) + 11 : TAP_R;
+            if (tp.x < lo) move(-1);
+            else if (tp.x > hi) move(1);
             else search();
           }
         },
@@ -536,10 +657,13 @@
           else drawStation(g);
           drawMap(g);
           drawStatus(g);
+          drawLegend(g);
           if (st.msgT > 0 && st.mode !== 'ride') {
-            // 1 行に入らなければ、小さい字にする
-            const size = g.measure(st.msg, 16) <= W - 36 ? 16 : 12;
-            g.say(st.msg, { y: 111, maxLines: 1, size, h: 36 });
+            // 1 行に入らなければ、小さい字にする（2 行まで）
+            const parts = st.msg.split('\n');
+            const size = parts.every((l) => g.measure(l, 16) <= W - 36) ? 16 : 12;
+            const n = Math.min(2, g.wrap(st.msg, W - 32, size).length);
+            g.say(st.msg, { y: SCENE_Y + 2, maxLines: 2, size, h: 16 + n * (size + 4), name: st.msgName || undefined });
           }
         },
       };

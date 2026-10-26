@@ -333,12 +333,26 @@ const setsubunState = (page) => page.evaluate(() => {
   const g = OTK.debug.game, r = OTK.debug.run;
   return { res: r.result, t: r.t, p: g.peek(), m: g.marker, state: g.state, stats: g.stats };
 });
+// ピラミッドは全員全裸。画面の四角 [x, y, w, h] の中の色を数える：
+//   clothes … のる人のジャージ・パーカーの色（服を着ていたら出る）／ white・red … 首から下げた「男魂」の札の白と赤
+const CLOTHES = ['#00804c', '#283890', '#b85c00', '#6c2c9c', '#d04848'];
+const setsubunPixels = (page, rect) => page.evaluate(([r, clothes]) => {
+  const d = document.getElementById('otk-canvas').getContext('2d').getImageData(r[0], r[1], r[2], r[3]).data;
+  const out = { clothes: 0, white: 0, red: 0 };
+  for (let i = 0; i < d.length; i += 4) {
+    const h = '#' + ((1 << 24) | (d[i] << 16) | (d[i + 1] << 8) | d[i + 2]).toString(16).slice(1);
+    if (clothes.includes(h)) out.clothes++;
+    else if (h === '#fcfcfc') out.white++;
+    else if (h === '#f83800') out.red++;
+  }
+  return out;
+}, [rect, CLOTHES]);
 // マーカーがゾーンのまん中に来たら A。物が飛んできたら B でふんばる。警察の「！」が出たら ↓。
 // o.brace：false でふんばらない／o.police：false で逃げない／o.stopAt：その人数で、のせるのをやめる
 async function setsubunBot(page, ctl, o) {
   o = o || {};
   const label = o.label || 'setsubun';
-  const seen = { alarm: false, hide: false, patrol: false, back: false, before: null, after: null, brace: false, collapse: false };
+  const seen = { alarm: false, hide: false, patrol: false, back: false, before: null, after: null, brace: false, collapse: false, hidePx: null };
   let bracing = false, alarmAt = 0, lastA = 0;
   for (let i = 0; i < 30000; i++) {
     const s = await setsubunState(page);
@@ -353,7 +367,12 @@ async function setsubunBot(page, ctl, o) {
         if (!seen.alarm) { seen.alarm = true; seen.before = s.p.built; alarmAt = Date.now(); await page.waitForTimeout(o.alarmDelay != null ? 0 : 150); await shot(page, label + '-alarm'); }
         if (o.police !== false && Date.now() - alarmAt >= (o.alarmDelay != null ? o.alarmDelay : 250)) await ctl.tap('down');
       }
-      if (pc === 'hide' && !seen.hide) { seen.hide = true; await page.waitForTimeout(300); await shot(page, label + '-hide'); }
+      if (pc === 'hide' && !seen.hide) {
+        seen.hide = true;
+        await page.waitForTimeout(300);
+        seen.hidePx = await setsubunPixels(page, [0, 100, 256, 98]); // 中へ走っていく人
+        await shot(page, label + '-hide');
+      }
       if (pc === 'patrol' && !seen.patrol) { seen.patrol = true; await page.waitForTimeout(1500); await shot(page, label + '-patrol'); }
       if (pc === 'back') seen.back = true;
       await page.waitForTimeout(10);
@@ -387,12 +406,15 @@ async function setsubunDesktop(open) {
   await waitScene(page, 'intro');
   await page.waitForTimeout(600);
   await shot(page, 'setsubun-intro');
+  check(await page.evaluate(() => /全裸/.test(OTK.get('setsubun').goal)), '説明に「全裸で」と出る');
   await page.keyboard.press('KeyZ');
   await waitScene(page, 'countdown');
   await waitScene(page, 'play');
   await page.waitForTimeout(400);
   await shot(page, 'setsubun-start');
   check((await canvasColors(page)) > 12, '夜の寮の玄関が描けている');
+  let px = await setsubunPixels(page, [196, 140, 44, 56]);
+  check(px.clothes === 0 && px.white > 10 && px.red > 2, '玄関で待っている人は全裸で、「男魂」の札を下げている');
   const ctl = keyboardCtl(page);
 
   // ゾーンの外で A をおすと、その人は転がり落ちる（ぐらぐらが少し増える）
@@ -401,6 +423,8 @@ async function setsubunDesktop(open) {
   await page.waitForTimeout(500);
   let st = await page.evaluate(() => ({ built: OTK.debug.game.built, miss: OTK.debug.game.stats.miss, wob: OTK.debug.game.wob }));
   check(st.built === 0 && st.miss === 1 && st.wob > 0, 'ゾーンをはずすと、転がり落ちて、ぐらぐらが増える');
+  px = await setsubunPixels(page, [0, 140, 172, 58]);
+  check(px.clothes === 0 && px.white > 10, '転がり落ちた人も全裸');
   await shot(page, 'setsubun-tumble');
   // B をおしている間は、のせられない
   await waitFor(page, () => !OTK.debug.game.peek().busy, null, 3000);
@@ -427,7 +451,10 @@ async function setsubunDesktop(open) {
   check(st.stats.braced > 0, '飛んでくる物を、B でふんばって受けた');
   check(seen.alarm && seen.hide && seen.patrol && seen.back, '警察が来て、↓ で中に逃げ、行ってしまうと出てくる');
   check(seen.after === seen.before, '警察が行ったあと、続き（' + seen.before + ' 人）から再開');
+  check(seen.hidePx && seen.hidePx.clothes === 0 && seen.hidePx.white > 10, '中へ逃げていく人も全裸');
   await page.waitForTimeout(900);
+  px = await setsubunPixels(page, [0, 60, 170, 138]);
+  check(px.clothes === 0 && px.white > 300 && px.red > 200, 'できたピラミッドは 10 人とも全裸で、札を下げている（白 ' + px.white + '・赤 ' + px.red + '）');
   await shot(page, 'setsubun-win');
   await waitScene(page, 'result', 8000);
   await page.waitForTimeout(500);
@@ -439,6 +466,8 @@ async function setsubunDesktop(open) {
   r = await result(page);
   check(r.result === 'lose' && seen.collapse && /くずれた/.test(r.msg), 'ふんばらないと、ぐらぐらが満タンになってくずれる');
   await page.waitForTimeout(900);
+  px = await setsubunPixels(page, [0, 100, 172, 98]);
+  check(px.clothes === 0 && px.white > 10, 'くずれて落ちた人も全裸');
   await shot(page, 'setsubun-collapse');
 
   // しっぱい 2：警察が来ても逃げないと、つかまる

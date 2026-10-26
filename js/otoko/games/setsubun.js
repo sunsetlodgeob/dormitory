@@ -173,6 +173,28 @@
       function pop(x, y, str, col) {
         pops.push({ x, y, str, col: col || P.yellow, t: 0 });
       }
+      // 全裸の人の絵。横向きの歩き（frame 1）は、半そでの人の肩に服の色が 2×2 ドット残るので、肌の色でぬりなおす
+      const bcache = new Map();
+      function bare(m, dir, frame) {
+        const img = api.person(m.kind, { dir, frame, variant: m.v, naked: true });
+        if (!frame || (dir !== 'left' && dir !== 'right')) return img;
+        const key = m.kind + '|' + m.v + '|' + dir;
+        if (!bcache.has(key)) {
+          const c = OTK.makeCanvas(img.width, img.height);
+          const x2 = c.getContext('2d');
+          x2.drawImage(img, 0, 0);
+          x2.fillStyle = pixel(img, dir === 'left' ? 7 : 8, 11); // 肩の肌
+          x2.fillRect(dir === 'left' ? 6 : 8, 12, 2, 2);
+          bcache.set(key, c);
+        }
+        return bcache.get(key);
+      }
+      // 寒さの見た目（ふるえ・白い息・雪）は時間だけで決める（乱数を使わないので、遊び方は変わらない）
+      function shiver(i) {
+        // ときどき 1 人ずつ、ブルブルッとふるえる（ふんばっている間は、ふるえない）
+        if (bracing) return 0;
+        return (api.time * 0.45 + i * 0.318) % 1 < 0.16 ? (Math.floor(api.time * 24) % 2 ? 1 : -1) : 0;
+      }
 
       // ── のせる ──
       function tryBuild() {
@@ -394,6 +416,23 @@
         }
         lines.forEach((l, i) => g.text(l, bx + w / 2, by + 3 + i * 13, { size, col: o.col || P.ink, align: 'center' }));
       }
+      // 白い息。t は 0〜1（その外は描かない）。口もと (x, y) から、dir の向きにのぼって消える
+      function breath(g, x, y, t, dir) {
+        if (!(t >= 0 && t < 1)) return;
+        g.ctx.save();
+        g.ctx.globalAlpha = 0.85 * (1 - t * t);
+        g.disc(x + dir * t * 10, y - t * 12, 1.5 + t * 2.5, P.white);
+        g.ctx.restore();
+      }
+      // ちらつく雪（寮の前の夜空と地面。人や飛んでくる物より奥）
+      function drawSnow(g) {
+        for (let i = 0; i < 22; i++) {
+          const v = 7 + (i % 5) * 3;
+          const y = 14 + ((i * 47 + api.time * v) % 184);
+          const x = (((i * 89 + Math.sin(api.time * 0.9 + i) * 5 + api.time * 3) % W) + W) % W;
+          g.R(x, y, 1, 1, i % 3 ? P.white : P.lsky);
+        }
+      }
       function drawItem(g, kind, x, y, spin) {
         x = Math.round(x);
         y = Math.round(y);
@@ -517,10 +556,16 @@
       function drawPyramid(g) {
         for (let i = 0; i < built; i++) {
           const sp = slotPos(i);
-          g.sprite(imgs[i], sp.x, sp.y, { scale: 2 });
+          g.sprite(imgs[i], sp.x + shiver(i), sp.y, { scale: 2 });
           if (bracing && state === 'build' && Math.floor(api.time * 6 + i) % 3 === 0) {
             g.R(sp.x + 36, sp.y + 4, 2, 3, P.lsky); // 汗
           }
+        }
+        // 白い息（1 人ずつ、間をずらして）
+        for (let i = 0; i < built; i++) {
+          const sp = slotPos(i);
+          const t = ((api.time + i * 0.71) % 2.3) / 0.9, dir = i % 2 ? 1 : -1;
+          breath(g, sp.x + 21 + dir * 7 + shiver(i), sp.y + 25, t, dir);
         }
       }
       // のぼる・転がる・待っている人
@@ -530,13 +575,13 @@
           const k = act.t / CLIMB;
           const s = SLOTS[act.i];
           const x = api.lerp(WAIT.x, s.x + 6, k), y = api.lerp(WAIT.y, s.y - 18, k) - Math.sin(k * Math.PI) * 30;
-          if (k < 0.8) g.sprite(api.person(CREW[act.i].kind, { dir: 'left', frame: Math.floor(act.t * 12) % 2, variant: CREW[act.i].v }), x, y, { scale: 2 });
+          if (k < 0.8) g.sprite(bare(CREW[act.i], 'left', Math.floor(act.t * 12) % 2), x, y, { scale: 2 });
           else g.sprite(imgs[act.i], s.x, s.y - (1 - k) * 30, { scale: 2 });
           return;
         }
         if (act && act.type === 'tumble') {
           const m = CREW[act.i];
-          const img = api.person(m.kind, { dir: 'left', frame: 0, variant: m.v });
+          const img = bare(m, 'left', 0);
           const s = SLOTS[act.i];
           if (act.t < 0.4) {
             // とびついて、すべる
@@ -556,9 +601,13 @@
           return;
         }
         if (built < NEED && state !== 'collapse') {
+          // 玄関で待っている人（全裸で、ガタガタふるえている）
           const m = CREW[built];
           const bob = Math.floor(api.time * 2) % 2;
-          g.sprite(api.person(m.kind, { dir: 'left', frame: 0, variant: m.v }), WAIT.x, WAIT.y - bob, { scale: 2 });
+          const jit = state === 'done' ? 0 : Math.floor(api.time * 20) % 2;
+          g.sprite(bare(m, 'left', 0), WAIT.x + jit, WAIT.y - bob, { scale: 2 });
+          breath(g, WAIT.x + 3, WAIT.y + 19 - bob, ((api.time + 0.4) % 1.7) / 0.9, -1);
+          if (state === 'build' && (api.time + 1.5) % 4.2 < 1.3) g.text('さむい…', WAIT.x + 16, WAIT.y - 15, { size: 12, col: P.lsky, outline: P.ink, align: 'center' });
         }
       }
       function drawPolice(g) {
@@ -607,8 +656,7 @@
               continue;
             }
             const x = api.lerp(s.x + 6, DOOR.x + 4, k), y = api.lerp(s.y - 16, GROUND - 48, Math.min(1, k * 1.6));
-            const m = CREW[i];
-            g.sprite(api.person(m.kind, { dir: pc.s === 'hide' ? 'right' : 'left', frame: Math.floor(api.time * 10 + i) % 2, variant: m.v }), x, y, { scale: 2, alpha: k > 0.92 ? 0.4 : 1 });
+            g.sprite(bare(CREW[i], pc.s === 'hide' ? 'right' : 'left', Math.floor(api.time * 10 + i) % 2), x, y, { scale: 2, alpha: k > 0.92 ? 0.4 : 1 });
           }
           if (pc.s === 'back' && pc.t > 0.2) g.big('せーの！', 92, 70, { size: 16, col: P.white, align: 'center' });
         }
@@ -783,13 +831,14 @@
           drawSky(g);
           drawGround(g);
           drawDorm(g);
+          drawSnow(g);
           litter.forEach((l) => drawItem(g, l.kind, l.x, l.y, 1));
           if (state === 'collapse') {
             bodies.forEach((b) => {
               g.ctx.save();
               g.ctx.translate(Math.round(b.x + FW), Math.round(b.y + FH));
               g.ctx.rotate(b.a);
-              g.ctx.drawImage(imgs[b.i], -FW, -FH, FW * 2, FH * 2);
+              g.ctx.drawImage(imgs[b.i], -FW, -FH, FW * 2, KH * 2);
               g.ctx.restore();
             });
             if (endT > 0.3) g.big('ドシャーン', 92, 70, { size: 32, col: P.lsky, shade: P.mblue, rim: P.navy, align: 'center' });
@@ -808,6 +857,7 @@
           if (state === 'build' && wob > 60 && built > 0 && g.blink(3)) g.text('ぐらぐら…', 92, SLOTS[Math.min(built, NEED) - 1].y - 16, { size: 12, col: P.red, outline: P.white, align: 'center' });
           if (state === 'done') {
             if (endT > 0.2) g.big('完成！', 92, 46, { col: P.yellow, shade: P.orange, align: 'center' });
+            if (endT > 0.8) g.text('さ、さむい…', SLOTS[NEED - 1].x + 44, SLOTS[NEED - 1].y + 4, { size: 12, col: P.lsky, outline: P.ink });
             for (let i = 0; i < 24; i++) {
               const x = (i * 47 + endT * 30 * ((i % 3) - 1)) % W;
               const y = 40 + ((i * 31 + endT * 90) % 150);

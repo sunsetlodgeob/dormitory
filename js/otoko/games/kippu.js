@@ -587,7 +587,7 @@
       let tickT = 0;
       let lastArea = -1;
       const entered = { go: new Set(), back: new Set() };
-      const dog = { barkT: -99, nextOk: 0, tail: 0 };
+      const dog = { barkT: -99, nextOk: 0 }; // ほえた時刻、次にほえられる時刻
       const fx = [];
       const stats = { caught: 0, cps: [0], boxUsed: 0, barks: 0 };
       const touch = { box: false };
@@ -1743,8 +1743,10 @@
               const ar = AREAS[n.area];
               const ex = api.clamp(nx.x0, Math.max(camX, ar.x) + 22, Math.min(camX + W, ar.x + ar.w) - 22);
               const from = nx.x0 < ex ? 'left' : 'right'; // 自転車が来る側
-              g.text('チリンチリン', ex + (from === 'left' ? 8 : -8), nx.y0 - 30 - (g.blink(4) ? 1 : 0), { size: 12, align: 'center', col: P.lyellow, outline: P.black });
-              arrow(g, from === 'left' ? ex - 16 : ex + 16, nx.y0 - 10, P.lyellow, from === 'left' ? 'right' : 'left');
+              const lo = Math.max(camX, ar.x), hi = Math.min(camX + W, ar.x + ar.w);
+              const tx = api.clamp(ex, lo + 42, hi - 42);
+              g.text('チリンチリン', tx, nx.y0 - 30 - (g.blink(4) ? 1 : 0), { size: 12, align: 'center', col: P.lyellow, outline: P.black });
+              arrow(g, from === 'left' ? lo + 12 : hi - 12, nx.y0 - 8, P.lyellow, from === 'left' ? 'right' : 'left');
               if (!n.rang || n.rang !== p.seg) { n.rang = p.seg; if (areaAt(me.x) === n.area) api.sfx('ring'); }
             }
           });

@@ -630,7 +630,7 @@ async function kippuDesktop(open) {
     if (st.err) throw new Error(st.err);
     r = await result(page);
     const order = st.cps.join(',');
-    check(r.result === 'win' && order === '1,2,3,4,5,6,7,8', '種 ' + sd + '：はじめから通しでクリア（チェックポイント ' + order + '、見つかった回数 ' + st.caught + '、ゲームの中で ' + st.npcT.toFixed(0) + ' 秒）');
+    check(r.result === 'win' && order === '1,2,3,4,5,6,7,8' && st.caught === 0, '種 ' + sd + '：はじめから通しで、一度も見つからずにクリア（チェックポイント ' + order + '、ゲームの中で ' + st.npcT.toFixed(0) + ' 秒）');
     check(st.npcT > 55, '道のりが長い（先が分かっているボットでも ' + st.npcT.toFixed(0) + ' 秒かかる）');
   }
 
