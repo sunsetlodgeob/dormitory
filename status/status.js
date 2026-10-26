@@ -32,6 +32,7 @@ window.OB_STATUS = {
     { id: 'setsubun', month: 2, event: '節分', title: '節分ピラミッド', status: '完了' },
     { id: 'unko', month: 3, event: '追いコン', title: 'うんこをよけろ', status: '完了' },
     { id: 'kippu', month: 3, event: '追いコン', title: '全裸で切符', status: '完了' },
+    { id: '', month: null, event: '', title: '行事の合間のストーリー（たたき）', status: '作成中', note: 'ドット絵の寸劇。入寮のあいさつや、行事の前ふり' },
     { id: '', month: null, event: '', title: '男魂野球大会', status: 'あとで', note: 'タイトル画面に「準備中」で置いてある' },
     { id: '', month: null, event: '', title: '寮生ひとりひとりのドット絵', status: 'あとで', note: 'Codex に発注するかも' },
   ],
@@ -43,7 +44,7 @@ window.OB_STATUS = {
     { area: 'Google 側', name: '年表のログインと権限の確認', status: '完了', note: '「メンバー」シートの人だけ見られる' },
     { area: 'Google 側', name: '幹事向けの設定手順書', status: '完了', note: 'docs/site/SETUP.md', link: 'https://github.com/sunsetlodgeob/dormitory/blob/claude/quirky-mccarthy-cozapk/docs/site/SETUP.md' },
     { area: '仕上げ', name: 'サイト全体の通し確認', status: '完了', note: '全ページをスマホとパソコンで確認。テスト 12 本がすべて通る' },
-    { area: '仕上げ', name: 'GitHub Pages の公開設定', status: '設定待ち', note: 'sunsetlodgeob でログインして Settings → Pages' },
+    { area: '仕上げ', name: 'GitHub Pages の公開設定', status: '完了', note: '設定ずみ' },
     { area: '仕上げ', name: 'Google 側の設定（幹事）', status: '設定待ち', note: '手順書どおりに。URL などを js/site/config.js に入れる' },
     { area: '仕上げ', name: '本番のデータを入れる', status: '未着手', note: '名簿・部屋割り・事件簿の元データをもらってから' },
     { area: '仕上げ', name: '人が遊んで、むずかしさと音を確かめる', status: '未着手', note: 'ミニゲームのむずかしさは自動の確認だけ。曲もまだ人の耳で聞いていない' },
@@ -60,8 +61,8 @@ window.OB_STATUS = {
 
   // 持ち主に決めてもらうこと・もらうもの
   decisions: [
-    { name: '「とりのおばちゃん」が実在の人とわかる呼び名か', status: '未着手' },
-    { name: '名簿に入れる項目（卒業年度など）', status: '未着手' },
+    { name: '「とりのおばちゃん」の呼び名（そのまま使ってよい）', status: '完了' },
+    { name: '名簿に卒業年度を出すか（出す）', status: '完了' },
     { name: '名簿・部屋割り・事件簿の元データ', status: 'あとで' },
     { name: '部屋割りで「ノックしたときの反応」をどう集めるか', status: 'あとで' },
     { name: 'OB会参加者リストとサイトのつなぎ方', status: 'あとで' },
