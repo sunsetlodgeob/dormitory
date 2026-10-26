@@ -599,8 +599,8 @@
     box(6, y, W - 12, h);
     if (o.name) {
       const nw = measure(o.name, 12) + 14;
-      box(12, y - 14, nw, 18, { fill: o.nameFill || P.navy });
-      text(o.name, 19, y - 9, { size: 12, col: P.lyellow });
+      box(12, y - 16, nw, 20, { fill: o.nameFill || P.navy });
+      text(o.name, 19, y - 13, { size: 12, col: P.lyellow });
     }
     lines.forEach((l, i) => text(l, 16, y + 10 + i * lh, { size, col: o.col || P.white }));
   }
@@ -647,7 +647,8 @@
         released: (k) => live() && input.released(k),
         repeat: (k) => live() && input.repeat(k),
         get tap() { return live() ? input.tap : null; },
-        get pointer() { return input.pointer; },
+        // 終わったあと・はじまる前は、おしていないことにする（ほかの入力と同じ）
+        get pointer() { return live() ? input.pointer : { x: input.pointer.x, y: input.pointer.y, down: false }; },
         dir: () => (live() ? input.dir() : { x: 0, y: 0 }),
         any: () => live() && (input.pressed('a') || input.pressed('b') || !!input.tap),
       },

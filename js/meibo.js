@@ -21,27 +21,14 @@
   let total = 0;
 
   // ── 小物 ──────────────────────────────────────
-  // 年度（4月はじまり）の元号。元年は「元」と書く
-  function wareki(y) {
-    const f = (era, n) => era + (n === 1 ? '元' : n);
-    if (y >= 2019) return f('令和', y - 2018);
-    if (y >= 1989) return f('平成', y - 1988);
-    if (y >= 1926) return f('昭和', y - 1925);
-    return '';
-  }
+  const wareki = OB.wareki; // 年度の元号（js/site/common.js）
   function cleanYear(v) {
     if (v == null || v === '') return null;
     const n = Number(v);
     return Number.isInteger(n) && n >= 1900 && n <= 2100 ? n : null;
   }
-  // さがすときは、全角・半角、カタカナ・ひらがな、大文字・小文字、空白の違いを気にしない
-  function norm(s) {
-    return String(s == null ? '' : s)
-      .normalize('NFKC')
-      .toLowerCase()
-      .replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60))
-      .replace(/\s+/g, '');
-  }
+  // さがすときは、全角・半角、カタカナ・ひらがな、大文字・小文字、空白の違いを気にしない（js/site/common.js）
+  const norm = OB.normSearch;
   // 更新日は日本の日付で出す（"2026-10-31T20:00:00Z" なら 11月1日）
   function fmtDate(s) {
     if (!s) return '';

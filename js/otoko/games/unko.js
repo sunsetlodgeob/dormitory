@@ -83,7 +83,7 @@
       const easy = api.tries >= 2; // 2 回しっぱいしたら、影を長めに出して、投げる間をあける
       const T = () => api.time;
       const flyTime = (t) => api.lerp(1.2, 0.92, Math.min(1, t / 28)) + (easy ? 0.15 : 0);
-      const gap = (t) => api.lerp(1.3, 0.6, Math.min(1, t / 26)) + (easy ? 0.18 : 0);
+      const gap = (t) => api.lerp(1.3, 0.68, Math.min(1, t / 26)) + (easy ? 0.18 : 0);
 
       const me = { x: 128, y: 140, vx: 0, vy: 0, run: 0, face: 'up', hit: false, hitT: 0, hitBy: null, safe: false };
       const senpais = SENPAI_X.map((x, i) => ({ x, y: SENPAI_Y[i], v: [0, 3, 5][i], run: i * 0.3, wind: 0, windDur: 0, gold: false, fall: 0 }));
@@ -169,6 +169,7 @@
           api.lose(p.gold ? '金のうんこが命中！\nありがたいけど\nうれしくない…' : 'うんこが命中！\n追いコンの主役は\n男魂くんになった。', { wait: 1.4 });
           return;
         }
+        if (api.ended) return; // 終わったあとに落ちたものは、音も文字も出さない（クリアの音にかぶるので）
         dodged++;
         api.sfx('hit');
         // 文字は、男魂くんやほかの文字に重ならないときだけ
@@ -225,14 +226,14 @@
         g.R(x + 15, y - 4, 2, 4, P.xdgray);
       }
       function signboard(g, x, y) {
-        // 「追いコン会場」の立て看板（スタートの場所）
-        g.shadow(x + 18, y, 18);
-        g.R(x + 4, y - 10, 2, 10, P.dbrown);
-        g.R(x + 30, y - 10, 2, 10, P.dbrown);
-        g.R(x - 1, y - 31, 38, 22, P.black);
-        g.R(x, y - 30, 36, 20, P.white);
-        g.R(x, y - 30, 36, 3, P.red);
-        g.text('追いコン', x + 18, y - 26, { size: 12, align: 'center', col: P.ink });
+        // 「追いコン」の立て看板（スタートした場所）
+        g.shadow(x + 26, y, 22);
+        g.R(x + 6, y - 10, 2, 10, P.dbrown);
+        g.R(x + 44, y - 10, 2, 10, P.dbrown);
+        g.R(x - 1, y - 31, 54, 22, P.black);
+        g.R(x, y - 30, 52, 20, P.white);
+        g.R(x, y - 30, 52, 3, P.red);
+        g.text('追いコン', x + 26, y - 25, { size: 12, align: 'center', col: P.ink });
       }
 
       function drawGround(g) {
@@ -298,11 +299,70 @@
         }
       }
 
-      const sprOf = (kind, dir, run, v, naked) => {
+      const sprOf = (kind, dir, run, v) => {
         const f = Math.floor(run * 9) % 4;
         const side = dir === 'left' || dir === 'right';
-        return { img: api.person(kind, { dir, frame: f % 2, variant: v, naked }), flip: !side && f >= 2 };
+        return { img: api.person(kind, { dir, frame: f % 2, variant: v }), flip: !side && f >= 2 };
       };
+
+      function drawMe(g) {
+        if (me.hit) {
+          // 頭にうんこ。星がまわる
+          const x = me.hitBy.x, y = me.hitBy.y;
+          const wob = me.hitT < 0.3 ? Math.round(Math.sin(me.hitT * 50) * 2) : 0;
+          g.shadow(x, y, 7);
+          g.sprite(api.person('otoko', { dir: 'down' }), x - 8 + wob, y - 24);
+          g.sprite(art(me.hitBy.gold), x - 7 + wob, y - 33);
+          for (let i = 0; i < 3; i++) {
+            const a = api.time * 6 + (i * Math.PI * 2) / 3;
+            star(g, x + Math.cos(a) * 13, y - 30 + Math.sin(a) * 5, i === 1 ? P.white : P.yellow, true);
+          }
+          return;
+        }
+        if (me.y < -30) return;
+        const s = sprOf('otoko', me.face, me.run, 0);
+        g.shadow(me.x, me.y, 7);
+        g.sprite(s.img, me.x - 8, me.y - 24 - (Math.floor(me.run * 9) % 2), { flip: s.flip });
+      }
+      function drawSenpai(g, s, i) {
+        const y = s.y + s.fall;
+        if (y - 24 > H) return;
+        const sp = sprOf('senpai', 'up', s.run, s.v);
+        g.shadow(s.x + 8, y, 7);
+        g.sprite(sp.img, s.x, y - 24 - (Math.floor(s.run * 9 + i) % 2), { flip: sp.flip });
+        if (s.wind > 0) {
+          // ふりかぶって、うんこを頭の上に持つ
+          const k = 1 - s.wind / Math.max(0.01, s.windDur);
+          const up = Math.round(4 + k * 6);
+          g.R(s.x + 3, y - 30 - up + 8, 2, up, P.skin);
+          g.R(s.x + 11, y - 30 - up + 8, 2, up, P.skin);
+          g.sprite(art(s.gold), s.x + 1, y - 34 - up, {});
+          if (s.gold) {
+            for (let n = 0; n < 4; n++) {
+              const a = n * Math.PI / 2 + api.time * 8;
+              star(g, s.x + 8 + Math.cos(a) * 12, y - 30 - up + Math.sin(a) * 8, n % 2 ? P.white : P.yellow);
+            }
+          }
+        }
+        // 息切れ（まん中の先輩の吹き出しに重ならないように、左右の先輩は外がわに出す）
+        if (me.safe && s.fall > 4 && Math.floor(api.time * 2 + i * 0.7) % 2) g.text('ゼェ', s.x + 8 + (i - 1) * 8, y - 34, { size: 12, align: 'center', col: P.white, outline: P.black });
+      }
+      function drawPile(g, p) {
+        // 落ちたうんこ：ぽよんとつぶれて、点滅して消える
+        if (p.pileT > PILE_T - 0.35 && g.blink(10)) return;
+        const sq = p.pileT < 0.12;
+        const img = art(p.gold);
+        g.shadow(p.tx, p.ty, 7);
+        if (sq) g.ctx.drawImage(img, Math.round(p.tx - 9), Math.round(p.ty - 8), 18, 8);
+        else g.sprite(img, p.tx - 7, p.ty - 11);
+        if (p.pileT < 0.25) {
+          const r = 6 + p.pileT * 40;
+          g.R(p.tx - r, p.ty - 1, 2, 1, P.white);
+          g.R(p.tx + r - 2, p.ty - 1, 2, 1, P.white);
+          g.R(p.tx - r * 0.7, p.ty - 4, 1, 1, P.white);
+          g.R(p.tx + r * 0.7, p.ty - 4, 1, 1, P.white);
+        }
+      }
 
       return {
         // テストで見るための中身
@@ -324,8 +384,8 @@
             let { x: dx, y: dy } = api.input.dir();
             const pt = api.input.pointer;
             if (!dx && !dy && pt.down && pt.y > 12) {
-              // 画面をおさえた所へ（足もとが指の少し下に来るように）
-              const ax = pt.x - me.x, ay = pt.y + 10 - me.y;
+              // 画面をおさえた所へ（指で男魂くんや影がかくれないように、指の少し上に来る）
+              const ax = pt.x - me.x, ay = pt.y - 12 - me.y;
               if (Math.abs(ax) > 3) dx = Math.sign(ax);
               if (Math.abs(ay) > 3) dy = Math.sign(ay);
             }
@@ -354,7 +414,6 @@
             if (!me.safe && !me.hit) s.x = api.approach(s.x, want, 42 * dt);
             if (me.safe) s.fall += dt * (26 + i * 6); // 息が切れて、おくれていく
             s.run += dt * (me.hit ? 0 : me.safe ? 0.5 : 1);
-            if (s.wind > 0 && !volleys.some((v) => v.who.includes(i))) s.wind = 0;
           });
 
           // 投げる予定
@@ -367,7 +426,7 @@
               else if (t >= 14.5) kind = api.pick(['pair', 'trio', 'lead', 'rain', 'aim']);
               else if (t >= 6.5) kind = api.pick(['aim', 'pair', 'lead', 'aim']);
               if (easy && kind === 'trio') kind = 'pair';
-              if (startVolley(kind)) nextT = t + gap(t) * (kind === 'trio' || kind === 'rain' ? 1.25 : 1);
+              if (startVolley(kind)) nextT = t + gap(t) * (kind === 'trio' || kind === 'rain' ? 1.3 : 1);
             }
           }
           for (let i = volleys.length - 1; i >= 0; i--) {
@@ -417,7 +476,7 @@
         draw(g) {
           drawGround(g);
           // スタートの看板
-          if (scroll < 120) signboard(g, PATH_R - 44, 196 + scroll);
+          if (scroll < 120) signboard(g, PATH_R + 1, 200 + scroll);
 
           // 地面の影（落ちる所）。落ちる直前ほど大きく濃い
           poops.forEach((p) => {
@@ -454,7 +513,6 @@
           poops.forEach((p) => {
             if (p.landed) return;
             const k = Math.min(1, p.t / p.dur);
-            if (k < 0.3) return;
             const rx = 4 + 7 * k + 1, ry = Math.max(2, (4 + 7 * k) * 0.5) + 1;
             const col = p.gold ? P.yellow : k > 0.75 ? P.red : P.white;
             for (let i = 0; i < 16; i++) {
@@ -485,8 +543,8 @@
           // 吹き出し
           if (say) {
             const s = senpais[say.who];
-            // うんこを頭の上に持っているときは、その上に出す
-            if (s && s.y + s.fall < H + 10) bubble(g, say.str, s.x + 8, s.y + s.fall - (s.wind > 0 ? 50 : 26));
+            // うんこを頭の上に持っているときは、その上に出す。おくれて画面の外へ出ても、下のはしに残す
+            bubble(g, say.str, s.x + 8, Math.min(H - 4, s.y + s.fall - (s.wind > 0 ? 50 : 26)));
           }
           // 花びら
           petals.forEach((q) => g.R(q.x + Math.sin(q.ph) * 2, q.y, 2, 1, Math.sin(q.ph) > 0 ? P.lpink : P.white));
@@ -496,64 +554,6 @@
           }
         },
       };
-
-      function drawMe(g) {
-        if (me.hit) {
-          // 頭にうんこ。星がまわる
-          const x = me.hitBy.x, y = me.hitBy.y;
-          const wob = me.hitT < 0.3 ? Math.round(Math.sin(me.hitT * 50) * 2) : 0;
-          g.shadow(x, y, 7);
-          g.sprite(api.person('otoko', { dir: 'down' }), x - 8 + wob, y - 24);
-          g.sprite(art(me.hitBy.gold), x - 7 + wob, y - 33);
-          for (let i = 0; i < 3; i++) {
-            const a = api.time * 6 + (i * Math.PI * 2) / 3;
-            star(g, x + Math.cos(a) * 13, y - 30 + Math.sin(a) * 5, i === 1 ? P.white : P.yellow, true);
-          }
-          return;
-        }
-        if (me.y < -30) return;
-        const s = sprOf('otoko', me.face, me.run, 0, false);
-        g.shadow(me.x, me.y, 7);
-        g.sprite(s.img, me.x - 8, me.y - 24 - (Math.floor(me.run * 9) % 2), { flip: s.flip });
-      }
-      function drawSenpai(g, s, i) {
-        const y = s.y + s.fall;
-        if (y - 24 > H) return;
-        const sp = sprOf('senpai', 'up', s.run, s.v, false);
-        g.shadow(s.x + 8, y, 7);
-        g.sprite(sp.img, s.x, y - 24 - (Math.floor(s.run * 9 + i) % 2), { flip: sp.flip });
-        if (s.wind > 0) {
-          // ふりかぶって、うんこを頭の上に持つ
-          const k = 1 - s.wind / Math.max(0.01, s.windDur);
-          const up = Math.round(4 + k * 6);
-          g.R(s.x + 3, y - 30 - up + 8, 2, up, P.skin);
-          g.R(s.x + 11, y - 30 - up + 8, 2, up, P.skin);
-          g.sprite(art(s.gold), s.x + 1, y - 34 - up, {});
-          if (s.gold) {
-            for (let n = 0; n < 4; n++) {
-              const a = n * Math.PI / 2 + api.time * 8;
-              star(g, s.x + 8 + Math.cos(a) * 12, y - 30 - up + Math.sin(a) * 8, n % 2 ? P.white : P.yellow);
-            }
-          }
-        }
-        if (me.safe && s.fall > 4 && Math.floor(api.time * 2 + i * 0.7) % 2) g.text('ゼェ', s.x + 8, y - 34, { size: 12, align: 'center', col: P.white, outline: P.black });
-      }
-      function drawPile(g, p) {
-        // 落ちたうんこ：ぽよんとつぶれて、点滅して消える
-        if (p.pileT > PILE_T - 0.35 && g.blink(10)) return;
-        const sq = p.pileT < 0.12;
-        const img = art(p.gold);
-        g.shadow(p.tx, p.ty, 7);
-        if (sq) g.ctx.drawImage(img, Math.round(p.tx - 9), Math.round(p.ty - 8), 18, 8);
-        else g.sprite(img, p.tx - 7, p.ty - 11);
-        if (p.pileT < 0.25) {
-          const r = 6 + p.pileT * 40;
-          g.R(p.tx - r, p.ty - 1, 2, 1, P.white);
-          g.R(p.tx + r - 2, p.ty - 1, 2, 1, P.white);
-          g.R(p.tx - r * 0.7, p.ty - 4, 1, 1, P.white);
-          g.R(p.tx + r * 0.7, p.ty - 4, 1, 1, P.white);
-        }
-      }
     },
   });
 })();

@@ -2,7 +2,7 @@
  * 3月 追いコン「全裸で切符」 ― 誰にも見られずに、駅で切符を買って寮へもどれ
  *  夜の町を上から見た 1 画面の地図。左下が寮の玄関、右上が駅の券売機。
  *  通りがかりの人・おまわりさん・駅員さんには、見ている向きに光のくさび（視線）が出る。
- *  光の中に少しでも長くいると「見られた」でしっぱい。植え込み・電柱・自販機・建物のうしろは視線が通らない。
+ *  光の中に入ると、ほんの一瞬（0.3秒）で「見られた」になってしっぱい。植え込み・電柱・自販機・建物のうしろは視線が通らない。
  *  券売機の前で A を長おし（約1.5秒）すると切符が買える（その間は動けない）。切符を持って玄関にもどればクリア。
  *  男魂くんは全裸（「男魂」の札とモザイクつき）。寮の玄関の中にいる間は見られない。
  *  人の動きは時間だけで決まる（テストのボットが先を読めるように、visibleAt で見られるかを調べられる）。
@@ -46,11 +46,12 @@
       who: 'ekiin', kind: 'ekiin', v: 0, len: 74, half: 0.5, x: 206, y: 62,
       steps: [{ look: LEFT, dur: 2.0 }, { look: DOWN, dur: 2.2 }, { look: RIGHT, dur: 1.4 }, { look: DOWN, dur: 1.4 }],
     },
-    // おまわりさん：公園のまわりを右回り。寮のわきの道を上がって、角で道路と左を見る
+    // おまわりさん：公園のまわりを右回り。寮のわきの道を上がって、角で左と道路を見る
+    // （左から右へふり向くと、下の道をなめてしまうので、上を見てから右へ行く）
     {
       who: 'police', kind: 'police', v: 0, len: 70, half: 0.52, x: 91, y: 122,
       steps: [
-        { look: UP, dur: 0.7 }, { look: LEFT, dur: 0.6 },
+        { look: LEFT, dur: 0.6 }, { look: UP, dur: 0.7 },
         { to: [200, 122], speed: 36 }, { look: DOWN, dur: 0.4 },
         { to: [200, 204], speed: 36 }, { look: LEFT, dur: 0.4 },
         { to: [91, 204], speed: 36 }, { look: UP, dur: 0.3 },
@@ -215,12 +216,12 @@
       const lenMul = easy ? 0.88 : 1;
       const grace = easy ? GRACE + 0.15 : GRACE;
 
-      const me = { x: START.x, y: START.y, face: 'up', walk: 0, moving: false, ticket: false, buy: 0, buying: false, home: false };
+      const me = { x: START.x, y: START.y, face: 'up', walk: 0, moving: false, ticket: false, buy: 0, buying: false, home: false, homeT: 0 };
       let npcT = 0; // 人の動きの時計（見つかったら止まる）
       // 人の動きの始まりを、遊ぶたびに少しずらす
       const offs = NPCS.map((n) => api.rnd(0, n.plan.total));
       const poseOf = (i, t) => poseAt(NPCS[i], t + offs[i]);
-      let seenT = 0, watcher = -1, caught = null; // caught：{ i, x, y }
+      let seenT = 0, watcher = -1, caught = null; // seenT：光の中にいる時間、watcher：見ている人、caught：{ i, bump }
       let say = null; // 吹き出し { x, y, str, t, col }
       let shownGo = false;
       let tickT = 0;
@@ -272,6 +273,14 @@
           g.R(x + 5 - i, y + i, 1, 1, P.black);
         }
         g.R(x, y + 5, 1, 1, P.black);
+      }
+      function plate(g, str, cx, col, bg) {
+        // 屋根にかけた看板（上下は y 12〜25）
+        const w = g.measure(str, 12) + 6;
+        const x = Math.round(cx - w / 2);
+        g.R(x - 1, 12, w + 2, 15, P.black);
+        g.R(x, 12, w, 14, bg);
+        g.text(str, cx, 13, { size: 12, align: 'center', col });
       }
       function ticketIcon(g, x, y) {
         g.R(x - 1, y - 1, 16, 10, P.black);
@@ -335,10 +344,9 @@
             g.R(x, 41, w, 1, '#8c8470');
             // 窓（明かり）
             [110, 190].forEach((wx) => { g.R(wx, 27, 12, 8, '#f8d878'); g.R(wx, 31, 12, 1, '#c8a050'); g.R(wx + 6, 27, 1, 8, '#c8a050'); });
-            // 駅の看板
-            g.R(186, 13, 22, 9, P.white);
-            g.R(186, 13, 22, 1, P.mblue);
-            g.text('駅', 197, 11, { size: 12, align: 'center', col: P.navy });
+            // 看板：券売機の上に「きっぷ」、となりに「駅」
+            plate(g, 'きっぷ', 165, P.white, P.navy);
+            plate(g, '駅', 198, P.navy, P.white);
             // 改札（明るい中と、ゲート）
             g.R(214, 26, 40, 16, '#f8e8b0');
             g.R(214, 26, 40, 2, '#c8b880');
@@ -348,7 +356,6 @@
           }
           case 'kenbaiki': {
             // 券売機 2 台
-            g.text('きっぷ', 166, 24, { size: 12, align: 'center', col: P.navy });
             for (let i = 0; i < 2; i++) {
               const kx = x + i * 16;
               g.R(kx, y - 8, 15, h + 8, '#1c3c8c');
@@ -387,11 +394,12 @@
           case 'pole': {
             // 電柱
             g.shadow(x + 3, y + 4, 5);
-            g.R(x + 1, y - 44, 5, 49, '#8c8478');
-            g.R(x + 1, y - 44, 1, 49, '#bcb4a0');
-            g.R(x - 4, y - 40, 15, 2, '#5c5448');
-            g.R(x + 4, y - 22, 6, 9, P.white);
-            g.R(x + 5, y - 21, 4, 1, P.dgray);
+            g.R(x + 1, y - 34, 5, 39, '#8c8478');
+            g.R(x + 1, y - 34, 1, 39, '#bcb4a0');
+            g.R(x - 4, y - 30, 15, 2, '#5c5448');
+            g.R(x + 4, y - 18, 6, 9, P.white);
+            g.R(x + 5, y - 17, 4, 1, P.dgray);
+            g.R(x + 5, y - 14, 4, 1, P.dgray);
             break;
           }
           case 'gomi': {
@@ -504,6 +512,36 @@
         return d > 0 ? 'down' : 'up';
       };
 
+      function drawNpc(g, n, ps, i) {
+        if (ps.x < -12 || ps.x > W + 12) return;
+        let a = ps.a;
+        if (caught && caught.i === i) a = Math.atan2(me.y - ps.y, me.x - ps.x);
+        const s = sprOf(n.kind, dirOf(a), ps.walk ? npcT + i * 0.3 : 0, n.v, false);
+        g.shadow(ps.x, ps.y, 6);
+        g.sprite(s.img, ps.x - 8, ps.y - 23, { flip: s.flip });
+      }
+      function drawMe(g) {
+        if (me.home) {
+          // 玄関の中へ消える
+          g.ctx.save();
+          g.ctx.globalAlpha = Math.max(0, 1 - me.homeT * 1.6);
+        }
+        const s = sprOf('otoko', me.face, me.moving || me.home ? me.walk : 0, 0, true);
+        g.shadow(me.x, me.y, 6);
+        const shake = caught ? Math.round(Math.sin(api.time * 40)) : 0;
+        g.sprite(s.img, me.x - 8 + shake, me.y - 23, { flip: s.flip });
+        if (me.home) g.ctx.restore();
+        if (seenT > 0 && !caught && g.blink(6)) {
+          // あせ
+          g.R(me.x + 6, me.y - 26, 2, 3, P.lsky);
+          g.R(me.x + 7, me.y - 27, 1, 1, P.lsky);
+        }
+        if (me.ticket && !me.home) {
+          g.R(me.x + 5, me.y - 14, 6, 4, P.black);
+          g.R(me.x + 6, me.y - 13, 4, 2, '#f8e8c0');
+        }
+      }
+
       return {
         // テストで見るための中身
         me, NPCS, SOLIDS, DOOR, BUY, SPEED, visibleAt, blocked,
@@ -522,8 +560,14 @@
             talk(12, 178, '切符、たのんだぞ！', 2.4);
           }
           if (api.ended) {
-            // 玄関に入っていく
-            if (me.home) { me.y = Math.min(me.y, 214) - 0; me.face = 'up'; }
+            if (me.home) {
+              // 玄関の中へ入っていく
+              me.homeT += dt;
+              me.face = 'up';
+              me.x = api.approach(me.x, DOOR.x + DOOR.w / 2, 30 * dt);
+              me.y = api.approach(me.y, DOOR.y + 2, 30 * dt);
+              me.walk += dt;
+            }
             return;
           }
 
@@ -533,8 +577,8 @@
           const inBuy = inRect(me.x, me.y, BUY);
           const pressBuy = api.input.held('a') || (pt.down && inBuy && pt.y < BUY.y + 4 && pt.x > BUY.x - 4 && pt.x < BUY.x + BUY.w + 4);
           if (!dx && !dy && pt.down && pt.y > 12 && !pressBuy) {
-            // 画面をおさえた所へ（足もとが指の少し下に来るように）
-            const ax = pt.x - me.x, ay = pt.y + 8 - me.y;
+            // 画面をおさえた所へ（指で男魂くんがかくれないように、指の少し上に来る）
+            const ax = pt.x - me.x, ay = pt.y - 12 - me.y;
             if (Math.abs(ax) > 2) dx = Math.sign(ax);
             if (Math.abs(ay) > 2) dy = Math.sign(ay);
           }
@@ -549,8 +593,8 @@
               me.ticket = true;
               me.buying = false;
               api.sfx('ok');
-              pop('切符ゲット！', me.x, me.y - 36, P.yellow, 1.4);
-              talk(me.x, me.y - 30, 'あとは寮へ！', 1.6);
+              pop('切符ゲット！', me.x, me.y - 34, P.yellow, 1.4);
+              talk(12, 178, 'よし、もどってこい！', 2.2);
             }
           }
           me.moving = false;
@@ -624,7 +668,7 @@
 
           // 目的地の矢印
           if (!api.ended) {
-            if (!me.ticket) arrow(g, 166, 12 + 8, P.yellow);
+            if (!me.ticket) arrow(g, 166, 30, P.yellow); // 「きっぷ」の看板の下、券売機の上
             else arrow(g, DOOR.x + DOOR.w / 2, 168, P.yellow);
           }
           // 買っているところ
@@ -636,48 +680,19 @@
           fx.forEach((e) => g.text(e.str, e.x, e.y - (e.t / e.dur) * 8, { size: 12, align: 'center', col: e.col, outline: P.black }));
           if (say) bubble(g, say.str, say.x, say.y, say.col);
           // 切符を持っているか
-          if (me.ticket) ticketIcon(g, W - 20, 15);
+          if (me.ticket) ticketIcon(g, 4, 15);
           // 見られかけ
           if (seenT > 0 && !caught) {
             const w = watcher >= 0 ? ps[watcher] : null;
             if (w) g.text('？', w.x, w.y - 40, { col: P.yellow, outline: P.black, align: 'center' });
           }
-          if (caught) {
+          if (caught && g.blink(4)) {
             const w = ps[caught.i];
-            g.text('！', w.x, w.y - 42, { col: P.red, outline: P.white, align: 'center' });
+            g.text('！', w.x + 11, w.y - 30, { col: P.red, outline: P.white, align: 'center' });
           }
         },
       };
 
-      function drawNpc(g, n, ps, i) {
-        if (ps.x < -12 || ps.x > W + 12) return;
-        let a = ps.a;
-        if (caught && caught.i === i) a = Math.atan2(me.y - ps.y, me.x - ps.x);
-        const s = sprOf(n.kind, dirOf(a), ps.walk ? npcT + i * 0.3 : 0, n.v, false);
-        g.shadow(ps.x, ps.y, 6);
-        g.sprite(s.img, ps.x - 8, ps.y - 23, { flip: s.flip });
-      }
-      function drawMe(g) {
-        if (me.home && api.ended) {
-          // 玄関の中へ消える
-          g.ctx.save();
-          g.ctx.globalAlpha = Math.max(0, 1 - api.time * 0 - (me.fade = (me.fade || 0) + 1 / 60) * 1.5);
-        }
-        const s = sprOf('otoko', me.face, me.moving ? me.walk : 0, 0, true);
-        g.shadow(me.x, me.y, 6);
-        const shake = caught ? Math.round(Math.sin(api.time * 40)) : 0;
-        g.sprite(s.img, me.x - 8 + shake, me.y - 23, { flip: s.flip });
-        if (me.home && api.ended) g.ctx.restore();
-        if (seenT > 0 && !caught && g.blink(6)) {
-          // あせ
-          g.R(me.x + 6, me.y - 26, 2, 3, P.lsky);
-          g.R(me.x + 7, me.y - 27, 1, 1, P.lsky);
-        }
-        if (me.ticket && !me.home) {
-          g.R(me.x + 5, me.y - 14, 6, 4, P.black);
-          g.R(me.x + 6, me.y - 13, 4, 2, '#f8e8c0');
-        }
-      }
     },
   });
 })();

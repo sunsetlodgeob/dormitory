@@ -78,16 +78,9 @@
   if (YEAR && window.OB && window.OB.data) {
     yearRooms.state = 'loading';
     window.OB.data.loadPublic().then((d) => {
-      // 部屋割りのページ（js/heya.js）と同じそろえ方：全角の数字や「305号室」も読む
-      const str = (v) => String(v == null ? '' : v).trim();
-      for (const r of d.rooms || []) {
-        if (!r || Number(str(r.year).normalize('NFKC')) !== YEAR) continue;
-        const room = str(r.room).normalize('NFKC').replace(/[^0-9]/g, '');
-        const name = str(r.name);
-        if (!room || !name) continue;
-        const list = (yearRooms.byRoom[room] = yearRooms.byRoom[room] || []);
-        if (list.indexOf(name) < 0) list.push(name);
-      }
+      // 部屋割りのページ（js/heya.js）と同じそろえ方（OB.data.roomsByYear）：全角の数字や「305号室」も読む
+      const m = window.OB.data.roomsByYear(d.rooms).get(YEAR);
+      if (m) m.forEach((names, room) => { yearRooms.byRoom[room] = names.slice(); });
       yearRooms.state = 'ok';
     }).catch(() => { yearRooms.state = 'error'; });
   }

@@ -79,7 +79,7 @@
 | `title` | 題名（練習モードの一覧と、画面上の帯に出る） |
 | `goal` | 説明画面に大きく出す一言。1 行 7 文字くらい。長いときはエンジンが区切りのよい所で 2 行に分ける（`\n` で分ける所を決めてもよい）。入りきらなければ小さい字になる |
 | `howto` | 操作の説明。文字列の配列（1〜3 行） |
-| `note` | 任意。小さい注記（`nomu` の「お酒は二十歳になってから。一気飲みはやめましょう。」など） |
+| `note` | 任意。小さい注記（`nomu` の「お酒は二十歳になってから。一気飲みはやめましょう。」など）。2 行まで。`howto` と `note` が説明画面に入りきらないときは、コンソールに注意（console.warn）が出る |
 | `time` | 制限時間（秒）。`null` なら時間制限なし（自分で `win`・`lose` する） |
 | `timeout` | 時間切れのとき `'win'` か `'lose'` |
 | `timeoutMsg` | 任意。時間切れのときのひとこと |
@@ -101,7 +101,7 @@
 | `dir()` | 十字キーの向き `{ x: -1|0|1, y: -1|0|1 }` |
 | `any()` | A・B のどちらかを押したか、画面をタップした瞬間 |
 | `tap` | その瞬間に画面をタップ（クリック）した位置 `{ x, y }`、なければ `null` |
-| `pointer` | 指（マウス）の今の位置と、押しているか `{ x, y, down }` |
+| `pointer` | 指（マウス）の今の位置と、押しているか `{ x, y, down }`。ほかの入力と同じく、遊んでいる間だけ `down` が true になる |
 
 `k` は `'up'` `'down'` `'left'` `'right'` `'a'` `'b'`。キーボードは矢印、A は Z・A・スペース・Enter、B は X・B・Shift・Backspace。スマホは画面の下のボタン。
 `win`・`lose` のあとは、入力はすべて「押していない」になる。
@@ -198,7 +198,7 @@
 | `OTK.debug.current` | 遊んでいるミニゲームの id（なければ `null`） |
 | `OTK.debug.game` | `create(api)` が返したもの（中の状態を見るのに使う） |
 | `OTK.debug.api` / `OTK.debug.run` | いまの api ／ 実行の情報（`run.phase`：`ready` `play` `stamp` `done`、`run.result`、`run.msg`） |
-| `OTK.debug.start(id, { quick })` | そのミニゲームを始める |
+| `OTK.debug.start(id, { quick, tries })` | そのミニゲームを始める。`tries: 2` で、2 回しっぱいしたあとの易しさを試せる |
 | `OTK.debug.forceResult('win' か 'lose', msg)` | いまのミニゲームを勝ち・負けで終わらせる |
 | `OTK.debug.seed(n)` | 次に始めるミニゲームの乱数を固定（`null` で戻す） |
 | `OTK.debug.speed = 4` | 早送り（4 倍） |

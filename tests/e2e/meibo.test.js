@@ -9,7 +9,7 @@ const assert = require('assert');
 const path = require('path');
 const { withSite, realErrors } = require('./lib');
 
-const PORT = Number(process.env.MEIBO_PORT) || 8804; // ARCH.md の割り当て（確認役が別のポートで動かすときは MEIBO_PORT）
+const PORT = Number(process.env.MEIBO_PORT || process.env.PORT) || 8804; // ARCH.md の割り当て（確認役が別のポートで動かすときは MEIBO_PORT）
 const SHOTS = process.env.MEIBO_SHOTS || '';
 const GAS = 'https://script.google.com/macros/s/TEST/exec';
 const XSS = '<img src=x onerror="window.__xss=1">';

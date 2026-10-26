@@ -23,7 +23,7 @@
   const SEATS = [30, 70, 110, 150, 190]; // 丸いすの中心。0 が男魂くんの席、2 は空いている
   const GRACE = 0.12; // ふり向いた直後は、少しだけ見のがしてくれる（反応の時間）
   const SPEED = 22; // こっそり歩く速さ（ドット/秒）
-  const MENU = ['大盛', '特盛', 'みそ汁', 'お新香', '生玉子'];
+  const MENU = ['大盛', '特盛', 'みそ汁', 'お新香'];
 
   OTK.register({
     id: 'gyudon',
@@ -32,7 +32,7 @@
     event: '',
     title: '財布がない',
     goal: 'こっそり\n店を出ろ！',
-    howto: ['→かA：おす間だけ進む', '顔が見えたら止まれ！', '「！」「？」はふり向く合図'],
+    howto: ['→かA：おす間だけ進む', '「！」「？」が出たら止まれ', 'こっちを見ている間は動くな'],
     note: 'スマホは画面をおしていても進む。',
     time: 30,
     timeout: 'lose',
@@ -46,11 +46,11 @@
 
       const me = { x: START_X, walk: 0, moving: false, stepT: 0, alpha: 1, inY: 0 };
       // 店員：kitchen（鍋を見ている）→ tell（合図）→ watch（こっちを見ている）→ kitchen …
-      const tenin = { state: 'kitchen', t: 0, dur: 2.6, cycle: 0, feint: false };
+      const tenin = { state: 'kitchen', t: 0, dur: 2.6, cycle: 0, feint: false, rattle: 0 };
       const kyaku = [
         { cx: SEATS[1], variant: 4, state: 'eat', t: 0, plan: null, bob: 0 },
-        { cx: SEATS[3], variant: 7, state: 'eat', t: 0.2, plan: null, bob: 0.15 },
-        { cx: SEATS[4], variant: 6, state: 'eat', t: 0.4, plan: null, bob: 0.3 },
+        { cx: SEATS[3], variant: 7, state: 'eat', t: 0, plan: null, bob: 0.15 },
+        { cx: SEATS[4], variant: 6, state: 'eat', t: 0, plan: null, bob: 0.3 },
       ];
       let glances = 0;
       let door = 0; // 自動ドアの開き（0〜1）
@@ -62,6 +62,7 @@
         tenin.state = state;
         tenin.t = 0;
         tenin.dur = dur;
+        tenin.rattle = 0;
       }
       function startKitchen() {
         setTenin('kitchen', api.rnd(1.4, 2.6));
@@ -78,7 +79,6 @@
           setTenin('tell', TELL);
           // 3 回目くらいから、ときどきフェイント（合図だけで、また鍋にもどる）
           tenin.feint = !easy && tenin.cycle >= 2 && api.chance(0.25);
-          api.sfx('cursor');
         } else if (tenin.state === 'tell') {
           if (tenin.feint) {
             tenin.feint = false;
@@ -192,7 +192,7 @@
         g.disc(192, 62, 7, P.dbrown);
         g.disc(192, 62, 6, P.white);
         g.line(192, 62, 192, 57, P.ink);
-        g.line(192, 62, 189, 63, P.ink);
+        g.line(192, 62, 190, 59, P.ink);
         // 奥の台（ステンレス）
         g.R(0, BACK_Y, W, 2, P.white);
         g.R(0, BACK_Y + 2, W, CNT_Y - BACK_Y - 2, P.gray);
@@ -388,13 +388,19 @@
         me, tenin, kyaku,
         get escaped() { return escaped; },
         get caughtBy() { return caughtBy === null ? null : caughtBy === 'tenin' ? 'tenin' : 'kyaku'; },
-        // 動いてもだいじょうぶか（テスト・デバッグ用）
-        get safe() { return tenin.state === 'kitchen' && kyaku.every((c) => c.state === 'eat' && c.plan == null); },
         update(dt) {
           // 店員と客の動き（見つかったら、そのまま止まる）
           if (!caughtBy) {
             tenin.t += dt;
             if (tenin.t >= tenin.dur) nextTenin();
+            // 合図の間は、鍋のふたがカタカタ鳴る
+            if (tenin.state === 'tell') {
+              tenin.rattle -= dt;
+              if (tenin.rattle <= 0) {
+                tenin.rattle = 0.15;
+                api.sfx('cursor');
+              }
+            }
             kyaku.forEach((c) => {
               c.t += dt;
               if (c.plan != null) {
@@ -403,7 +409,7 @@
                   c.plan = null;
                   c.state = 'tell';
                   c.t = 0;
-                  api.sfx('text');
+                  api.sfx('select');
                 }
               } else if (c.state === 'tell' && c.t >= TELL_K) {
                 c.state = 'look';

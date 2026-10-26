@@ -12,7 +12,7 @@ const fs = require('fs');
 const path = require('path');
 const { withSite, realErrors } = require('./lib');
 
-const PORT = Number(process.env.PORT) || 8834;
+const PORT = Number(process.env.PORT) || 8814; // ARCH.md の割り当て（ミニゲームは 8811〜8815）
 const SHOTS = process.env.SHOTS_DIR || '';
 const ONLY = process.env.ONLY || '';
 const NO_PHONE = !!process.env.NO_PHONE;

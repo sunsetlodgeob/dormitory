@@ -9,7 +9,7 @@ const assert = require('assert');
 const path = require('path');
 const { withSite, realErrors } = require('./lib');
 
-const PORT = Number(process.env.HOME_PORT) || 8802; // 確認役が別のポートで動かすときは HOME_PORT
+const PORT = Number(process.env.HOME_PORT || process.env.PORT) || 8802; // 確認役が別のポートで動かすときは HOME_PORT
 const SHOTS = process.env.HOME_SHOTS || '';
 const TARGETS = /\/(game|nenpyo|heya|meibo|sanpo)\/$/;
 const STUB = '<!doctype html><html lang="ja"><meta charset="utf-8"><title>stub</title><p>stub</p></html>';

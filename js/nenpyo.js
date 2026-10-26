@@ -21,7 +21,7 @@
   };
 
   const MSG = {
-    not_member: 'このアカウントには見る権限がありません。幹事に連絡して、スプレッドシートを共有してもらってください。',
+    not_member: 'このアカウントには見る権限がありません。幹事に連絡して、見る権限をもらってください。',
     invalid_token: 'ログインを確かめられませんでした（時間がたって切れたのかもしれません）。もう一度ログインしてください。',
     not_configured: '年表の準備がまだ終わっていません（Apps Script の設定がまだです）。しばらくしてから、もう一度ためしてください。',
     network: '通信に失敗しました。電波のよい所で、もう一度ログインしてください。',
@@ -36,42 +36,43 @@
   let tries = 0;          // ログインの回数（古い返事を捨てるため）
 
   // ── 小物 ──────────────────────────────────────
-  function wareki(y) {
-    const f = (era, n) => era + (n === 1 ? '元' : n);
-    if (y >= 2019) return f('令和', y - 2018);
-    if (y >= 1989) return f('平成', y - 1988);
-    if (y >= 1926) return f('昭和', y - 1925);
-    return '';
-  }
+  const wareki = OB.wareki; // 年度の元号（js/site/common.js）
   function cleanInt(v, lo, hi) {
     if (v == null || v === '') return null;
     const n = Number(v);
     return Number.isInteger(n) && n >= lo && n <= hi ? n : null;
   }
-  // さがすときは、全角・半角、カタカナ・ひらがな、大文字・小文字、空白の違いを気にしない
-  function norm(s) {
-    return String(s == null ? '' : s)
-      .normalize('NFKC')
-      .toLowerCase()
-      .replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60))
-      .replace(/\s+/g, '');
-  }
-  // 見つかった所に印をつける（文字はすべて OB.esc を通す）
-  function mark(text, q) {
+  // さがすときは、全角・半角、カタカナ・ひらがな、大文字・小文字、空白の違いを気にしない（js/site/common.js）
+  const norm = OB.normSearch;
+  // 見つかった所に印をつける（文字はすべて OB.esc を通す）。
+  // さがすときと同じそろえ方（norm）で比べるので、カタカナ・ひらがなや全角・半角が違っても印がつく
+  function mark(text, raw) {
     const s = String(text);
+    const q = norm(raw);
     if (!q) return OB.esc(s);
-    const low = s.toLowerCase();
-    const ql = q.toLowerCase();
-    if (low.length !== s.length || !ql) return OB.esc(s);
-    let out = '';
-    let i = 0;
-    for (;;) {
-      const j = low.indexOf(ql, i);
-      if (j < 0) break;
-      out += OB.esc(s.slice(i, j)) + '<mark>' + OB.esc(s.slice(j, j + ql.length)) + '</mark>';
-      i = j + ql.length;
+    // そろえた文字の 1 つずつが、もとの文字のどこからどこまでか
+    let ns = '';
+    const from = [], to = [];
+    let pos = 0;
+    // 濁点・半濁点（半角の ﾞ ﾟ など）は前の文字といっしょにそろえる（ﾊﾞ → ば）
+    for (const ch of s.match(/[\s\S][\uFF9E\uFF9F\u3099-\u309C]*/gu) || []) {
+      const n = norm(ch);
+      for (let k = 0; k < n.length; k++) { from.push(pos); to.push(pos + ch.length); }
+      ns += n;
+      pos += ch.length;
     }
-    return out + OB.esc(s.slice(i));
+    let out = '', last = 0, i = 0;
+    for (;;) {
+      const j = ns.indexOf(q, i);
+      if (j < 0) break;
+      const a = from[j], b = to[j + q.length - 1];
+      if (a >= last) {
+        out += OB.esc(s.slice(last, a)) + '<mark>' + OB.esc(s.slice(a, b)) + '</mark>';
+        last = b;
+      }
+      i = j + q.length;
+    }
+    return out + OB.esc(s.slice(last));
   }
   // ID トークンの中のメールアドレス（表示に使うだけ。確かめるのは Apps Script 側）
   function emailOf(jwt) {
@@ -289,10 +290,12 @@
       gsiFailed();
     }
   }
+  let btnW = 0; // いま出しているログインボタンの幅
+  const wantBtnW = () => Math.max(200, Math.min(300, (el.gbtn.clientWidth || 280)));
   function renderButton() {
     if (!gsiReady) return;
     el.gbtn.innerHTML = '';
-    const w = Math.max(200, Math.min(300, (el.gbtn.clientWidth || 280)));
+    const w = (btnW = wantBtnW());
     try {
       google.accounts.id.renderButton(el.gbtn, {
         type: 'standard', theme: 'filled_blue', size: 'large', text: 'signin_with',
@@ -403,6 +406,14 @@
   el.top.addEventListener('click', (e) => {
     e.preventDefault();
     window.scrollTo({ top: 0, behavior: reduceMotion() ? 'auto' : 'smooth' });
+  });
+  // スマホを横にしたときなど、ログインボタンの入る幅が変わったら描きなおす
+  let resizeT = 0;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeT);
+    resizeT = setTimeout(() => {
+      if (gsiReady && !el.login.hidden && !el.gbtn.hidden && wantBtnW() !== btnW) renderButton();
+    }, 250);
   });
   let ticking = false;
   window.addEventListener('scroll', () => {

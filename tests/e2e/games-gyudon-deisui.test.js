@@ -43,6 +43,31 @@ async function canvasColors(page) {
     return seen.size;
   });
 }
+// 鳴らした効果音の名前を記録する（音そのものは確かめられないので、鳴らそうとしたかを見る）
+async function spySfx(page) {
+  await page.evaluate(() => {
+    window.__sfx = [];
+    const orig = OTK.audio.sfx;
+    OTK.audio.sfx = (name) => { window.__sfx.push(name); return orig(name); };
+  });
+}
+// 幅 360px のスマホで、ページが横にはみ出さず、ゲーム画面が全部見えるか
+async function check360(browser, base, rel) {
+  const ctx = await browser.newContext({ viewport: { width: 360, height: 640 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push('pageerror: ' + e));
+  await page.goto(base + rel);
+  await waitScene(page, 'play');
+  await page.waitForTimeout(300);
+  const m = await page.evaluate(() => {
+    const r = document.getElementById('otk-canvas').getBoundingClientRect();
+    return { sw: document.documentElement.scrollWidth, left: r.left, right: r.right };
+  });
+  check(m.sw <= 360 && m.left >= 0 && m.right <= 360, '幅 360px：横にはみ出さない（' + Math.round(m.left) + '〜' + Math.round(m.right) + 'px）');
+  check(errors.length === 0, '幅 360px：エラーなし');
+  await ctx.close();
+}
 // 要素のまん中を、指（マウス）でおしっぱなしにする
 async function holdAt(page, selector) {
   const b = await page.locator(selector).boundingBox();
@@ -54,7 +79,7 @@ async function holdAt(page, selector) {
 // 店員も客もこっちを見ていない間だけ進むボット。見えている合図（「！」「？」）だけで判断する
 async function gyudonBot(page, startMove, stopMove, label) {
   let moving = false;
-  const seen = { tell: false, watch: false, glance: false, whistle: false };
+  const seen = { tell: false, watch: false, glance: false };
   for (let i = 0; i < 3000; i++) {
     const s = await page.evaluate(() => {
       const g = OTK.debug.game;
@@ -86,12 +111,22 @@ async function gyudonDesktop(open) {
   await page.waitForTimeout(300);
   await shot(page, 'gyudon-start');
   check((await canvasColors(page)) > 12, 'お店の絵が描けている');
+  // 音のオン・オフ（ボタン）。切りかえてもゲームは続く
+  const pressed = () => page.locator('#otk-sound').getAttribute('aria-pressed');
+  const before = await pressed();
+  await page.locator('#otk-sound').click();
+  const after = await pressed();
+  await page.locator('#otk-sound').click();
+  check(before !== after && (await pressed()) === before && (await page.evaluate(() => OTK.debug.scene)) === 'play', '音のボタンでオン・オフできる（' + before + ' → ' + after + '）');
+  await spySfx(page);
 
   // クリア：見られていない間だけ → をおす
   const seen = await gyudonBot(page, () => page.keyboard.down('ArrowRight'), () => page.keyboard.up('ArrowRight'), 'gyudon');
   let r = await result(page);
   check(r && r.result === 'win', '見られていない間だけ進むと、外に出られる（' + (r && r.result) + '）');
   check(seen.tell, '店員がふり向く前に「！」の合図が出る');
+  const rattles = await page.evaluate(() => window.__sfx.filter((n) => n === 'cursor').length);
+  check(rattles >= 4, '合図の間、鍋のふたがカタカタ鳴る（' + rattles + ' 回）');
   await page.waitForTimeout(900);
   await shot(page, 'gyudon-escape');
   await waitScene(page, 'result', 8000);
@@ -154,7 +189,7 @@ async function gyudonPhone(open) {
   const { page, errors } = await open('game/?play=gyudon&quick=1&seed=21', { phone: true, wait: 300 });
   await waitScene(page, 'play');
   await page.waitForTimeout(200);
-  await page.screenshot({ path: SHOTS ? path.join(SHOTS, 'gyudon-phone-page.png') : '/dev/null' }).catch(() => {});
+  if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'gyudon-phone-page.png') });
   // クリア：A ボタンをおしっぱなしにして進む
   await gyudonBot(page, () => holdAt(page, '[data-otk-key="a"]'), () => page.mouse.up(), 'gyudon-phone');
   let r = await result(page);
@@ -317,19 +352,32 @@ async function deisuiPhone(open) {
   await waitIdle(page);
   st = await dstate(page);
   check(!!st.searched[HOME + 1] || st.res === 'win', 'スマホ：路線図のいまの駅をタップすると、さがす');
+  if (!st.res) {
+    // ベンチ（寝ている人）をタップしても、移動せずにさがす
+    await dp.tap({ position: { x: db.width * 0.88, y: db.height / 2 } });
+    await page.waitForTimeout(60);
+    await waitIdle(page);
+    await cv.tap({ position: { x: 190 * k, y: 166 * k } });
+    await page.waitForTimeout(60);
+    await waitIdle(page);
+    st = await dstate(page);
+    check(st.cur === HOME + 2 && (!!st.searched[HOME + 2] || st.res === 'win'), 'スマホ：ベンチをタップすると、さがす（移動しない）');
+  }
   const errs = realErrors(errors);
   check(errs.length === 0, 'エラーなし' + (errs.length ? '：' + errs.join(' / ') : ''));
   await page.context().close();
 }
 
-withSite(PORT, async ({ open }) => {
+withSite(PORT, async ({ open, browser, base }) => {
   if (!ONLY || ONLY === 'gyudon') {
     await gyudonDesktop(open);
     await gyudonPhone(open);
+    await check360(browser, base, 'game/?play=gyudon&quick=1&seed=2');
   }
   if (!ONLY || ONLY === 'deisui') {
     await deisuiDesktop(open);
     await deisuiPhone(open);
+    await check360(browser, base, 'game/?play=deisui&quick=1&seed=2');
   }
   console.log('すべて ok');
 }).catch((e) => {

@@ -426,7 +426,7 @@
           if (i < st.mistakes) for (let j = 0; j < 6; j++) { g.R(x + 2 + j, y + 2 + j, 1, 1, P.white); g.R(x + 7 - j, y + 2 + j, 1, 1, P.white); }
         }
         // ひとこと
-        let msg = 'コールが止まったら飲め', mcol = P.white;
+        let msg = 'キミで止まったら飲め', mcol = P.white;
         if (st.phase === 'over') {
           msg = st.down ? 'ダウン…' : 'ミス 3回…';
           mcol = P.lsky;
@@ -437,7 +437,7 @@
           msg = red() ? '限界！ 先にBで吐け！' : 'キミの番！ Aで飲め！';
           mcol = red() ? (g.blink(4) ? P.red : P.lorange) : P.yellow;
         } else if (st.vomitT > 0) {
-          msg = 'スッキリ！';
+          msg = 'キラキラ～ スッキリ！';
           mcol = P.lgreen;
         } else if (red()) {
           msg = '限界だ！ Bで吐け！';
@@ -570,7 +570,6 @@
             bubble(g, SEATS[st.target].x, headTop(st.target), 'のめ！', { size: 16, bg: P.red, col: P.white });
           }
           if (st.scold) bubble(g, SEATS[st.scold.seat].x, headTop(st.scold.seat), st.scold.text, { col: P.dred });
-          if (st.vomitT > 0) g.text('キラキラ～', SEATS[0].x, 14, { size: 12, align: 'center', col: P.purple, outline: P.white });
 
           drawPanel(g);
         },

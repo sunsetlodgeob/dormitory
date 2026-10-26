@@ -52,5 +52,23 @@
   const ROOM_NUMBERS = ['101'];
   for (const f of [2, 3]) for (let n = 1; n <= 17; n++) ROOM_NUMBERS.push(String(f * 100 + n));
 
-  OB.data = { isLive, loadPublic, loadTimeline, ROOM_NUMBERS };
+  // rooms: [{ year, room, name }] を 年度 → 部屋 → 名前の一覧 の Map にまとめる（部屋割り・寮さんぽで使う）
+  // 全角の数字や「305号室」もそろえ、寮にない部屋番号は捨てる（名前の字は変えない）
+  function roomsByYear(rooms) {
+    const by = new Map();
+    const str = (v) => String(v == null ? '' : v).trim();
+    for (const r of rooms || []) {
+      const year = Number(str(r && r.year).normalize('NFKC'));
+      const room = str(r && r.room).normalize('NFKC').replace(/[^0-9]/g, '');
+      const name = str(r && r.name);
+      if (!Number.isInteger(year) || ROOM_NUMBERS.indexOf(room) < 0 || !name) continue;
+      if (!by.has(year)) by.set(year, new Map());
+      const m = by.get(year);
+      if (!m.has(room)) m.set(room, []);
+      if (m.get(room).indexOf(name) < 0) m.get(room).push(name);
+    }
+    return by;
+  }
+
+  OB.data = { isLive, loadPublic, loadTimeline, roomsByYear, ROOM_NUMBERS };
 })();

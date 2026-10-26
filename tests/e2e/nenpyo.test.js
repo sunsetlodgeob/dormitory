@@ -12,7 +12,7 @@ const assert = require('assert');
 const path = require('path');
 const { withSite, realErrors } = require('./lib');
 
-const PORT = Number(process.env.NENPYO_PORT) || 8804; // ARCH.md の割り当て（確認役が別のポートで動かすときは NENPYO_PORT）
+const PORT = Number(process.env.NENPYO_PORT || process.env.PORT) || 8804; // ARCH.md の割り当て（確認役が別のポートで動かすときは NENPYO_PORT）
 const SHOTS = process.env.NENPYO_SHOTS || '';
 const GAS = 'https://script.google.com/macros/s/TEST/exec';
 const GSI = 'https://accounts.google.com/gsi/client';
@@ -252,7 +252,7 @@ withSite(PORT, async ({ browser, base }) => {
     // 権限なし
     await signIn(page, 'not_member', 'kouhai@example.com');
     let st = await statusText(page);
-    assert.ok(st.includes('このアカウントには見る権限がありません。幹事に連絡して、スプレッドシートを共有してもらってください。'), tag + ': 権限なしの文がちがう: ' + st);
+    assert.ok(st.includes('このアカウントには見る権限がありません。幹事に連絡して、見る権限をもらってください。'), tag + ': 権限なしの文がちがう: ' + st);
     assert.ok(st.includes('kouhai@example.com'), tag + ': ためしたアカウントが出ていない');
     assert.ok(!(await page.isVisible('#np-board')), tag + ': 権限がないのに年表が出た');
     assert.strictEqual(await page.evaluate(() => window.__gsi.disabled), 1, tag + ': 自動ログインを止めていない');

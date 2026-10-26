@@ -82,7 +82,7 @@ const FORMS = {
     items: [
       { key: 'name', type: 'text', title: 'お名前', help: '例：夕照 一郎', required: true },
       { key: 'entry', type: 'text', title: '入学年度', help: '例：2003（平成15年度）', required: true },
-      { key: 'grad', type: 'text', title: '卒業年度（任意）', required: false },
+      { key: 'grad', type: 'text', title: '卒業年度（任意）', help: '例：2006（2007年3月に卒業したなら 2006）', required: false },
       { key: 'rooms', type: 'paragraph', title: '住んでいた部屋と年度（例：2005年度 305号室、2006年度 212号室）', help: 'おぼえている分だけでOK', required: false },
       { key: 'consent', type: 'choice', title: '名簿にお名前を載せてもよいですか？（はい／いいえ）', choices: ['はい', 'いいえ'], help: '「いいえ」なら、名簿にも部屋割りにもお名前は出しません。', required: true },
     ],
@@ -494,7 +494,7 @@ const MEMBER_SCHEMA = {
   type: 'OBJECT',
   properties: {
     entryYear: { type: 'INTEGER', nullable: true, description: '入学年度（西暦）' },
-    gradYear: { type: 'INTEGER', nullable: true, description: '卒業年度（西暦）。書かれていなければ null' },
+    gradYear: { type: 'INTEGER', nullable: true, description: '卒業した年度（4月はじまりの西暦）。書かれていなければ null' },
     rooms: {
       type: 'ARRAY',
       items: {
@@ -525,7 +525,7 @@ function timelinePrompt(a) {
 function memberPrompt(a) {
   return '寮生の登録フォームの回答から、入学年度・卒業年度・住んでいた部屋を整理してください。\n' +
     '- entryYear：入学年度（西暦）。分からなければ null。\n' +
-    '- gradYear：卒業年度（西暦）。書かれていなければ null。\n' +
+    '- gradYear：卒業した年度（4月はじまりの西暦）。「○年3月卒業」のように月まで書いてあれば、年度はその前の年（2007年3月卒業なら 2006）。書かれていなければ null。\n' +
     '- rooms：住んでいた部屋と年度の組。room は部屋番号の数字 3 けた（例 "305"）。年度がはっきり書かれていない部屋は入れない。\n\n' +
     '回答（JSON）：\n' + JSON.stringify({ 入学年度: a.entry, 卒業年度: a.grad, 住んでいた部屋と年度: a.rooms });
 }

@@ -16,7 +16,7 @@
       members.push({
         name: FAMILY[k % FAMILY.length] + ' ' + GIVEN[Math.floor(k / FAMILY.length) % GIVEN.length],
         entryYear: year,
-        gradYear: year + 4 + (i % 3 === 0 ? 1 : 0),
+        gradYear: year + 3 + (i % 3 === 0 ? 1 : 0), // 卒業した年度（4年で卒業なら 入学年度 + 3。3人に1人は留年）
       });
       k++;
     }

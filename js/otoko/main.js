@@ -306,7 +306,8 @@
 
   // ── メニュー ─────────────────────────────────────
   function Menu(sel) {
-    const canCont = () => save.step > 0 && save.step < total();
+    // step が total() と同じ ＝ 10 本目をクリアして、エンディングを見る前に閉じた。つづきからでエンディングへ
+    const canCont = () => save.step > 0 && save.step <= total();
     const items = [
       { id: 'new', label: '1年をはじめる' },
       { id: 'cont', label: 'つづきから' },
@@ -325,7 +326,7 @@
         startStory();
       } else if (it.id === 'cont') {
         audio.sfx('ok');
-        go(Calendar(save.step));
+        go(save.step >= total() ? GoodEnd() : Calendar(save.step));
       } else if (it.id === 'prac') {
         audio.sfx('ok');
         go(Practice());
@@ -381,7 +382,7 @@
           g.text(it.label, BX + 28, y, { col: on ? P.white : P.dgray });
           if (it.id === 'cont' && canCont()) {
             const d = games()[save.step];
-            if (d) g.text(d.month + '月から', BX + BW - 12, y + 3, { size: 12, align: 'right', col: P.lsky });
+            g.text(d ? d.month + '月から' : 'エンディング', BX + BW - 12, y + 3, { size: 12, align: 'right', col: P.lsky });
           }
           if (it.id === 'yakyu') g.text('準備中', BX + BW - 12, y + 3, { size: 12, align: 'right', col: P.dgray });
           if (it.id === 'prac') g.text('★' + clearedCount() + '/' + total(), BX + BW - 12, y + 3, { size: 12, align: 'right', col: P.yellow });
@@ -584,6 +585,7 @@
   }
   function Intro(ctx) {
     const d = OTK.get(ctx.id);
+    let warned = false; // 説明が入りきらないとき、作る人向けに 1 回だけ知らせる
     return {
       name: 'intro',
       enter() { if (ctx.mode === 'practice') audio.bgm('menu'); },
@@ -606,8 +608,10 @@
         g.text(d.title, W / 2, 32, { align: 'center' });
         R(18, 52, W - 36, 1, P.mblue);
         // 下から：注記（小さい字）、その上に操作の説明。残りに目的を大きく
-        const howto = (d.howto || []).flatMap((h) => g.wrap(h, W - 40, 16)).slice(0, 4);
-        const note = d.note ? g.wrap(d.note, W - 40, 12).slice(0, 2) : [];
+        const howtoAll = (d.howto || []).flatMap((h) => g.wrap(h, W - 40, 16));
+        const noteAll = d.note ? g.wrap(d.note, W - 40, 12) : [];
+        const howto = howtoAll.slice(0, 4);
+        const note = noteAll.slice(0, 2);
         const noteY = 190 - note.length * 14;
         const gy = 58;
         let gs = 32, lines = goalLines(d.goal, W - 28);
@@ -623,6 +627,10 @@
         R(18, y, W - 36 - tw, 1, P.mblue);
         y += 8;
         howto.slice(0, room).forEach((l) => { g.text(l, 22, y); y += 18; });
+        if (!warned && (howtoAll.length > Math.min(4, room) || noteAll.length > 2)) {
+          warned = true;
+          console.warn('ミニゲーム「' + d.id + '」の説明が画面に入りきりません。howto は 3 行、note は 2 行までにしてください。');
+        }
         note.forEach((l, i) => g.text(l, 22, noteY + i * 14, { size: 12, col: P.gray }));
         if (g.blink(1.5)) g.text('Aでスタート', W - 18, 196, { align: 'right', col: P.white });
         if (ctx.mode !== 'debug') g.text('B：もどる', 18, 199, { size: 12, col: P.gray });
@@ -1049,10 +1057,10 @@
     get save() { return JSON.parse(JSON.stringify(save)); },
     get speed() { return OTK.speed; },
     set speed(v) { OTK.speed = Math.max(0.1, Number(v) || 1); },
-    // ミニゲームを 1 本はじめる。quick: true なら説明と 3・2・1 をとばす
+    // ミニゲームを 1 本はじめる。quick: true なら説明と 3・2・1 をとばす。tries: 2 などで、しっぱいしたあとのやさしい難しさを試せる
     start(id, o) {
       if (!OTK.get(id)) throw new Error('ミニゲームがありません: ' + id);
-      const ctx = { mode: 'debug', id, tries: 0, quick: !!(o && o.quick) };
+      const ctx = { mode: 'debug', id, tries: (o && o.tries) | 0, quick: !!(o && o.quick) };
       if (ctx.quick) startQuick(ctx);
       else go(Intro(ctx), { instant: true });
     },

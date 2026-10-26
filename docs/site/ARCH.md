@@ -20,15 +20,22 @@ nenpyo/index.html        年表（Google ログイン）   js/nenpyo.js  css/nen
 heya/index.html          部屋割り                  js/heya.js    css/heya.css
 meibo/index.html         名簿                      js/meibo.js   css/meibo.css
 sanpo/index.html         寮さんぽ（建物を歩ける再現）  js/world.js js/art.js js/game.js css/style.css
+                         （?year= の部屋割りと注記のために js/site/ の 4 つも読む）
 css/site.css             コンテンツのページ共通の見た目
 js/site/config.js        設定（URL など。空ならサンプルで動く）
 js/site/sample.js        サンプルデータ（すべて架空）
-js/site/data.js          データの読み込み（OB.data）
-js/site/common.js        注記の表示（OB.DISCLAIMER）、OB.esc など
+js/site/data.js          データの読み込み（OB.data）、部屋割りのそろえ方（OB.data.roomsByYear）
+js/site/common.js        注記の表示（OB.DISCLAIMER）、OB.esc・OB.safeUrl・OB.wareki・OB.normSearch
 gas/                     Google Apps Script（フォーム → Gemini → スプレッドシート → サイト）
+tools/build_artifact.py  寮さんぽを 1 枚の HTML にまとめる（claude.ai に公開する用）
 tests/e2e/               ブラウザでの確認（Playwright）
+tests/gas/               gas/Code.gs の確認（Google には出ない）
+tests/run-all.sh         確認をぜんぶ動かす
+docs/site/ENGINE.md      ゲームのエンジンの使い方（ミニゲームを作る人向け）
 docs/site/SETUP.md       Google 側の設定手順（幹事向け）
 ```
+
+どのページも、ほかのページへのリンクは相対パス（`../`、`../heya/` など）で書く。サイトは `/dormitory/` の下に出るので、`/` から始まるパスは使わない。
 
 写真館はサイトに置かない。`OB_CONFIG.ALBUM_URL`（Google のアルバム）へのリンクだけ。
 
@@ -53,14 +60,16 @@ docs/site/SETUP.md       Google 側の設定手順（幹事向け）
 {
   "ok": true,
   "updated": "2026-11-01T12:00:00+09:00",
-  "members": [ { "name": "夕照 一郎", "entryYear": 2003, "gradYear": 2007 } ],
+  "members": [ { "name": "夕照 一郎", "entryYear": 2003, "gradYear": 2006 } ],
   "rooms":   [ { "year": 2005, "room": "305", "name": "夕照 一郎" } ]
 }
 ```
 
-- `entryYear`・`year` は年度（4月はじまり）の西暦。`gradYear` は無いこと（null）もある。
+- `entryYear`・`year` は年度（4月はじまり）の西暦。
+- `gradYear` は卒業した年度（2007年3月に卒業したなら 2006）。名簿には「2006年度卒」と出る。無いこと（null）もある。
 - `room` は文字列で `"101"`、`"201"`〜`"217"`、`"301"`〜`"317"`（一覧は `OB.data.ROOM_NUMBERS`）。
-- 幹事が「掲載」にチェックした行だけが返る。
+- 幹事が「掲載」にチェックした行だけが返る。メモに「名簿掲載NG」とある行と、入学年度のない名簿の行は返らない。
+- `members` は入学年度の順、`rooms` は年度の順（同じ年度の中は部屋の順）。
 - 設定が空のときは `js/site/sample.js` の中身を返し、`sample: true` が付く。
 
 ### 年表（Google でログインした、見る権限のある人だけ）
@@ -72,11 +81,17 @@ docs/site/SETUP.md       Google 側の設定手順（幹事向け）
 { "ok": false, "error": "not_member" }      // 権限がない
 { "ok": false, "error": "invalid_token" }   // ログインが切れた・不正
 { "ok": false, "error": "not_configured" }  // Apps Script 側の設定がまだ
+{ "ok": false, "error": "bad_request" }     // 送った中身がおかしい
+{ "ok": false, "error": "server_error" }    // Apps Script の中でエラー
 ```
+
+- `OB.data.loadTimeline()` は、失敗すると `code` 付きの Error を投げる。`code` は上の `error` の値か、通信できなかったときの `'network'`。
+- 年表のページは `not_member`・`invalid_token`・`not_configured`・`network` で、それぞれの文を出す。ほかは「うまく読み込めませんでした」。
 
 - `year`・`month` は分からなければ null。
 - `idToken` は Google Identity Services（`google.accounts.id`）のログインで受け取る credential（ID トークン）。サイトは保存しない（メモリだけ）。
-- 「見る権限」＝ そのスプレッドシートを共有されている人（閲覧者・編集者・オーナー）か、シート「メンバー」にメールアドレスがある人。
+- 「見る権限」＝ シート「メンバー」にメールアドレスがある人か、そのスプレッドシートを共有されている人（閲覧者・編集者・オーナー）。
+  スプレッドシートを共有すると、掲載していない投稿やメモまで見えるので、寮生は「メンバー」に書く（`docs/site/SETUP.md`）。
 
 ## 4. ゲーム「男魂くんの1年」
 
@@ -137,9 +152,31 @@ OTK.register({
 - 画面は 256×224 ドット（ファミコンと同じ）。上の 12 ドットは、残り時間などを出すので空けておく。
 - 操作は十字キーと A・B だけ（キーボードは矢印・Z/X、スマホは画面下のボタン）。タップの位置も使ってよい。
 
-## 5. 確認のしかた
+## 5. ブラウザに保存するもの
+
+サーバーには何も送らない。どれも、その人のブラウザの中だけ。
+
+| ページ | 場所 | キー | 中身 |
+| --- | --- | --- | --- |
+| ホーム | localStorage | `ob-home-sound` | 音のオン・オフ（`'on'`・`'off'`） |
+| ホーム | sessionStorage | `ob-home-last` | コンテンツから戻ったとき、元の場面とカーソルから始めるためのメモ（1 回読んだら消す） |
+| ゲーム | localStorage | `otk-save` | 1年の進み具合 `{ step, clear, good, bad }` |
+| ゲーム | localStorage | `otk-sound` | 音のオン・オフ |
+| 寮さんぽ | localStorage | `sekisho-dorm-save-v1` | 進み具合 |
+| 寮さんぽ | localStorage | `sekisho-sound` | 音のオン・オフ |
+
+年表のログインで受け取る ID トークンは、どこにも保存しない（メモリだけ）。
+
+## 6. 確認のしかた
 
 - `node tests/e2e/<名前>.test.js` で動く確認を書く（`tests/e2e/lib.js` を使う）。エラーが出ないこと、主な操作が通ることを確かめる。
+- ぜんぶまとめて動かすときは `sh tests/run-all.sh`（1 つでも失敗すると、終了コードが 0 以外になる）。30 分ほどかかる。
+- `gas/Code.gs` の確認は `node tests/gas/run.js`（Google には出ない。Apps Script のまねをして動かす）。
 - 同時に動かしても重ならないように、ポートを分ける：
-  ホーム 8802、ゲームのエンジン 8801、ミニゲーム 8811〜8815、部屋割り 8803、名簿・年表 8804、確認役 8821〜。
+  ゲームのエンジン 8801、ホーム 8802、部屋割り 8803、名簿・年表 8804、ミニゲーム 8811〜8815、サイト全体 8805、確認役 8821〜。
+- どの確認も、環境変数 `PORT` でポートを変えられる（例：`PORT=8821 node tests/e2e/home.test.js`）。古い名前の `HOME_PORT`・`HEYA_PORT`・`MEIBO_PORT`・`NENPYO_PORT` も使える。
 - このリポジトリの外（Google Fonts など）には出られないことがある。フォントが読めないことによるエラーは無視してよい（`realErrors()`）。
+- 確認のための入り口：
+  - ホーム：`window.HOME.state`（いまの場面・カーソル）、`HOME.hit`、`HOME.audio.current()`・`HOME.audio.started()`
+  - ゲーム：`OTK.debug`（`docs/site/ENGINE.md` の 7）。`game/?play=<id>&quick=1&seed=1` で、そのミニゲームからすぐ始まる
+  - 部屋割り：`window.HEYA`

@@ -445,6 +445,17 @@ async function details(open, base) {
   await waitScene(page, 'story');
   check((await page.evaluate(() => OTK.debug.save.step)) === 0, '確認の「はい」をタップすると、はじめから');
 
+  // 10 本目をクリアして、エンディングを見る前に閉じたとき：つづきからでエンディングへ
+  await page.evaluate(() => localStorage.setItem('otk-save', JSON.stringify({ step: 10, clear: {}, good: 0, bad: 0 })));
+  await page.reload();
+  await waitScene(page, 'title');
+  await pressUntil(page, 'Enter', 'menu');
+  await page.waitForTimeout(300);
+  await shot(page, 'd-menu-cont-ending');
+  await pressUntil(page, 'Enter', 'ending_good', 3); // カーソルは、はじめから「つづきから」にある
+  const sv10 = await page.evaluate(() => OTK.debug.save);
+  check(sv10.good === 1 && sv10.step === 0, '10 本目のあとに閉じても、つづきからでよいエンディングを見られる');
+
   // 「ホームへもどる」のあと、ブラウザの「戻る」でページが戻ってきたら、メニューに戻る
   await page.evaluate(() => OTK.debug.goto('menu'));
   await waitScene(page, 'menu');

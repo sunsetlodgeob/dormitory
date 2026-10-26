@@ -10,7 +10,7 @@ const fs = require('fs');
 const path = require('path');
 const { withSite, realErrors, ROOT } = require('./lib');
 
-const PORT = Number(process.env.HEYA_PORT) || 8803; // ARCH.md の割り当て（確認役が別のポートで動かすときは HEYA_PORT）
+const PORT = Number(process.env.HEYA_PORT || process.env.PORT) || 8803; // ARCH.md の割り当て（確認役が別のポートで動かすときは HEYA_PORT）
 const SHOTS = process.env.HEYA_SHOTS || '';
 
 async function shot(page, name, full) {

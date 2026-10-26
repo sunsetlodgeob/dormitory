@@ -39,23 +39,8 @@
   const namesFor = (room) => (S.byYear.get(S.year) || new Map()).get(room) || [];
 
   // ── データ ─────────────────────────────────────
-  // rooms: [{ year, room, name }] を 年度 → 部屋 → 名前の一覧 にまとめる
-  // 全角の数字や「305号室」もそろえ、寮にない部屋番号は捨てる（名前の字は変えない）
-  function index(rooms) {
-    const by = new Map();
-    const str = (v) => String(v == null ? '' : v).trim();
-    for (const r of rooms || []) {
-      const year = Number(str(r && r.year).normalize('NFKC'));
-      const room = str(r && r.room).normalize('NFKC').replace(/[^0-9]/g, '');
-      const name = str(r && r.name);
-      if (!Number.isInteger(year) || OB.data.ROOM_NUMBERS.indexOf(room) < 0 || !name) continue;
-      if (!by.has(year)) by.set(year, new Map());
-      const m = by.get(year);
-      if (!m.has(room)) m.set(room, []);
-      if (m.get(room).indexOf(name) < 0) m.get(room).push(name);
-    }
-    return by;
-  }
+  // rooms: [{ year, room, name }] を 年度 → 部屋 → 名前の一覧 にまとめる（そろえ方は js/site/data.js）
+  const index = (rooms) => OB.data.roomsByYear(rooms);
 
   async function load() {
     el.error.hidden = true;
@@ -473,6 +458,13 @@
   el.zoom.addEventListener('click', () => {
     S.zoom = !S.zoom;
     layout(true);
+    // 部屋をえらんでいたら、大きさが変わっても、その部屋が見えるところまで送る
+    const btn = S.sel && !el.panel.hidden && el.stack.querySelector('.heya-room[data-room="' + S.sel + '"]');
+    if (btn) {
+      const box = el.maps.getBoundingClientRect(), r = btn.getBoundingClientRect();
+      el.maps.scrollLeft += r.left + r.width / 2 - (box.left + box.width / 2);
+      revealAbovePanel(S.sel);
+    }
   });
   el.panelClose.addEventListener('click', closePanel);
   el.retry.addEventListener('click', () => load());

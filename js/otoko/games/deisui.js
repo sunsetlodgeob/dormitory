@@ -48,7 +48,7 @@
   const NOTHING = ['何もない。ハトがいるだけ。', '何もない。自販機がまぶしい。', '何もない。風がぬるい。', '何もない。ここじゃない。', '何もない。セミが鳴いている。'];
 
   // ── 絵（はじめて使うときに作って、使い回す） ─────────────────────
-  const INK = '#141018';
+  const INK = OTK.P.ink;
   let ART = null;
   function canvas(w, h) {
     const c = document.createElement('canvas');
@@ -182,7 +182,7 @@
       function move(d) {
         const to = st.cur + d;
         if (to < 0 || to >= STATIONS.length) {
-          say('ここが終点だ。', 1.4);
+          say('この先には行かない。', 1.4);
           api.sfx('cancel');
           return;
         }
@@ -520,11 +520,13 @@
           else if (inp.pressed('right')) move(1);
           else if (inp.pressed('a')) search();
           else if (inp.tap) {
-            // タップ：路線図なら、いまの駅より左・右・その駅。下の場面なら、左右のはし・まん中
+            // タップ：路線図なら、いまの駅より左・右・その駅。下の場面なら、左右のはし・まん中とベンチ
             const tp = inp.tap;
             const cx = tp.y < SCENE_Y ? SX(st.cur) : W / 2;
             const half = tp.y < SCENE_Y ? 11 : 48;
-            if (tp.x < cx - half) move(-1);
+            const bench = tp.y >= SEAT_Y - 34 && tp.y < PLAT_Y + 12 && tp.x >= BENCH_X - 6 && tp.x < BENCH_X + BENCH_W + 6;
+            if (bench) search();
+            else if (tp.x < cx - half) move(-1);
             else if (tp.x > cx + half) move(1);
             else search();
           }

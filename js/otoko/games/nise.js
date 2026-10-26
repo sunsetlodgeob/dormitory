@@ -79,6 +79,12 @@
   function hex(d, i) {
     return d[i + 3] ? '#' + ((1 << 24) | (d[i] << 16) | (d[i + 1] << 8) | d[i + 2]).toString(16).slice(1) : null;
   }
+  // 2 つの色をまぜる（t は b の割合）
+  function mix(a, b, t) {
+    const x = parseInt(a.slice(1), 16), y = parseInt(b.slice(1), 16);
+    const ch = (s) => Math.round(((x >> s) & 255) * (1 - t) + ((y >> s) & 255) * t);
+    return '#' + ((1 << 24) | (ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).slice(1);
+  }
   function face(api, v, mood, deco) {
     const base = api.portrait('ichinen', { variant: v, mood });
     if (!deco) return base;
@@ -105,7 +111,8 @@
     const onSkin = (px, py, col) => { if (at(px, py) === skin) put(px, py, col); };
     if (deco === 'beard') {
       // うっすら青ひげ（あごと口のまわり）
-      for (let py = 20; py <= 23; py++) for (let px = 10; px <= 21; px++) if ((px + py) % 2 === 0) onSkin(px, py, '#c8a8a8');
+      const stubble = mix(skin, '#40507c', 0.3);
+      for (let py = 20; py <= 23; py++) for (let px = 10; px <= 21; px++) if ((px + py) % 2 === 0) onSkin(px, py, stubble);
     } else if (deco === 'gray') {
       // こめかみに白髪。上にも少しだけ
       for (let py = 7; py <= 15; py++) for (let px = 4; px <= 27; px++) if ((px <= 9 || px >= 22) && at(px, py) === hair && (px + py) % 2 === 0) put(px, py, '#c8c8d0');
@@ -142,7 +149,7 @@
     title: 'ニセ一年を見抜け',
     goal: 'ニセ者を断れ！',
     howto: ['A：受ける　B：断る', 'ニセ一年（OB）は1人', '本物を3人断ると負け'],
-    note: '言葉づかいや顔を、よく見よう。',
+    note: '言葉づかいや顔を、よく見よう。\nだまっていると、受けたことになる。',
     time: null,
     timeout: 'lose',
     bgm: 'menu',
@@ -203,7 +210,7 @@
         choice: '',
         qShift: 0, // 列がつめる動き
       };
-      const cur = () => people[Math.min(st.idx, people.length - 1)];
+      const cur = () => people[st.idx]; // ニセ一年で、かならず終わる（7 人目より先には進まない）
       const inside = (tp, b) => tp.x >= b.x - 6 && tp.x < b.x + b.w + 6 && tp.y >= b.y - 8 && tp.y < b.y + b.h + 6;
 
       function decide(kind) {
@@ -305,7 +312,7 @@
         const rest = people.length - st.idx - 1;
         g.text('あと ' + Math.max(0, rest) + '人', 218, 21, { size: 12, align: 'center', col: P.white, outline: P.ink });
         for (let j = rest - 1; j >= 0; j--) {
-          const x = 188 + (j + st.qShift) * 11;
+          const x = 187 + (j + st.qShift) * 10;
           const p = people[st.idx + 1 + j];
           g.shadow(x + 8, 117, 6);
           g.sprite(api.person('ichinen', { dir: 'left', variant: p.v }), x, 94);
@@ -326,7 +333,6 @@
         g.box(B.x, B.y, B.w, B.h, { fill: P.lsky });
         const ix = B.x + 4, iy = B.y + 4, iw = B.w - 8, ih = B.h - 8;
         g.R(ix, iy + ih - 22, iw, 22, P.sky);
-        if (st.idx >= people.length) return;
         let k = 1;
         if (st.phase === 'in') k = Math.min(1, st.pT / 0.3);
         else if (st.phase === 'out') k = 1 - Math.min(1, st.pT / 0.3);
@@ -360,8 +366,8 @@
         g.box(4, 124, 248, 98);
         const name = st.reveal ? 'ニセ一年' : p.label;
         const nw = g.measure(name, 12) + 14;
-        g.box(12, 110, nw, 18, { fill: st.reveal ? P.dred : P.navy });
-        g.text(name, 19, 115, { size: 12, col: P.lyellow });
+        g.box(12, 108, nw, 20, { fill: st.reveal ? P.dred : P.navy });
+        g.text(name, 19, 111, { size: 12, col: P.lyellow });
         if (st.phase === 'in') return;
         const str = st.phase === 'talk' ? p.text : st.line;
         const lines = g.wrap(str, 232, 16).slice(0, 3); // 1 行 14 文字まで
@@ -440,7 +446,6 @@
               st.typed = 0;
               st.choice = '';
               st.qShift = 1;
-              if (st.idx >= people.length) api.win('ニセ一年は\nいなかった…？', { wait: 0.5 }); // ここには来ないはず（ニセ一年でかならず終わる）
             }
           }
         },

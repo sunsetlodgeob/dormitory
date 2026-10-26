@@ -244,6 +244,13 @@ async function nisePhone(open) {
   console.log('ニセ一年を見抜け（スマホ・画面のタップ）');
   const { page, errors } = await open('game/?play=nise&quick=1&seed=21', { phone: true, wait: 400 });
   await waitScene(page, 'play');
+  // 音のボタンで、オン・オフが切りかわる
+  const snd = () => page.evaluate(() => document.getElementById('otk-sound').getAttribute('aria-pressed'));
+  const s0 = await snd();
+  await page.locator('#otk-sound').tap();
+  const s1 = await snd();
+  await page.locator('#otk-sound').tap();
+  check(s0 === 'true' && s1 === 'false' && (await snd()) === 'true', '音のボタンで、オン・オフが切りかわる');
   await page.evaluate(() => { OTK.debug.speed = 2; });
   // 画面の「A 受ける」「B 断る」をタップ
   const tapBtn = async (pg, k) => {
@@ -284,6 +291,8 @@ async function small(browser, base) {
     const box = await page.locator('#otk-canvas').boundingBox();
     const noScroll = await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
     check(box.width <= 360 && noScroll, id + '：画面が 360px におさまる（' + Math.round(box.width) + 'px）');
+    const foot = await page.evaluate(() => { const f = document.querySelector('[data-ob-footer]'); return f ? f.textContent : ''; });
+    check(/フィクション/.test(foot), id + '：ページの下に「フィクションです」の注記');
     if (SHOTS) await page.screenshot({ path: path.join(SHOTS, id + '-360.png') });
     const errs = realErrors(errors);
     check(errs.length === 0, id + '：エラーなし' + (errs.length ? '：\n' + errs.join('\n') : ''));
