@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>進捗 ― 夕照寮OB会サイト</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=DotGothic16&display=swap">
+<link rel="stylesheet" href="../css/site.css">
+<style>
+  /* 進捗ページだけの見た目 */
+  .st-lead { margin: 0 0 4px; color: var(--muted); font-size: 14px; }
+  .st-sum { display: grid; gap: 10px; }
+  .st-big { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; font-family: var(--font-pixel); }
+  .st-big strong { font-size: 30px; font-weight: normal; color: var(--fc-yellow); font-variant-numeric: tabular-nums; }
+  .st-big span { color: var(--fc-yellow-2); }
+  .st-meter { display: flex; height: 16px; border: 2px solid var(--fc-white); background: var(--fc-navy); }
+  .st-meter i { display: block; height: 100%; }
+  .st-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; }
+  .st-legend b { font-weight: normal; font-variant-numeric: tabular-nums; }
+  .st-badge { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; font: 12px/1.6 var(--font-pixel); padding: 0 8px; border: 1px solid currentColor; }
+  .st-badge::before { content: ""; width: 7px; height: 7px; background: currentColor; }
+  .st-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); gap: 12px; }
+  .st-card { display: grid; gap: 6px; align-content: start; padding: 12px; border: 2px solid rgba(252, 252, 252, 0.45); background: var(--fc-navy); min-width: 0; }
+  .st-card h3 { margin: 0; font: 16px/1.4 var(--font-pixel); color: var(--fc-white); }
+  .st-card p { margin: 0; font-size: 13px; color: var(--muted); }
+  .st-card .fc-btn { justify-self: start; margin-top: 4px; font-size: 14px; padding: 7px 12px; }
+  .st-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; }
+  .st-month { font: 12px/1 var(--font-pixel); color: var(--fc-yellow-2); }
+  .st-list { list-style: none; margin: 0; padding: 0; display: grid; }
+  .st-list li { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 8px 0; border-bottom: 1px dashed rgba(252, 252, 252, 0.3); }
+  .st-list li:last-child { border-bottom: 0; }
+  .st-list small { grid-column: 1 / -1; color: var(--muted); font-size: 13px; }
+  .st-list .st-when { font: 13px/1.5 var(--font-pixel); color: var(--fc-yellow-2); margin-right: 8px; }
+  .st-list li.is-today { background: rgba(248, 184, 0, 0.12); }
+  .st-note { font-size: 13px; color: var(--muted); }
+  .st-note p { margin: 0 0 4px; }
+  /* 状態の色 */
+  .s-done { color: var(--fc-lime); }
+  .s-check { color: var(--fc-sky); }
+  .s-make { color: var(--fc-yellow); }
+  .s-todo { color: var(--fc-gray); }
+  .s-wait { color: var(--fc-pink); }
+  .s-later { color: var(--fc-gray-2); }
+</style>
+</head>
+<body>
+<header class="ob-top">
+  <a class="ob-back" href="../">◀ ホーム</a>
+  <h1 class="ob-title">サイトの進捗<small>夕照寮OB会サイト（作る人と幹事向け）</small></h1>
+</header>
+
+<main class="ob-main">
+  <p class="st-lead" id="updated">—</p>
+
+  <section class="fc-window" aria-labelledby="sum-title">
+    <h2 id="sum-title">まとめ</h2>
+    <div class="st-sum">
+      <p class="st-big" id="big">—</p>
+      <div class="st-meter" id="meter" role="img" aria-label="状態ごとの割合"></div>
+      <div class="st-legend" id="legend"></div>
+    </div>
+  </section>
+
+  <section class="fc-window" aria-labelledby="pages-title">
+    <h2 id="pages-title">ページ</h2>
+    <p class="st-note">作業の途中でも開けます。GitHub に送るたびに、1〜2 分で新しくなります。名前はすべてサンプル（架空）です。</p>
+    <div class="st-cards" id="pages"></div>
+  </section>
+
+  <section class="fc-window" aria-labelledby="games-title">
+    <h2 id="games-title">ミニゲーム</h2>
+    <p class="st-note">「あそぶ」で 1 本だけ遊べます。1年をとおして遊ぶときは <a href="../game/">男魂くんの1年</a> から。</p>
+    <div class="st-cards" id="games"></div>
+  </section>
+
+  <section class="fc-window" aria-labelledby="tasks-title">
+    <h2 id="tasks-title">Google 側と、公開までの仕上げ</h2>
+    <ul class="st-list" id="tasks"></ul>
+  </section>
+
+  <section class="fc-window" aria-labelledby="sched-title">
+    <h2 id="sched-title">スケジュール</h2>
+    <ul class="st-list" id="schedule"></ul>
+  </section>
+
+  <section class="fc-window" aria-labelledby="dec-title">
+    <h2 id="dec-title">決めてもらうこと・もらうもの</h2>
+    <ul class="st-list" id="decisions"></ul>
+  </section>
+</main>
+
+<footer data-ob-footer></footer>
+
+<script src="../js/site/common.js"></script>
+<script src="status.js"></script>
+<script>
+(function () {
+  'use strict';
+  const S = window.OB_STATUS;
+  const ORDER = ['完了', '確認中', '作成中', '未着手', '設定待ち', 'あとで'];
+  const CLS = { '完了': 's-done', '確認中': 's-check', '作成中': 's-make', '未着手': 's-todo', '設定待ち': 's-wait', 'あとで': 's-later' };
+  const COLOR = { '完了': '#b8f818', '確認中': '#3cbcfc', '作成中': '#f8b800', '未着手': '#bcbcbc', '設定待ち': '#f878f8', 'あとで': '#7c7c7c' };
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, cls, text) => {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  };
+  const badge = (st) => el('span', 'st-badge ' + (CLS[st] || 's-todo'), st);
+  // 日付は「年-月-日」の文字のまま扱う（見る人の時差で 1 日ずれないように）
+  const parse = (d) => new Date(d + 'T00:00:00Z');
+  const md = (d) => {
+    const x = parse(d);
+    return (x.getUTCMonth() + 1) + '/' + x.getUTCDate() + '（' + '日月火水木金土'[x.getUTCDay()] + '）';
+  };
+  const now = new Date();
+  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  const daysTo = (d) => Math.round((parse(d) - today) / 86400000);
+
+  // 更新日と、公開までの日数
+  const left = daysTo(S.release);
+  $('updated').textContent = '更新：' + md(S.updated) + '　公開の予定：' + md(S.release) + (left > 0 ? '（あと ' + left + ' 日）' : '');
+
+  // まとめ（あとで に回したものも数に入れる）
+  const all = [].concat(S.pages, S.games, S.tasks);
+  const count = {};
+  for (const s of ORDER) count[s] = 0;
+  for (const it of all) count[it.status] = (count[it.status] || 0) + 1;
+  const big = $('big');
+  big.textContent = '';
+  big.append(el('strong', null, count['完了'] + ' / ' + all.length), el('span', null, '項目が完了'));
+  const meter = $('meter');
+  const legend = $('legend');
+  for (const s of ORDER) {
+    if (!count[s]) continue;
+    const bar = el('i');
+    bar.style.width = (count[s] / all.length) * 100 + '%';
+    bar.style.background = COLOR[s];
+    bar.title = s + ' ' + count[s];
+    meter.append(bar);
+    const lg = el('span', CLS[s]);
+    lg.append(badge(s), document.createTextNode(' '), el('b', null, count[s]));
+    legend.append(lg);
+  }
+
+  // ページ
+  for (const p of S.pages) {
+    const c = el('article', 'st-card');
+    const row = el('div', 'st-row');
+    row.append(el('h3', null, p.name), badge(p.status));
+    c.append(row, el('p', null, p.note || ''));
+    if (p.path) {
+      const a = el('a', 'fc-btn', 'ひらく');
+      a.href = p.path;
+      c.append(a);
+    }
+    $('pages').append(c);
+  }
+
+  // ミニゲーム（1年の順）
+  for (const g of S.games) {
+    const c = el('article', 'st-card');
+    const row = el('div', 'st-row');
+    const head = el('div');
+    if (g.month) head.append(el('span', 'st-month', g.month + '月' + (g.event ? ' ' + g.event : '')));
+    head.append(el('h3', null, g.title));
+    row.append(head, badge(g.status));
+    c.append(row);
+    if (g.note) c.append(el('p', null, g.note));
+    if (g.id) {
+      const a = el('a', 'fc-btn', 'あそぶ');
+      a.href = '../game/?play=' + encodeURIComponent(g.id);
+      c.append(a);
+    }
+    $('games').append(c);
+  }
+
+  // Google 側と仕上げ
+  for (const t of S.tasks) {
+    const li = el('li');
+    const name = el('span');
+    name.append(el('span', 'st-when', t.area), document.createTextNode(t.name));
+    li.append(name, badge(t.status));
+    const small = el('small', null, t.note || '');
+    if (t.link) {
+      small.append(document.createTextNode(' '));
+      const a = el('a', null, '読む');
+      a.href = t.link;
+      small.append(a);
+    }
+    li.append(small);
+    $('tasks').append(li);
+  }
+
+  // スケジュール（今日をふくむ週に印）
+  for (const s of S.schedule) {
+    const li = el('li');
+    const d = daysTo(s.due);
+    if (d >= 0 && d < 7) li.classList.add('is-today');
+    const name = el('span');
+    name.append(el('span', 'st-when', md(s.due)), document.createTextNode(s.name));
+    li.append(name, badge(s.status));
+    $('schedule').append(li);
+  }
+
+  // 決めてもらうこと
+  for (const q of S.decisions) {
+    const li = el('li');
+    li.append(el('span', null, q.name), badge(q.status));
+    $('decisions').append(li);
+  }
+})();
+</script>
+</body>
+</html>
