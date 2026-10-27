@@ -61,40 +61,11 @@
       if (ext && ext.bg) D.renderMap(ext);
     }).catch(() => {});
   }
-  // 外の地図の、建物の窓ガラスの四角（夜に明かりをつける）。js/art.js の drawFacade と同じ割り付け
+  // 外の地図の、建物の窓ガラスの四角（夜に明かりをつける）。割り付けは js/art.js の DORM.art.facadeWindows（drawFacade と同じ）
   function facadeWindows(m) {
     if (m._otkWin) return m._otkWin;
     const D = DORM();
-    const b = m.building;
-    const out = [];
-    if (b && D) {
-      const rows = ['3F', '2F', '1F'].map((k) => { const r = D.WORLD.maps[k].rows; return r[r.length - 1]; });
-      const ox = b.x * TS, oy = b.y * TS, rh = b.roof * TS, fh = ((b.h - b.roof) * TS) / 3;
-      rows.forEach((row, f) => {
-        const fy = oy + rh + f * fh;
-        const n = rows[0].length;
-        let x = 0;
-        while (x < n) {
-          if (row[x] !== 'w') { x++; continue; }
-          let x2 = x;
-          while (x2 + 1 < n && row[x2 + 1] === 'w') x2++;
-          const wx = ox + x * TS, ww = (x2 - x + 1) * TS;
-          const side = row[x - 1] === 'E' || row[x2 + 1] === 'E';
-          if (!side) {
-            if (f === 2 && x2 - x >= 4) {
-              const top = fy + Math.round(fh * 0.14), sill = fy + Math.round(fh * 0.62);
-              out.push({ x: wx + 1, y: top + 2, w: ww - 2, h: sill - top - 3, k: x });
-            } else {
-              const top = fy + Math.round(fh * 0.24);
-              out.push({ x: wx + 3, y: top + 1, w: ww - 6, h: Math.round(fh * 0.5) - 2, k: x * 3 + f });
-            }
-          }
-          x = x2 + 1;
-        }
-      });
-    }
-    m._otkWin = out;
-    return out;
+    return (m._otkWin = D && D.art && D.art.facadeWindows ? D.art.facadeWindows(m) : []);
   }
 
   // ── 小さい絵（吹き出しの記号） ──────────────────────────────

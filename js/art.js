@@ -527,7 +527,71 @@
     const up = at(map, x, y - 1), dn = at(map, x, y + 1);
     return (isWall(up) || DOORISH.has(up)) && (isWall(dn) || DOORISH.has(dn));
   }
+  // 非常口（廊下の東のつきあたり）。屋内は、上下 2 マスにまたがる 1 枚の鉄のドアを上から見て描く。
+  // ドアの外は、1階は地面、2階・3階は非常はしごのついた踊り場（写真 3）
+  //  （写真では、非常口のまわりの枠と手すり、はしごが赤い）
+  const FIRE = { leaf: '#9a4036', leafHi: '#c2645a', leafDk: '#6a2a24', frame: '#a33d33', door: '#5e676b', glass: '#a9c6cf', rail: '#b0433a', railDk: '#7e2e28' };
+  // 外の地図の 1階の非常口（建物の東の面）。drawFacade とドアの大きさをそろえる
+  const EAST_DOOR = { w: 7, h: 20, r: 1 };
+  function drawFireDoor(ctx, map, x, y, px, py, open) {
+    if (map.kind === 'ext') { // 絵は drawFacade。開いたときだけ、暗い戸口を重ねる
+      if (!open) return;
+      const dx = px + 16 - EAST_DOOR.w - EAST_DOOR.r, dy = py + 16 - EAST_DOOR.h;
+      R(ctx, dx + 1, dy + 1, EAST_DOOR.w - 2, EAST_DOOR.h - 1, '#2a221e');
+      R(ctx, dx + 1, dy + EAST_DOOR.h - 4, EAST_DOOR.w - 2, 3, '#5d7287');
+      return;
+    }
+    const upN = at(map, x, y - 1) === 'N', dnN = at(map, x, y + 1) === 'N';
+    const y0 = upN ? 0 : dnN ? 8 : 2, y1 = dnN ? 16 : upN ? 8 : 14; // 2 マスで 16 ドットの戸口
+    const out = map.links && map.links.N ? 'ground' : 'landing';
+    R(ctx, px, py, 16, 16, P.wallTop);
+    if (isOpen(at(map, x - 1, y))) R(ctx, px, py, 1, 16, P.wallTopHi);
+    // 戸口：廊下の床が少し入りこみ、その先が外
+    const h = y1 - y0;
+    R(ctx, px, py + y0, 9, h, (x + y) & 1 ? '#5d7287' : '#586d82');
+    R(ctx, px + 9, py + y0, 7, h, out === 'ground' ? '#cfc9bc' : '#c9c4b8');
+    if (out === 'landing') R(ctx, px + 15, py + y0, 1, h, FIRE.rail); // 踊り場の手すり
+    if (!upN) R(ctx, px, py + y0 - 1, 16, 1, FIRE.frame);
+    if (!dnN) R(ctx, px, py + y1, 16, 1, FIRE.frame);
+    if (open) { // 開けたところ：外の光
+      R(ctx, px + 9, py + y0, 7, h, '#efe3bd');
+      if (!dnN) R(ctx, px + 9, py + y1 - 1, 7, 1, FIRE.leafDk); // 外へ開いた扉
+      return;
+    }
+    R(ctx, px + 8, py + y0, 4, h, FIRE.leaf);
+    R(ctx, px + 8, py + y0, 1, h, FIRE.leafHi);
+    R(ctx, px + 11, py + y0, 1, h, FIRE.leafDk);
+    R(ctx, px + 9, py + (upN ? 0 : y0 + 2), 2, upN ? 4 : h - 2, FIRE.glass); // 上半分のガラス
+    if (upN) R(ctx, px + 7, py + 1, 1, 3, P.metalLt); // 取っ手
+    fireDoorExtras(ctx, px, py, upN, dnN, out);
+  }
+  // 非常口の目じるし：上のかべに緑の「非常口」の灯り。外は、2階・3階なら非常はしごの上のはし、1階ならつっかけ
+  function fireDoorExtras(ctx, px, py, upN, dnN, out) {
+    if (dnN && !upN) {
+      R(ctx, px + 2, py + 1, 12, 6, '#0f5c34');
+      R(ctx, px + 3, py + 2, 10, 4, '#2fb36a');
+      R(ctx, px + 4, py + 3, 2, 3, '#e8fff0'); // 戸口
+      R(ctx, px + 8, py + 2, 1, 1, '#e8fff0'); // 走る人
+      R(ctx, px + 7, py + 3, 3, 1, '#e8fff0');
+      R(ctx, px + 8, py + 4, 1, 1, '#e8fff0');
+      R(ctx, px + 7, py + 5, 1, 1, '#e8fff0');
+      R(ctx, px + 9, py + 5, 1, 1, '#e8fff0');
+    }
+    if (!upN) return;
+    if (out === 'landing') { // はしごの上のはし（赤）
+      R(ctx, px + 12, py + 1, 1, 6, FIRE.rail);
+      R(ctx, px + 14, py + 1, 1, 6, FIRE.rail);
+      for (let k = 2; k < 7; k += 2) R(ctx, px + 12, py + k, 3, 1, FIRE.railDk);
+    } else { // つっかけ（くつをはきかえる人もいる）
+      R(ctx, px + 12, py + 1, 2, 3, '#3c5a8c');
+      R(ctx, px + 14, py + 2, 2, 3, '#3c5a8c');
+      R(ctx, px + 12, py + 1, 2, 1, '#6d8cc0');
+      R(ctx, px + 14, py + 2, 2, 1, '#6d8cc0');
+    }
+  }
+
   function drawDoor(ctx, map, x, y, px, py, ch, open) {
+    if (ch === 'N') return drawFireDoor(ctx, map, x, y, px, py, open);
     if (ch === '/') open = true;
     const up = at(map, x, y - 1), dn = at(map, x, y + 1);
     if (doorVertical(map, x, y)) { // 縦の壁のドア（上から見る）
@@ -1431,6 +1495,12 @@
         R(ctx, px + 2, py + 6, 3, 2, '#9a9aa2');
         break;
       }
+      case 'b': { // バイク（原付）：横から見たスクーターとカブ。自転車より車輪が小さく太く、車体がつまっている
+        const k = rnd(x, y, 11);
+        const col = ['#c8302c', '#f0eee6', '#2e2e36', '#3a6ab8', '#e0c040', '#9aa6ae', '#d07a2a'][(rnd(x, y, 12) * 7) | 0];
+        drawMoto(ctx, px, py, col, k < 0.4, k > 0.78);
+        break;
+      }
       case '*': {
         R(ctx, px, py + 8, 16, 8, '#6a4a32');
         R(ctx, px, py + 8, 16, 1, '#8a6a4a');
@@ -1468,6 +1538,44 @@
         break;
       }
     }
+  }
+
+  // 原付（16x16 の中に横向き）。flip で左向き、cub でカブ（またいで乗る形）
+  function drawMoto(ctx, px, py, col, flip, cub) {
+    const X = (dx, w) => (flip ? px + 16 - dx - w : px + dx);
+    const r = (dx, dy, w, h, c) => R(ctx, X(dx, w), py + dy, w, h, c);
+    const dk = mix(col, '#000000', 0.3), hi = mix(col, '#ffffff', 0.35);
+    R(ctx, px + 1, py + 13, 14, 2, 'rgba(0,0,0,0.2)');
+    for (const wx of [1, 10]) { // 小さく太い車輪
+      r(wx, 9, 5, 5, '#1c1a1e');
+      r(wx + 1, 10, 3, 3, '#4a4650');
+      r(wx + 2, 11, 1, 1, '#b3aea3');
+    }
+    if (cub) {
+      r(1, 7, 6, 2, col); // うしろの荷台と泥よけ
+      r(1, 6, 5, 1, '#3a3a40');
+      r(2, 5, 5, 2, '#2a2628'); // シート
+      r(6, 8, 5, 2, '#5a5f66'); // エンジン
+      r(8, 5, 4, 4, col); // 前のカバー
+      r(8, 5, 4, 1, hi);
+      r(11, 3, 2, 6, '#9aa0a4'); // フォーク
+      r(10, 2, 4, 1, '#2a2628'); // ハンドル
+      r(13, 3, 2, 2, '#f3e9c0'); // ライト
+      r(10, 9, 5, 1, dk);
+      return;
+    }
+    r(1, 6, 7, 4, col); // うしろのカウル
+    r(1, 6, 7, 1, hi);
+    r(1, 7, 1, 1, '#d8433a'); // テールランプ
+    r(1, 4, 6, 2, '#2a2628'); // シート
+    r(6, 9, 4, 2, dk); // 足をのせる床
+    r(9, 3, 3, 7, col); // 前の風よけ
+    r(9, 3, 1, 7, hi);
+    r(11, 1, 2, 3, '#5a5f66');
+    r(10, 1, 4, 1, '#2a2628'); // ハンドル
+    r(12, 3, 2, 2, '#f3e9c0'); // ライト
+    r(12, 6, 1, 3, '#9aa0a4'); // フォーク
+    r(1, 9, 6, 1, dk);
   }
 
   // 停まっている車（横向き 3x2 マス／後ろ向き 2x2 マス）
@@ -1663,6 +1771,75 @@
   }
   D.art.textBitmap = textBitmap;
 
+  // 道路側から見た写真（持ち主の提供。docs/dorm/dorm_reference.md の「持ち主のメモ（追加）」）でわかること：
+  //  - 2階・3階の道路側にベランダ。茶色い手すりと、部屋ごとの白い仕切り。洗濯物が干してある。
+  //    西のはしの 1 部屋（202・302）と、東のはしの物置の前にはない
+  //  - 屋上のふちは、白く厚く張り出している。その上に細い手すり
+  //  - 1階：玄関のまわりに平らなひさし、勉強部屋の前に白い柱の低い柵、脱衣所と浴室の窓は高い位置で、
+  //    そのあいだにメーター。2階の東のはしにエアコンの室外機
+  //  - 東の面：廊下のつきあたりに非常口。2階・3階は小さな踊り場と、赤い非常はしご。1階の非常口は地面の高さ（灯油庫は 1 列右にずらして描く）
+  const BALC = { from: 5, to: 50 }; // ベランダのある列（2階・3階の地図の x）
+  const PIPES = [5, 20, 30, 50]; // 雨どい（写真で見える所。仕切りのわき）
+  const FACADE = { wall: '#e3ddd0', hi: '#eeebe2', sh: '#c9c2b3' };
+  const BAL = {
+    slab: '#efede6', slabHi: '#faf8f2', slabSh: '#cdc8bc', fin: '#efede6', finHi: '#fbfaf5', finSh: '#cbc6ba',
+    rail: '#6e463c', railHi: '#8a5e50', bar: '#5a3a32',
+  };
+  const LAUNDRY = ['#f4f2ea', '#8fb3d9', '#2f4a7a', '#e8742c', '#c94a4a', '#a7a7a7', '#e8d27a', '#5a8a5a', '#f2b8c8'];
+
+  // 窓の割り付け（各階の地図の南の壁＝最下段から）。描くのにも、夜の明かりにも使う。座標は建物の左上から
+  //   kind: entrance 玄関 / side 玄関わきのガラス / bay 食堂の張り出し窓 / balcony ベランダの奥の窓 / bath 風呂の高い窓 / plain ふつうの窓
+  function facadeLayout(u, rh, fh) {
+    const cols = facadeColumns();
+    const n = cols[0].length;
+    const m1 = D.WORLD.maps['1F'];
+    const big = u >= 8;
+    const out = [];
+    for (let f = 0; f < 3; f++) {
+      const row = cols[f];
+      const fy = rh + f * fh;
+      let x = 0;
+      while (x < n) {
+        const ch = row[x];
+        if (ch !== 'w' && ch !== 'E') { x++; continue; }
+        let x2 = x;
+        while (x2 + 1 < n && row[x2 + 1] === ch) x2++;
+        let kind = 'plain';
+        if (ch === 'E') kind = 'entrance';
+        else if (row[x - 1] === 'E' || row[x2 + 1] === 'E') kind = 'side';
+        else if (f === 2 && x2 - x >= 4) kind = 'bay';
+        else if (f < 2 && x >= BALC.from && x2 < BALC.to) kind = 'balcony';
+        else if (f === 2 && /^(脱衣所|浴室)$/.test(labelAt(m1, x, m1.rows.length - 2) || '')) kind = 'bath';
+        const wx = x * u, ww = (x2 - x + 1) * u;
+        const ins = big ? 2 : 0;
+        let glass = null;
+        if (kind === 'bay') {
+          const top = fy + Math.round(fh * 0.14), sill = fy + Math.round(fh * 0.62);
+          glass = { x: wx + 1, y: top + 2, w: ww - 2, h: sill - top - 3 };
+        } else if (kind === 'balcony') {
+          const top = fy + Math.round(fh * 0.16), railT = fy + Math.round(fh * 0.56);
+          glass = { x: wx + ins + 1, y: top + 1, w: ww - ins * 2 - 2, h: railT - top - 1 };
+        } else if (kind === 'plain' || kind === 'bath') {
+          const top = fy + Math.round(fh * (kind === 'bath' ? 0.12 : 0.24)), h = Math.round(fh * (kind === 'bath' ? 0.34 : 0.5));
+          glass = { x: wx + ins + 1, y: top + 1, w: ww - ins * 2 - 2, h: h - 2 };
+          // 勉強部屋の窓は、前の低い柵より上だけ
+          if (f === 2 && labelAt(m1, x, m1.rows.length - 2) === '勉強部屋') glass.h = Math.min(glass.h, fy + Math.round(fh * 0.6) - glass.y - 1);
+        }
+        out.push({ f, x, x2, wx, ww, fy, kind, glass, k: kind === 'bay' ? x : x * 3 + f });
+        x = x2 + 1;
+      }
+    }
+    return out;
+  }
+  // 外の地図の窓ガラスの四角（地図のドット座標）。夜の明かり用（寸劇の js/otoko/story.js からも使える）
+  D.art.facadeWindows = function (map) {
+    const b = map && map.building;
+    if (!b) return [];
+    const rh = b.roof * TS, fh = ((b.h - b.roof) * TS) / 3;
+    return facadeLayout(TS, rh, fh).filter((w) => w.glass)
+      .map((w) => ({ x: b.x * TS + w.glass.x, y: b.y * TS + w.glass.y, w: w.glass.w, h: w.glass.h, k: w.k }));
+  };
+
   function drawFacade(ctx, ox, oy, o) {
     const u = o.u, rh = o.roofH, fh = o.floorH;
     const cols = facadeColumns();
@@ -1672,6 +1849,9 @@
     const big = u >= 8;
     const lit = o.lit || 0;
     const t1 = Math.max(1, Math.round(u / 8));
+    const ar = Math.max(2, Math.round(fh / 2)); // 灯油庫の屋根
+    const fy1 = oy + rh + fh * 2, gnd = oy + H; // 1階の上と、地面
+    const layout = facadeLayout(u, rh, fh);
     // 屋根
     R(ctx, ox, oy, W, rh, '#8d8e86');
     R(ctx, ox, oy, W, t1, P.concHi);
@@ -1701,15 +1881,21 @@
       R(ctx, ox + u * 12.5, oy - 4, 1, 5, P.ink);
       R(ctx, ox + u * 12, oy - 3, u, 1, P.ink);
     }
-    // 手すり壁の正面と、その上の茶色い手すり
-    const pr = Math.max(2, Math.round(u / 4));
-    R(ctx, ox, oy + rh - pr, W, pr, FACADE.hi);
+    // 屋上のふち：細い手すりと、白く厚く張り出したふち
+    const pr = big ? 6 : Math.max(2, Math.round(u / 4));
+    const ov = big ? 3 : 0;
     if (big) {
       R(ctx, ox, oy + rh - pr - 7, W, 1, '#8a4b3a');
       R(ctx, ox, oy + rh - pr - 3, W, 1, '#8a4b3a');
       for (let i = 0; i < W; i += 8) R(ctx, ox + i, oy + rh - pr - 7, 1, 7, '#6e3a2c');
     }
-    // 各階
+    R(ctx, ox - ov, oy + rh - pr, W + ov * 2, pr, BAL.slab);
+    if (big) {
+      R(ctx, ox - ov, oy + rh - pr, W + ov * 2, 1, BAL.slabHi);
+      R(ctx, ox - ov, oy + rh - 1, W + ov * 2, 1, BAL.slabSh);
+    }
+    // 各階の壁
+    const bs = big ? 5 : Math.max(1, Math.round(fh / 10)); // 1階の足もと（基礎）
     for (let f = 0; f < 3; f++) {
       const fy = oy + rh + f * fh;
       R(ctx, ox, fy, W, fh, FACADE.wall);
@@ -1717,31 +1903,135 @@
       const sl = Math.max(1, Math.round(fh / 12));
       R(ctx, ox, fy, W, sl, FACADE.hi);
       R(ctx, ox, fy + sl, W, 1, FACADE.sh);
-      const row = cols[f];
-      if (f === 2) drawFacadeTiles(ctx, ox, fy, row, u, fh, big);
-      let x = 0;
-      while (x < n) {
-        const ch = row[x];
-        if (ch !== 'w' && ch !== 'E') { x++; continue; }
-        let x2 = x;
-        while (x2 + 1 < n && row[x2 + 1] === ch) x2++;
-        const wx = ox + x * u, ww = (x2 - x + 1) * u;
-        if (ch === 'E') drawFacadeEntrance(ctx, wx, fy, ww, fh, u, big);
-        else if (row[x - 1] === 'E' || row[x2 + 1] === 'E') drawFacadeSidelight(ctx, wx, fy, ww, fh, u, big);
-        else if (f === 2 && x2 - x >= 4) drawFacadeBay(ctx, wx, fy, ww, fh, u, big, lit);
-        else drawFacadeWindow(ctx, wx, fy, ww, fh, u, big, f, x, lit);
-        x = x2 + 1;
+      if (f === 2) drawFacadeTiles(ctx, ox, fy, cols[2], u, fh, big);
+    }
+    R(ctx, ox, gnd - bs, W, bs, big ? '#b5afa3' : P.concDk);
+    if (big) {
+      R(ctx, ox, gnd - bs, W, 1, '#9d978b');
+      R(ctx, ox, gnd - 1, W, 1, P.concDk);
+      for (let i = 0; i < 30; i++) R(ctx, ox + ((rnd(i, 7, 9) * W) | 0), gnd - bs + 1, 2 + ((rnd(i, 8, 9) * 6) | 0), 2 + ((rnd(i, 9, 9) * 2) | 0), 'rgba(80,70,60,0.18)');
+    }
+    // 雨どい（壁にそって。ベランダより奥）
+    for (const c of PIPES) {
+      const px = ox + c * u + (big ? 4 : 0);
+      R(ctx, px, oy + rh - pr, t1, fh * 3 + pr - bs, P.concDk);
+      if (big) R(ctx, px + 1, oy + rh - pr, 1, fh * 3 + pr - bs, '#a8a091');
+    }
+    // 窓
+    for (const w of layout) {
+      const X = ox + w.wx, Y = oy + w.fy;
+      if (w.kind === 'entrance') drawFacadeEntrance(ctx, X, Y, w.ww, fh, u, big, big);
+      else if (w.kind === 'side') drawFacadeSidelight(ctx, X, Y, w.ww, fh, u, big);
+      else if (w.kind === 'bay') drawFacadeBay(ctx, X, Y, w.ww, fh, u, big, lit);
+      else if (w.kind === 'balcony') drawBalconyWindow(ctx, X, Y, w, fh, u, big, lit);
+      else drawFacadeWindow(ctx, X, Y, w.ww, fh, u, big, w.f, w.x, lit, w.kind === 'bath');
+    }
+    // 1階の小物
+    const m1 = D.WORLD.maps['1F'];
+    const study = m1.labels.find((l) => l.name === '勉強部屋');
+    if (big && study) { // 勉強部屋の前の低い柵（白い柱は、上のベランダの仕切りと同じ列）
+      const a = ox + (study.x - 1) * u + 4, b = ox + (study.x + study.w) * u;
+      const ry = fy1 + Math.round(fh * 0.6);
+      R(ctx, a, ry, b - a, 2, BAL.rail);
+      R(ctx, a, ry, b - a, 1, BAL.railHi);
+      R(ctx, a, ry + 6, b - a, 1, BAL.bar);
+      R(ctx, a - 2, ry - 1, 4, gnd - bs - ry + 1, BAL.fin);
+      R(ctx, a + 1, ry - 1, 1, gnd - bs - ry + 1, BAL.finSh);
+      for (let c = study.x; c <= study.x + study.w; c++) if (c % 5 === 0) drawFin(ctx, ox + c * u, ry + 2, gnd - bs - 2, fh, true);
+    }
+    if (big) { // メーター（脱衣所と浴室の窓のあいだ、ボイラー室の前）と、管
+      for (const [mx, nb] of [[44.7, 2], [51.4, 1]]) {
+        const x0 = ox + Math.round(mx * u), y0 = fy1 + Math.round(fh * 0.4);
+        for (let i = 0; i < nb; i++) {
+          const bx = x0 + i * 7;
+          R(ctx, bx, y0, 6, 8, '#eeece6');
+          R(ctx, bx, y0, 6, 1, '#ffffff');
+          R(ctx, bx + 5, y0, 1, 8, '#bdb8ad');
+          R(ctx, bx + 2, y0 + 2, 2, 2, '#8d9296');
+          R(ctx, bx + 2, y0 + 8, 1, gnd - bs - y0 - 8, '#9aa0a4');
+        }
       }
     }
-    // 1階の東の平屋（灯油庫）
-    if (extra > 0) {
-      const ax = ox + W, aw = extra * u, ay = oy + rh + fh * 2;
-      const ar = Math.max(2, Math.round(fh / 2));
+    // 2階・3階のベランダ
+    const fins = [];
+    for (const w of layout) if (w.kind === 'balcony' && w.f === 0) fins.push(w.x - 1);
+    if (fins.length) {
+      const last = layout.filter((w) => w.kind === 'balcony' && w.f === 0).pop();
+      fins.push(last.x2 + 2);
+    }
+    const bx0 = ox + BALC.from * u, bx1 = ox + BALC.to * u;
+    const shade = 'rgba(70,58,52,0.22)';
+    for (let f = 0; f < 2; f++) {
+      const fy = oy + rh + f * fh;
+      const slab = big ? 4 : 1;
+      const sy = fy + fh - slab;
+      const railT = fy + Math.round(fh * 0.56);
+      R(ctx, bx0, fy, bx1 - bx0, big ? 3 : 1, shade); // 上のベランダ（3階は屋上のふち）の影
+      if (big) for (const w of layout) if (w.kind === 'balcony' && w.f === f) drawLaundry(ctx, ox + w.wx, fy, w, fh);
+      // 手すり（茶色。すき間から奥が見える）
+      ctx.fillStyle = 'rgba(58,36,32,0.3)';
+      ctx.fillRect(bx0, railT + 1, bx1 - bx0, sy - railT - 1);
+      if (big) for (let i = bx0 + 1; i < bx1; i += 3) R(ctx, i, railT + 2, 1, sy - railT - 2, BAL.bar);
+      R(ctx, bx0, railT, bx1 - bx0, big ? 2 : 1, BAL.rail);
+      if (big) R(ctx, bx0, railT, bx1 - bx0, 1, BAL.railHi);
+      // 手すりにかけた布団
+      if (big) for (const w of layout) {
+        if (w.kind !== 'balcony' || w.f !== f || rnd(w.x, f, 45) > 0.16) continue;
+        const fc = ['#e8e4d8', '#e6a3a3', '#a3c0e6', '#e6d3a3'][(rnd(w.x, f, 46) * 4) | 0];
+        const X = ox + w.wx + 4, Wd = w.ww - 8;
+        R(ctx, X, railT - 2, Wd, 9, fc);
+        R(ctx, X, railT - 2, Wd, 1, '#ffffff');
+        R(ctx, X, railT + 6, Wd, 1, mix(fc, '#000000', 0.2));
+      }
+      // 床
+      R(ctx, bx0 - (big ? 2 : 0), sy, bx1 - bx0 + (big ? 4 : 0), slab, BAL.slab);
+      if (big) {
+        R(ctx, bx0 - 2, sy, bx1 - bx0 + 4, 1, BAL.slabHi);
+        R(ctx, bx0 - 2, sy + slab - 1, bx1 - bx0 + 4, 1, BAL.slabSh);
+      }
+      // 部屋ごとの白い仕切り
+      for (const c of fins) drawFin(ctx, ox + c * u, railT, fy + fh, fh, big);
+    }
+    if (fins.length) R(ctx, bx0, fy1, bx1 - bx0, big ? 3 : 1, shade); // 1階の上に落ちる影
+    // 玄関まわりの平らなひさし（管理人室の前から玄関まで）
+    const ent = cols[2].indexOf('E');
+    if (ent >= 0) {
+      const c0 = ox + (ent - 7) * u, c1 = ox + (ent + 3) * u;
+      if (big) {
+        R(ctx, c0 + 1, fy1 + 8, 4, gnd - bs - fy1 - 8, FACADE.hi); // 左の柱
+        R(ctx, c0 + 4, fy1 + 8, 1, gnd - bs - fy1 - 8, FACADE.sh);
+        R(ctx, c0 - 2, fy1 + 2, c1 - c0 + 4, 4, BAL.slab);
+        R(ctx, c0 - 2, fy1 + 2, c1 - c0 + 4, 1, BAL.slabHi);
+        R(ctx, c0 - 2, fy1 + 5, c1 - c0 + 4, 1, BAL.slabSh);
+        R(ctx, c0, fy1 + 6, c1 - c0, 2, 'rgba(60,48,44,0.3)');
+      } else {
+        R(ctx, c0, fy1 + 1, c1 - c0, 1, BAL.slab);
+      }
+    }
+    // 2階の東のはしの、エアコンの室外機
+    if (big) {
+      const ax = ox + Math.round(53.3 * u), ay = oy + rh + fh + Math.round(fh * 0.36);
+      R(ctx, ax + 1, ay + 12, 1, 5, '#8d9296');
+      R(ctx, ax + 15, ay + 12, 1, 5, '#8d9296');
+      R(ctx, ax, ay + 16, 17, 1, '#8d9296');
+      R(ctx, ax, ay, 17, 12, '#e7e3d8');
+      R(ctx, ax, ay, 17, 1, '#f6f4ee');
+      R(ctx, ax + 16, ay, 1, 12, '#bdb8ad');
+      disc(ctx, ax + 6, ay + 6, 4, '#a3a8ab');
+      disc(ctx, ax + 6, ay + 6, 2, '#c9cdcf');
+      for (let j = 0; j < 4; j++) R(ctx, ax + 12, ay + 3 + j * 2, 3, 1, '#c4c0b5');
+      R(ctx, ax - 3, ay + 3, 3, 1, '#d8d4ca');
+      R(ctx, ax - 3, ay + 3, 1, gnd - bs - ay - 3, '#d8d4ca');
+    }
+    // 1階の東の平屋（灯油庫）。いちばん左の 1 列（建物の東の面）はあけて、1階の非常口が見えるように
+    if (extra > 1) {
+      const ax = ox + W + u, aw = (extra - 1) * u, ay = fy1;
       R(ctx, ax, ay - ar, aw, ar, '#8d8e86');
       R(ctx, ax, ay - ar, aw, t1, P.concHi);
       R(ctx, ax, ay, aw, fh, FACADE.wall);
       R(ctx, ax, ay, aw, Math.max(1, Math.round(fh / 12)), FACADE.hi);
       R(ctx, ax, ay - ar, t1, ar + fh, FACADE.sh);
+      R(ctx, ax, gnd - bs, aw, bs, big ? '#b5afa3' : P.concDk);
       if (big) { // 鉄の扉
         R(ctx, ax + aw - u * 2, ay + Math.round(fh * 0.3), u, fh - Math.round(fh * 0.3), '#8a9297');
         R(ctx, ax + aw - u * 2 + 2, ay + Math.round(fh * 0.3) + 2, u - 4, 1, '#b0b8bd');
@@ -1757,14 +2047,6 @@
         ctx.fillRect(sx, sy, 1 + ((rnd(i, 5, 9) * 2) | 0), 6 + ((rnd(i, 6, 9) * 18) | 0));
       }
     }
-    // 雨どい
-    for (const c of [5.5, 20.5, 35.5, 50.5]) {
-      R(ctx, ox + c * u, oy + rh - pr, t1, fh * 3 + pr, P.concDk);
-      if (big) R(ctx, ox + c * u + 1, oy + rh - pr, 1, fh * 3 + pr, '#a8a091');
-    }
-    // 基礎
-    const bs = Math.max(1, Math.round(fh / 10));
-    R(ctx, ox, oy + H - bs, WA, bs, P.concDk);
     // 夕日（西＝左）からの光
     const g = ctx.createLinearGradient(ox, 0, ox + WA, 0);
     g.addColorStop(0, 'rgba(255,170,90,0.20)');
@@ -1772,19 +2054,140 @@
     g.addColorStop(1, 'rgba(60,40,90,0.10)');
     ctx.fillStyle = g;
     ctx.fillRect(ox, oy, W, H);
-    if (extra > 0) ctx.fillRect(ox + W, oy + rh + fh * 2 - Math.max(2, Math.round(fh / 2)), WA - W, fh + Math.max(2, Math.round(fh / 2)));
+    if (extra > 1) ctx.fillRect(ox + W + u, fy1 - ar, WA - W - u, fh + ar);
+    // 東の面（非常口・踊り場・非常はしご）。日かげ。各階のドアは、道路側の階の高さにそろえる
+    drawFacadeEast(ctx, ox + W, oy + Math.round(rh / 3), oy + rh, fh, gnd, u, big);
     // 玄関の左の壁の看板（位置は仮）
-    const ent = cols[2].indexOf('E');
     if (ent >= 0 && big) {
       const sign = signBitmap();
       const sw = 3 * u, sh = 18;
-      const sx = Math.round(ox + (ent - 4) * u), sy = Math.round(oy + rh + fh * 2 + (fh - sh) / 2 + 1);
+      const sx = Math.round(ox + (ent - 4) * u), sy = Math.round(fy1 + (fh - sh) / 2 + 2);
       R(ctx, sx, sy - 1, sw, sh + 2, '#4f3420');
       R(ctx, sx + 1, sy, sw - 2, sh, '#efe6cf');
       ctx.drawImage(sign, sx + Math.round((sw - sign.width) / 2), sy - 1);
     }
   }
-  const FACADE = { wall: '#e6dfcc', hi: '#f0ebdd', sh: '#cbc2ab' };
+
+  // ベランダの白い仕切り（上が丸い）。cx は部屋のさかい目
+  function drawFin(ctx, cx, railT, bottom, fh, big) {
+    if (!big) { R(ctx, cx, railT - 1, 1, bottom - railT + 1, BAL.fin); return; }
+    const fw = 7, x0 = cx - 3, top = railT - Math.round(fh * 0.16);
+    R(ctx, x0 + 1, top, fw - 2, 1, BAL.fin);
+    R(ctx, x0, top + 1, fw, bottom + 1 - top, BAL.fin);
+    R(ctx, x0, top + 1, 1, bottom + 1 - top, BAL.finHi);
+    R(ctx, x0 + fw - 2, top + 1, 2, bottom + 1 - top, BAL.finSh);
+    R(ctx, x0, bottom + 1, fw, 1, BAL.finSh);
+  }
+
+  // ベランダの奥の大きな窓（引き戸）
+  function drawBalconyWindow(ctx, x, y, w, fh, u, big, lit) {
+    const ins = big ? 2 : 0;
+    const top = y + Math.round(fh * 0.16), bot = y + fh - (big ? 4 : 1);
+    R(ctx, x + ins, top, w.ww - ins * 2, bot - top, P.alu);
+    const gx = x + ins + 1, gy = top + 1, gw = w.ww - ins * 2 - 2, gh = bot - top - 1;
+    const on = lit > 0 && rnd(w.x, w.f, 77) < lit;
+    for (let j = 0; j < gh; j++) R(ctx, gx, gy + j, gw, 1, on ? mix('#ffd68a', '#ffb860', j / gh) : mix(P.glassA, P.glassB, j / Math.max(1, gh - 1)));
+    if (!big) {
+      if (w.ww >= 6) R(ctx, gx + Math.floor(gw / 2), gy, 1, gh, P.aluDk);
+      return;
+    }
+    const cc = CURTAINS[(rnd(w.x, w.f, 7) * CURTAINS.length) | 0];
+    const k = rnd(w.x, w.f, 8);
+    if (k < 0.45) { R(ctx, gx, gy, 4, gh, cc); R(ctx, gx + gw - 4, gy, 4, gh, cc); }
+    else if (k < 0.8) R(ctx, gx, gy, Math.round(gw * 0.5), gh, cc);
+    R(ctx, gx + 3, gy + 1, 1, 1, P.glassHi);
+    R(ctx, gx + 2, gy + 2, 1, 1, P.glassHi);
+    R(ctx, gx + Math.round(gw / 2), gy, 1, gh, P.aluDk);
+  }
+
+  // ベランダの物干しざおの洗濯物
+  function drawLaundry(ctx, x, fy, w, fh) {
+    const s = (i) => rnd(w.x, w.f, 40 + i);
+    if (s(0) > 0.62) return;
+    const py = fy + Math.round(fh * 0.2);
+    const x0 = x + 1, x1 = x + w.ww - 1;
+    R(ctx, x0, py, x1 - x0, 1, '#8d9296');
+    const nItems = 1 + ((s(1) * 4) | 0);
+    let cx = x0 + 2 + ((s(2) * 4) | 0);
+    for (let i = 0; i < nItems && cx < x1 - 6; i++) {
+      const col = LAUNDRY[(s(3 + i) * LAUNDRY.length) | 0];
+      const dk = mix(col, '#000000', 0.18);
+      const t = s(10 + i);
+      if (t < 0.45) { // シャツ
+        R(ctx, cx + 3, py, 1, 1, '#8d9296');
+        R(ctx, cx, py + 1, 7, 2, col);
+        R(ctx, cx + 1, py + 3, 5, 6, col);
+        R(ctx, cx + 1, py + 8, 5, 1, dk);
+        cx += 8;
+      } else if (t < 0.75) { // タオル
+        R(ctx, cx, py + 1, 4, 8, col);
+        R(ctx, cx, py + 8, 4, 1, dk);
+        cx += 5;
+      } else { // ズボン
+        R(ctx, cx, py + 1, 5, 2, col);
+        R(ctx, cx, py + 3, 2, 7, col);
+        R(ctx, cx + 3, py + 3, 2, 7, col);
+        R(ctx, cx + 2, py + 3, 1, 1, dk);
+        cx += 6;
+      }
+      cx += 1 + ((s(20 + i) * 3) | 0);
+    }
+  }
+
+  // 東の面（日かげ）。廊下のつきあたりの非常口が 3 つ重なり、2階・3階には踊り場と赤い非常はしご（写真 3）。
+  // top は東の面の上のはし、f0 は 3階の上（道路側の階の線）、fh は 1 階分の高さ、gnd は地面。
+  // 1階のドアの下は地面（外の地図では、1階の非常口のマス N の下のふち）
+  function drawFacadeEast(ctx, sx, top, f0, fh, gnd, u, big) {
+    if (!big) {
+      const sw = Math.max(1, Math.round(u * 0.7));
+      R(ctx, sx, top, sw, gnd - top, '#b9b2a4');
+      R(ctx, sx, top, sw + 1, 1, BAL.slab);
+      for (let k = 1; k <= 2; k++) R(ctx, sx, Math.round(f0 + fh * k) - 1, sw + 1, 1, BAL.slab); // 3階・2階の踊り場
+      R(ctx, sx, Math.round(f0 + fh * 0.6), 1, Math.round(fh * 1.4), FIRE.rail); // はしご
+      R(ctx, sx + sw - 1, gnd - Math.max(2, Math.round(fh * 0.6)), 1, Math.max(2, Math.round(fh * 0.6)), FIRE.frame); // 1階のドア
+      return;
+    }
+    const sw = u, cap = 5;
+    R(ctx, sx, top, sw, gnd - top, '#c3bcae');
+    R(ctx, sx, top, 1, gnd - top, '#ddd7cb'); // 角
+    R(ctx, sx - 1, top, sw + 2, cap, BAL.slab); // 屋上のふちの横
+    R(ctx, sx - 1, top, sw + 2, 1, BAL.slabHi);
+    R(ctx, sx, top + cap, sw, 2, 'rgba(60,48,44,0.25)');
+    R(ctx, sx, gnd - 5, sw, 5, '#b5afa3'); // 足もと（基礎）
+    const dw = EAST_DOOR.w, dh = EAST_DOOR.h, dx = sx + sw - dw - EAST_DOOR.r;
+    const lands = [];
+    for (let k = 0; k < 3; k++) { // 0=3階 1=2階 2=1階
+      // 2階・3階は、ドアの下（踊り場の床）を道路側のベランダの床にそろえる
+      const fb = k === 2 ? gnd : Math.round(f0 + fh * (k + 1)) - 4;
+      const dy = fb - dh;
+      R(ctx, dx, dy, dw, dh, FIRE.frame);
+      R(ctx, dx + 1, dy + 1, dw - 2, dh - 1, FIRE.door);
+      R(ctx, dx + 2, dy + 2, dw - 4, 8, FIRE.glass);
+      R(ctx, dx + 2, dy + 2, 1, 3, '#e4f0f4');
+      R(ctx, dx + 1, dy + 12, 1, 2, P.metalLt);
+      if (k === 2) { // 1階：ドアの前にコンクリートの段と、つっかけ
+        R(ctx, dx - 2, fb - 2, dw + 4, 2, P.concHi);
+        R(ctx, dx - 2, fb - 1, dw + 4, 1, '#a9a395');
+        R(ctx, sx + 2, fb - 4, 3, 2, '#3c5a8c');
+        R(ctx, sx + 2, fb - 4, 3, 1, '#6d8cc0');
+        continue;
+      }
+      lands.push(fb);
+      // 踊り場：床、赤い手すり、外がわの白い板
+      const lx0 = sx + 1, lx1 = sx + sw + 6;
+      R(ctx, lx0, fb, lx1 - lx0, 3, BAL.slab);
+      R(ctx, lx0, fb + 2, lx1 - lx0, 1, BAL.slabSh);
+      R(ctx, sx + 7, fb - 8, lx1 - sx - 10, 1, FIRE.rail);
+      for (let i = sx + 7; i < lx1 - 3; i += 3) R(ctx, i, fb - 8, 1, 8, FIRE.railDk);
+      R(ctx, lx1 - 3, fb - 10, 3, 13, BAL.fin);
+      R(ctx, lx1 - 1, fb - 10, 1, 13, BAL.finSh);
+    }
+    // 非常はしご（3階の踊り場から2階の踊り場へ。角のそば）
+    const y0 = lands[0] - 10, y1 = lands[1] + 3;
+    R(ctx, sx + 2, y0, 1, y1 - y0, FIRE.rail);
+    R(ctx, sx + 5, y0, 1, y1 - y0, FIRE.rail);
+    for (let yy = y0 + 2; yy < y1; yy += 3) R(ctx, sx + 2, yy, 4, 1, FIRE.railDk);
+  }
 
   // 玄関まわりの壁のタイル（1階の x21〜29）
   function drawFacadeTiles(ctx, ox, fy, row, u, fh, big) {
@@ -1832,8 +2235,8 @@
     if (big) for (let i = bx + 4; i < bx + bw - 4; i += 6) R(ctx, i, sill + 3, 1, y + fh - sill - 6, FACADE.sh);
   }
 
-  function drawFacadeWindow(ctx, x, y, w, fh, u, big, floor, col, lit) {
-    const top = y + Math.round(fh * 0.24), h = Math.round(fh * 0.5);
+  function drawFacadeWindow(ctx, x, y, w, fh, u, big, floor, col, lit, bath) {
+    const top = y + Math.round(fh * (bath ? 0.12 : 0.24)), h = Math.round(fh * (bath ? 0.34 : 0.5));
     const ins = big ? 2 : 0;
     // 霧除け（小さなひさし）
     R(ctx, x + ins - 1, top - Math.max(1, Math.round(fh / 16)) - 1, w - ins * 2 + 2, Math.max(1, Math.round(fh / 16)), P.concHi);
@@ -1841,13 +2244,13 @@
     R(ctx, x + ins, top, w - ins * 2, h, P.alu);
     const gx = x + ins + 1, gy = top + 1, gw = w - ins * 2 - 2, gh = h - 2;
     const on = lit > 0 && rnd(col, floor, 77) < lit;
-    for (let j = 0; j < gh; j++) R(ctx, gx, gy + j, gw, 1, on ? mix('#ffd68a', '#ffb860', j / gh) : mix(P.glassA, P.glassB, j / Math.max(1, gh - 1)));
+    for (let j = 0; j < gh; j++) R(ctx, gx, gy + j, gw, 1, on ? mix('#ffd68a', '#ffb860', j / gh) : bath ? mix('#cfd8da', '#e6ecec', j / Math.max(1, gh - 1)) : mix(P.glassA, P.glassB, j / Math.max(1, gh - 1)));
     if (big) {
-      // カーテン
+      // カーテン（風呂の窓はくもりガラス）
       const cc = CURTAINS[(rnd(col, floor, 7) * CURTAINS.length) | 0];
       const k = rnd(col, floor, 8);
-      if (k < 0.5) { R(ctx, gx, gy, 3, gh, cc); R(ctx, gx + gw - 3, gy, 3, gh, cc); }
-      else if (k < 0.8) R(ctx, gx, gy, Math.round(gw * 0.55), gh, cc);
+      if (!bath && k < 0.5) { R(ctx, gx, gy, 3, gh, cc); R(ctx, gx + gw - 3, gy, 3, gh, cc); }
+      else if (!bath && k < 0.8) R(ctx, gx, gy, Math.round(gw * 0.55), gh, cc);
       // 映り込み
       R(ctx, gx + 3, gy + 1, 1, 1, P.glassHi);
       R(ctx, gx + 2, gy + 2, 1, 1, P.glassHi);
@@ -1867,14 +2270,17 @@
     }
   }
 
-  function drawFacadeEntrance(ctx, x, y, w, fh, u, big) {
+  // noEave：玄関まわりの大きなひさしを別に描くときは、ドアの上の小さなひさしを描かない
+  function drawFacadeEntrance(ctx, x, y, w, fh, u, big, noEave) {
     const dt = y + Math.round(fh * 0.3);
     const dh = y + fh - dt;
     // ひさし
     const ch = Math.max(2, Math.round(fh / 9));
     const oh = Math.max(1, Math.round(u * 0.2));
-    R(ctx, x - oh, dt - ch - 1, w + oh * 2, ch, P.concHi);
-    R(ctx, x - oh, dt - 1, w + oh * 2, 1, P.concDk);
+    if (!noEave) {
+      R(ctx, x - oh, dt - ch - 1, w + oh * 2, ch, P.concHi);
+      R(ctx, x - oh, dt - 1, w + oh * 2, 1, P.concDk);
+    }
     // 玄関ドア
     R(ctx, x, dt, w, dh, P.alu);
     const panes = big ? 4 : 2;
@@ -2327,6 +2733,22 @@
     side(bx + 43 * u, '#25252b');
     rear(bx + 51 * u, '#c4352d');
     rear(bx - 3 * u - 2, '#e6e3dc');
+    // 向かって左はバイク置き場、右は自転車置き場
+    const moto = ['#c8302c', '#f0eee6', '#3a6ab8', '#e0c040', '#2e2e36', '#9aa6ae'];
+    for (let i = 0; i < 6; i++) {
+      const x = bx + Math.round((4.6 + i * 1.3) * u);
+      R(ctx, x, gy, 4, 2, moto[i]);
+      R(ctx, x + 3, gy - 2, 1, 2, '#2b2026');
+      R(ctx, x, gy + 2, 1, 1, '#1c1a1e');
+      R(ctx, x + 3, gy + 2, 1, 1, '#1c1a1e');
+    }
+    for (let i = 0; i < 5; i++) {
+      const x = bx + Math.round((57 + i * 0.85) * u);
+      R(ctx, x, gy + 2, 1, 1, '#1c1a1e');
+      R(ctx, x + 3, gy + 2, 1, 1, '#1c1a1e');
+      R(ctx, x + 1, gy + 1, 2, 1, moto[(i + 2) % 6]);
+      R(ctx, x + 2, gy, 1, 1, '#2b2026');
+    }
     // 西のはしの桜
     {
       const x = Math.round(bx - 22), yb = gy + 2, s2 = 1;

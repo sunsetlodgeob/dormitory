@@ -470,6 +470,27 @@ async function sanpoPlain(open) {
   await waitIdle(page);
   s = await dbg(page);
   assert.ok(s.x === 9 && s.y === 6 && !s.dialog, 'ドアまで歩く');
+  // 廊下の東のつきあたりの非常口：1階は外（建物の東の面の下。自転車置き場の間）に出られて、もどれる。2階・3階は調べるだけ
+  await page.evaluate(() => window.DORM.debug.enterMap('1F', 53, 8, 'right'));
+  await page.evaluate(() => window.DORM.debug.tapTile(55, 8, null));
+  await page.waitForFunction(() => window.DORM.debug.S.mapId === 'EXT' && !window.DORM.debug.S.fade, null, { timeout: 8000 });
+  await waitIdle(page);
+  s = await dbg(page);
+  assert.ok(s.x === 60 && s.y === 12, '1階の非常口から外へ: ' + JSON.stringify(s));
+  await page.evaluate(() => window.DORM.debug.tapTile(60, 11, null));
+  await page.waitForFunction(() => window.DORM.debug.S.mapId === '1F' && !window.DORM.debug.S.fade, null, { timeout: 8000 });
+  await waitIdle(page);
+  s = await dbg(page);
+  assert.ok(s.x === 54 && s.y === 8, '外から1階の非常口で中へ: ' + JSON.stringify(s));
+  await page.evaluate(() => window.DORM.debug.enterMap('2F', 54, 7, 'right'));
+  await page.keyboard.press('KeyZ');
+  assert.ok(/非常口/.test(((await dbg(page)).dialog || [])[0] || ''), '2階の非常口は調べられる');
+  await readDialog(page);
+  await page.keyboard.down('ArrowRight');
+  await page.waitForTimeout(400);
+  await page.keyboard.up('ArrowRight');
+  s = await dbg(page);
+  assert.ok(s.map === '2F' && s.x === 54, '2階の非常口からは出られない');
   assert.deepStrictEqual(realErrors(errors), [], 'エラーなし（寮さんぽ）');
 }
 

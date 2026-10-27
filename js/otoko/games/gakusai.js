@@ -5,8 +5,8 @@
  *  左にホストクラブの入り口。前の通りを、奥は左から右へ、手前は右から左へ、人のグループが歩いていく。
  *
  *  ねらって、さそう：
- *   - 2 本ののぼりの間（とどく所）にいるグループだけ、えらべる。えらべる相手には白いかぎかっこが付く。
- *     ←→（↑↓ で奥・手前）で黄色いわくを動かし、A でさそう。スマホは人をタップするとえらび、もう一度タップ（か A）でさそう。
+ *   - 2 本ののぼりの間（とどく所）にいるグループだけ、えらべる。えらべる相手には白いかぎかっこ（こい影つき）が付く。
+ *     ←→（↑↓ で奥・手前）で黄色いわくを動かし、A でさそう。←→ は見たとおりの向きにだけ動く（はしでぐるっと回らない）。スマホは人をタップするとえらび、もう一度タップ（か A）でさそう。
  *     勝手にはえらばない。何もえらんでいないときに A をおしても、声はだれにもとどかない。
  *     えらんだグループがのぼりの外へ行ってしまうと、わくは消える。下の帯に、いまの相手と気分が出る。
  *   - 女子のグループは、頭の上の吹き出しで気分がわかる。来てくれるかは気分しだい（少しだけ運）。
@@ -19,7 +19,9 @@
  *   - 来てくれたらグループ全員が数に入る（＋人数）。男子は来ても数えない。
  *     とりのおばちゃん（頭にニワトリ、赤い「−10」の札）は、さそうとだいたい来て −10 人。まわりの女子も逃げる。
  *   - ことわられると、男魂くんがしゅんとして、少しの間さそえない（あてずっぽうの連打は損）。
- *  45 秒で 100 人に届けばクリア。
+ *  45 秒で 100 人に届けばクリア。しっぱいしてやりなおすと、少しだけ来てくれやすく、ハートが長くなる。
+ *  つりあいの目安（人の反応を入れた試算）：大きめの「♪」「…」のグループを先にえらんでおき、ハートが出たら A、で 1〜2 回でクリア（38〜41 秒くらい）。
+ *  ハートが出てからえらぶだけでも、何回かでクリア。気分を見ずに女子をさそうと 85 人前後、相手を見ずに「→・A」を連打すると 50 人前後どまり。
  */
 (function () {
   'use strict';
@@ -44,13 +46,13 @@
   const BAR_Y = 209; // 下の帯（いまの相手）
   const STEP_X = 10; // グループの中の人と人の間
   const GAP = [4, 16]; // グループとグループの間（ドット）
-  const MIN_GAP = 4; // 前のグループが立ち止まったら、ここまでつめて待つ
+  const MIN_GAP = 6; // 前のグループが立ち止まったら、ここまでつめて待つ（グループのさかい目が見えるように）
   const COOL = 0.35; // 声をかけたあと、次に声をかけられるまで（秒）
   const THINK = 0.35; // 声をかけてから、返事が来るまで（秒）
   const SULK = 0.6; // ことわられたあと、男魂くんがしゅんとしている間（さそえない）
   const EMPTY_COOL = 0.3; // だれもえらばずに叫んだあと
-  const LOOK_T = 2.0; // 立ち止まって看板を見ている間（秒）
-  const JOSHI_N = [2, 3, 3, 3, 4, 4, 4, 5, 5, 6]; // 女子のグループの人数
+  const LOOK_T = 2.8; // 立ち止まって看板を見ている間（秒）。人が気づいて、えらんで、A をおすのにまにあう長さ
+  const JOSHI_N = [3, 3, 4, 4, 4, 5, 5, 5, 6, 6]; // 女子のグループの人数
   // 女子のグループの気分（頭の上の吹き出し）と、来てくれる見こみ
   const MOODS = {
     love: { odds: 0.93, lv: 3, word: '看板を見てる！' },
@@ -82,7 +84,7 @@
     event: '学祭',
     title: '女子100人勧誘',
     goal: '女子を100人\nさそえ！',
-    howto: ['←→：相手をえらぶ　A：さそう', 'ハートが出たら、ねらい目', OBA_NAME + 'は−10人'],
+    howto: ['←→かタップ：えらぶ', 'ハートが出たら A：さそう', OBA_NAME + 'は−10人'],
     note: 'お酒は出さない。ジュースとお菓子。\n男子は数えない。',
     time: 45,
     timeout: 'lose',
@@ -94,6 +96,7 @@
 
       let count = 0;
       let sel = null; // えらんでいるグループ（勝手にはえらばない）
+      let selTag = null; // えらんでいる相手の名札の四角（タップ用。描いたときに決まる）
       let curX = ZONE_C; // わくがいた所（←→ はここから動く）
       let cool = 0; // 次に声をかけられるまで
       let queued = null; // 待ち時間の終わりぎわに A をおしたら、終わってすぐさそう
@@ -104,6 +107,7 @@
       let bowT = 0; // 入り口のホストが、おじぎしている間
       let note = null; // 下の帯の一言 { str, col, t }
       let last = null; // さそった結果（数の板の下） { str, col, t }
+      let barNow = ''; // テスト用：下の帯に出ている文
       let spawned = 0, nextId = 1;
       let done = false, doneT = 0;
       // テスト用の数え
@@ -207,16 +211,18 @@
         note = null;
         api.sfx('cursor');
       }
+      // ←→ は見たとおりの向きに動く（はしでぐるっと回らない）。同じ列にいなければ、もう一方の列の、その向きのいちばん近い相手へ
       function moveSel(k) {
         const list = cands();
         if (!list.length) { say('とどく所に、だれもいない', P.lgray); api.sfx('ng'); return; }
         const ref = sel ? cx(sel) : curX;
         let g = null;
         if (k === 'left' || k === 'right') {
-          const i = sel ? list.indexOf(sel) : -1;
-          if (i >= 0) g = list[(i + (k === 'right' ? 1 : -1) + list.length) % list.length];
-          else if (k === 'right') g = list.find((o) => cx(o) >= ref) || list[0];
-          else g = list.slice().reverse().find((o) => cx(o) <= ref) || list[list.length - 1];
+          const s = k === 'right' ? 1 : -1;
+          const ahead = list.filter((o) => o !== sel && (cx(o) - ref) * s > 0.5).sort((a, b) => (cx(a) - cx(b)) * s);
+          if (sel) g = ahead.find((o) => o.lane === sel.lane) || ahead[0];
+          else g = ahead[0] || list.slice().sort((a, b) => Math.abs(cx(a) - ref) - Math.abs(cx(b) - ref))[0];
+          if (!g) { api.sfx('ng'); return; } // その向きには、もうだれもいない
         } else {
           const li = k === 'up' ? 0 : 1;
           if (sel && sel.lane === li) return;
@@ -226,9 +232,18 @@
         }
         select(g);
       }
-      // タップした所にいるグループ（とどく所の人を先に。重なっていたら手前の列）
+      // タップした所にいるグループ
+      //  えらんでいる相手（名札・▼・吹き出し・体）を先に見る。手前の列の名札は、奥の列の人の上に重なるので。
+      //  ほかは、とどく所の人を先に。重なっていたら手前の列（手前の列は頭の上の吹き出しまで、奥の列は足もとまで）
+      function inBox(p, b) { return b && p.x >= b.x0 && p.x <= b.x1 && p.y >= b.y0 && p.y <= b.y1; }
       function groupAt(p) {
-        const hits = groups.filter((g) => g.state !== 'join' && p.x >= g.x - 3 && p.x <= g.x + g.w + 3 && p.y >= feetOf(g) - 40 && p.y <= feetOf(g) + 5);
+        if (sel && reachable(sel)) {
+          const tg = selTag && selTag.id === sel.id ? selTag : null; // 名札は、描いたときの場所
+          const body = { x0: sel.x - 3, x1: sel.x + sel.w + 3, y0: tg ? tg.y0 : headTop(sel) - 36, y1: feetOf(sel) + (sel.lane ? 5 : 2) };
+          if (inBox(p, body) || inBox(p, tg)) return sel;
+        }
+        const hits = groups.filter((g) => g.state !== 'join' && p.x >= g.x - 3 && p.x <= g.x + g.w + 3 &&
+          p.y >= feetOf(g) - (g.lane ? 45 : 40) && p.y <= feetOf(g) + (g.lane ? 5 : 2));
         hits.sort((a, b) => reachable(b) - reachable(a) || b.lane - a.lane);
         return hits[0] || null;
       }
@@ -289,7 +304,7 @@
             sulk = SULK;
             cool = Math.max(cool, SULK);
             st.refused++;
-            result('ことわられた…', P.dgray);
+            result(g.n + '人組に ことわられた', P.dgray);
             api.sfx('cancel');
           }
         } else if (g.kind === 'oba') {
@@ -759,8 +774,14 @@
         return g.kind === 'joshi' ? g.n + '人' : g.kind === 'oba' ? 'おばちゃん' : '男子';
       }
       function drawCursor(g) {
+        selTag = null;
         if (api.ended) return;
-        cands().forEach((gr) => { if (gr !== sel) corners(g, gr, P.white, 1, 3); });
+        // えらべる相手：こい影の上に白いかぎかっこ（明るい石だたみの上でも見えるように）
+        cands().forEach((gr) => {
+          if (gr === sel) return;
+          corners(g, gr, P.ink, 2, 5);
+          corners(g, gr, P.white, 1, 4);
+        });
         if (!sel) return;
         const oba = sel.kind === 'oba';
         const col = oba ? P.red : P.yellow;
@@ -783,6 +804,7 @@
         const tw = g.measure(str, 12) + 6;
         const lx = Math.round(Math.max(2, Math.min(W - tw - 2, c - tw / 2)));
         const ly = ay - 14;
+        selTag = { id: sel.id, x0: lx - 2, x1: lx + tw + 2, y0: ly - 2, y1: ay + 4 };
         g.R(lx - 1, ly - 1, tw + 2, 15, col);
         g.R(lx, ly, tw, 13, P.ink);
         g.R(lx + 1, ly + 1, tw - 2, 11, fill);
@@ -815,43 +837,41 @@
         g.R(0, BAR_Y, W, H - BAR_Y, P.ink);
         g.R(0, BAR_Y, W, 1, P.yellow);
         const y = BAR_Y + 1;
-        if (api.ended) {
-          g.text(count + '人', W / 2, y, { size: 12, col: P.white, align: 'center' });
-          return;
-        }
-        if (note && note.t > 0) {
-          g.text(note.str, W / 2, y, { size: 12, col: note.col, align: 'center' });
-          return;
-        }
+        const mid = (str, col) => { barNow = str; g.text(str, W / 2, y, { size: 12, col, align: 'center' }); };
+        if (api.ended) return mid(count + '人', P.white);
+        if (note && note.t > 0) return mid(note.str, note.col);
         if (sel) {
           const oba = sel.kind === 'oba';
           const nx = 6;
           const nw = g.text(label(sel), nx, y, { size: 12, col: oba ? P.red : sel.kind === 'joshi' ? P.lpink : P.lgray });
           let x = nx + nw + 8;
+          let str;
           if (oba) {
-            g.text('−' + OBA_MINUS + '人！ さそうと へる', x, y, { size: 12, col: g.blink(3) ? P.red : P.pink });
+            str = '−' + OBA_MINUS + '人！ さそうと へる';
+            g.text(str, x, y, { size: 12, col: g.blink(3) ? P.red : P.pink });
           } else if (sel.kind === 'danshi') {
-            g.text('男子は数に入らない', x, y, { size: 12, col: P.lgray });
+            str = '男子は数に入らない';
+            g.text(str, x, y, { size: 12, col: P.lgray });
           } else {
             const md = MOODS[sel.mood];
+            str = md.word;
             g.R(x, y + 2, 13, 11, md.lv === 3 ? P.lpink : P.white);
             moodIcon(g, sel.mood, x + 6, y + 4);
             x += 17;
-            g.text(md.word, x, y, { size: 12, col: md.lv >= 3 ? P.pink : md.lv === 2 ? P.lyellow : md.lv === 1 ? P.white : P.gray });
+            g.text(str, x, y, { size: 12, col: md.lv >= 3 ? P.pink : md.lv === 2 ? P.lyellow : md.lv === 1 ? P.white : P.gray });
             // 脈あり度（ハート 3 つ）
             for (let i = 0; i < 3; i++) heart(g, W - 30 + i * 9, y + 4, i < md.lv ? P.rose : P.dgray);
           }
+          barNow = label(sel) + ' ' + str;
           return;
         }
         const n = cands().length;
-        if (!n) {
-          g.text('とどく所に、だれもいない', W / 2, y, { size: 12, col: P.gray, align: 'center' });
-          return;
-        }
+        if (!n) return mid('とどく所に、だれもいない', P.gray);
         const touch = typeof document !== 'undefined' && document.body.classList.contains('otk-touch');
-        const on = g.blink(2);
-        g.text((touch ? 'タップか←→' : '←→') + 'で 相手をえらぶ', 6, y, { size: 12, col: on ? P.lyellow : P.white });
-        g.text('とどく所に' + n + '組', W - 6, y, { size: 12, col: P.lgray, align: 'right' });
+        const left = (touch ? 'タップか←→' : '←→') + 'で 相手をえらぶ', right = 'とどく所に' + n + '組';
+        barNow = left + ' ' + right;
+        g.text(left, 6, y, { size: 12, col: g.blink(2) ? P.lyellow : P.white });
+        g.text(right, W - 6, y, { size: 12, col: P.lgray, align: 'right' });
       }
       function drawTalk(g) {
         // おばちゃんの吹き出しは、まわりの「ひっ」より上に
@@ -886,6 +906,8 @@
         get shout() { return shout > 0 ? shoutMsg : null; }, // テスト用：いまの呼びこみ
         get note() { return note && note.t > 0 ? note.str : null; }, // テスト用：下の帯の一言
         get last() { return last && last.t > 0 ? last.str : null; }, // テスト用：さそった結果
+        get bar() { return barNow; }, // テスト用：下の帯に出ている文
+        get selTag() { return selTag ? Object.assign({}, selTag) : null; }, // テスト用：えらんでいる相手の名札の四角
         texts: { CLUB, CLUB_NAME, CALL, YES_MSG, NO_MSG, DAN_MSG }, // テスト用：看板とセリフ
         zone: [ZONE_L, ZONE_R],
         groups,
@@ -907,11 +929,11 @@
           walkLanes(dt);
           moods(dt);
           // えらんでいた相手が、とどく所から出ていった
-          if (sel && !reachable(sel)) {
+          if (sel && (!reachable(sel) || !groups.includes(sel))) {
             curX = api.clamp(cx(sel), ZONE_L, ZONE_R);
             sel = null;
             queued = null;
-            say('行っちゃった… ←→でえらびなおし', P.lgray);
+            say('行っちゃった…', P.lgray);
           }
           if (!done) {
             // えらぶ
@@ -923,7 +945,8 @@
                 if (g === sel) tryInvite();
                 else select(g);
               } else if (g && g.state === 'walk' && !g.tried) {
-                say('まだ とどかない（のぼりの間で）', P.lgray);
+                const gone = LANES[g.lane].dir > 0 ? cx(g) > ZONE_R : cx(g) < ZONE_L; // のぼりの間を通りすぎた
+                say(gone ? 'もう とどかない' : 'まだ とどかない（のぼりの間で）', P.lgray);
                 api.sfx('ng');
               }
             }

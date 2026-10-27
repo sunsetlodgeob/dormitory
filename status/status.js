@@ -4,7 +4,7 @@
  * status：'完了' | '確認中' | '作成中' | '未着手' | '設定待ち' | 'あとで'
  */
 window.OB_STATUS = {
-  updated: '2026-10-26',
+  updated: '2026-10-27',
   release: '2026-11-21', // 公開の予定
   event: '2026-11-28',   // 寮生大会
 
@@ -15,7 +15,7 @@ window.OB_STATUS = {
     { name: '部屋割り', path: '../heya/', status: '完了', note: '年度ごとに、寮のドット絵の上に名前が出る' },
     { name: '名簿', path: '../meibo/', status: '完了', note: '入学年度ごと。検索つき' },
     { name: '年表', path: '../nenpyo/', status: '完了', note: 'いまはデモ表示。本番は Google ログインした人だけ' },
-    { name: '寮さんぽ', path: '../sanpo/', status: '完了', note: '建物の中を歩ける。年度を選ぶと部屋をノックできる' },
+    { name: '寮さんぽ', path: '../sanpo/', status: '完了', note: '建物の中を歩ける。年度を選ぶと部屋をノックできる。廊下の東の非常口（1階は外に出られる）、右に自転車・左にバイク、写真に近づけた外観' },
     { name: '寮さんぽ（2005年度）', path: '../sanpo/?year=2005', status: '完了', note: 'ドアの前で A を押すとノック（サンプルの名前）' },
     { name: '写真館', path: '', status: '設定待ち', note: 'Google のアルバムの URL をもらったらリンクを張る' },
   ],
@@ -28,7 +28,7 @@ window.OB_STATUS = {
     { id: 'deisui', month: 7, event: '', title: '同期Bをさがせ', status: '完了', note: '終電 0:40 までの時計ひとつ。脱いだ服（くつ→くつした→シャツ→ズボン）で、あと何駅かわかる' },
     { id: 'conveni', month: 9, event: '', title: '全裸コンビニ', status: '完了' },
     { id: 'zombie', month: 10, event: '', title: '寮ゾンビ', status: '完了' },
-    { id: 'gakusai', month: 11, event: '学祭', title: '女子100人勧誘', status: '完了', note: '寮のホストクラブ「夕照」の呼びこみ（お酒なし。ジュースとお菓子と出し物）' },
+    { id: 'gakusai', month: 11, event: '学祭', title: '女子100人勧誘', status: '完了', note: '寮のホストクラブ「夕照」の呼びこみ（お酒なし。ジュースとお菓子と出し物）。相手を自分でえらんでねらう（ハートがねらい目）' },
     { id: 'setsubun', month: 2, event: '節分', title: '節分ピラミッド', status: '完了', note: '全員全裸で組む（札とモザイク）。寒い' },
     { id: 'kippu', month: 3, event: '追いコン', title: '全裸で切符', status: '完了', note: 'いちばんの見せ場。駅まで行って帰ってくる、長めのかくれんぼ' },
     { id: 'unko', month: 3, event: '追いコン', title: 'うんこをよけろ', status: '完了', note: '寮までの最後のひと走り。待ちぶせしていた先輩たちから逃げて、玄関へ' },
@@ -50,7 +50,7 @@ window.OB_STATUS = {
     { id: 'conveni_win', title: '9月 クリアのあと', note: '「…で、アイスは？」' },
     { id: 'zombie', title: '10月 キノコ鍋', note: '裏の川原のキノコ（たぶん）' },
     { id: 'zombie_win', title: '10月 クリアのあと', note: '「なんでみんな顔がはれてるんだ？」' },
-    { id: 'gakusai', title: '11月 学祭の作戦会議', note: 'ホストクラブ「夕照」（お酒はなし）。スーツに着がえて、目標は女子100人' },
+    { id: 'gakusai', title: '11月 学祭の作戦会議', note: 'ホストクラブ「夕照」（お酒はなし）。スーツに着がえて、目標は女子100人。「看板を見て立ち止まった子をねらえ」' },
     { id: 'setsubun', title: '2月 節分', note: '「豆は、まかれるほうだ」「全員、全裸でな！」' },
     { id: 'kippu', title: '3月 追いコンの夜', note: '伝統の罰ゲーム「全裸で切符」→ 午前0時、玄関の前' },
     { id: 'unko', title: '3月 川ぞいの帰り道', note: '切符のすぐあと（カレンダーなし）。卒業する先輩 3 人が待ちぶせ。「最後のプレゼントだ！」' },
@@ -88,5 +88,6 @@ window.OB_STATUS = {
     { name: '部屋割りで「ノックしたときの反応」をどう集めるか', status: 'あとで' },
     { name: 'OB会参加者リストとサイトのつなぎ方', status: 'あとで' },
     { name: '寮の再現の修正ポイント', status: 'あとで' },
+    { name: '1階の非常口を出たら、すぐ表？ 灯油庫のうらを回った？（いまは、すぐ表）', status: '確認中' },
   ],
 };
