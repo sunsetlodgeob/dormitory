@@ -10,7 +10,7 @@
  *     勝手にはえらばない。何もえらんでいないときに A をおしても、声はだれにもとどかない。
  *     えらんだグループがのぼりの外へ行ってしまうと、わくは消える。下の帯に、いまの相手と気分が出る。
  *   - 女子のグループは、頭の上の吹き出しで気分がわかる。来てくれるかは気分しだい（少しだけ運）。
- *       ハート … 立ち止まって看板を見ている。いまだ（9 割）
+ *       ハート … 立ち止まって看板を見ている。いまだ（9 割ちょっと）
  *       ♪     … ごきげん（ほかの店から出てきたところ）。わりと来る（5 割）
  *       …     … ふつう（3 割）
  *       スマホ … スマホを見ている（1 割）
@@ -38,22 +38,22 @@
   const DOOR = { x0: 6, x1: 42, y0: 66, y1: 146 }; // ホストクラブの入り口
   const SHOP = { x: 12, feet: 146 }; // 店に入る人が向かう所（入り口）
   const LANES = [
-    { feet: 166, dir: 1, speed: 34 }, // 奥の列：左から右へ
-    { feet: 196, dir: -1, speed: 38 }, // 手前の列：右から左へ
+    { feet: 160, dir: 1, speed: 40 }, // 奥の列：左から右へ
+    { feet: 198, dir: -1, speed: 44 }, // 手前の列：右から左へ
   ];
   const BAR_Y = 209; // 下の帯（いまの相手）
   const STEP_X = 10; // グループの中の人と人の間
-  const GAP = [6, 22]; // グループとグループの間（ドット）
+  const GAP = [4, 16]; // グループとグループの間（ドット）
   const MIN_GAP = 4; // 前のグループが立ち止まったら、ここまでつめて待つ
   const COOL = 0.35; // 声をかけたあと、次に声をかけられるまで（秒）
   const THINK = 0.35; // 声をかけてから、返事が来るまで（秒）
   const SULK = 0.6; // ことわられたあと、男魂くんがしゅんとしている間（さそえない）
   const EMPTY_COOL = 0.3; // だれもえらばずに叫んだあと
-  const LOOK_T = 1.4; // 立ち止まって看板を見ている間（秒）
-  const JOSHI_N = [2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 6]; // 女子のグループの人数
+  const LOOK_T = 2.0; // 立ち止まって看板を見ている間（秒）
+  const JOSHI_N = [2, 3, 3, 3, 4, 4, 4, 5, 5, 6]; // 女子のグループの人数
   // 女子のグループの気分（頭の上の吹き出し）と、来てくれる見こみ
   const MOODS = {
-    love: { odds: 0.9, lv: 3, word: '看板を見てる！' },
+    love: { odds: 0.93, lv: 3, word: '看板を見てる！' },
     fun: { odds: 0.55, lv: 2, word: 'ごきげん' },
     none: { odds: 0.3, lv: 1, word: 'ふつう' },
     phone: { odds: 0.1, lv: 0, word: 'スマホ中' },
@@ -90,7 +90,7 @@
     create(api) {
       const P = api.P, W = api.W, H = api.H;
       // しっぱいが続いたら、少しだけ来てくれやすくする
-      const EASE = api.tries >= 4 ? 0.1 : api.tries >= 2 ? 0.05 : 0;
+      const EASE = api.tries >= 3 ? 0.08 : api.tries >= 1 ? 0.04 : 0;
 
       let count = 0;
       let sel = null; // えらんでいるグループ（勝手にはえらばない）
@@ -156,7 +156,7 @@
           state: 'walk', t: 0, tried: false, say: null, sayT: 0, alpha: 1, moving: true,
           base, mood: kind === 'oba' ? 'love' : base, after: base === 'phone' ? 'none' : base,
           mul: base === 'hurry' ? 1.6 : kind === 'oba' ? 0.85 : 1,
-          lookAt, look: 0, looked: false, lookT: kind === 'oba' ? 2.2 : LOOK_T + EASE * 4, seen: false, asked: null,
+          lookAt, look: 0, looked: false, lookT: kind === 'oba' ? 2.2 : LOOK_T + EASE * 5, seen: false, asked: null,
         };
         groups.push(g);
         nextGap[li] = api.rnd(GAP[0], GAP[1]);
@@ -263,7 +263,8 @@
         api.sfx('select');
       }
       function answer(g) {
-        const top = feetOf(g) - 44; // 「+3」などは、頭の上に出す
+        // 「+3」などは、返事の吹き出しの上に出す
+        const top = () => feetOf(g) - 26 - (String(g.say || '').split('\n').length * 13 + 8) - 16;
         const m = st.moods[g.asked] || (st.moods[g.asked] = { asked: 0, ok: 0 });
         m.asked++;
         if (g.kind === 'joshi') {
@@ -276,7 +277,7 @@
             addCount(g.n);
             st.joined++;
             st.girlsIn += g.n;
-            pop(cx(g), top, '+' + g.n, P.lpink);
+            pop(cx(g), top(), '+' + g.n, P.lpink);
             result('+' + g.n + ' ' + label(g), P.rose);
             api.sfx('coin');
             if (count >= NEED && !done) finish();
@@ -300,7 +301,7 @@
             bowT = 0.9;
             addCount(-OBA_MINUS);
             st.oba++;
-            pop(cx(g), top, '−' + OBA_MINUS, P.red, true);
+            pop(cx(g), top(), '−' + OBA_MINUS, P.red, true);
             result('−' + OBA_MINUS + ' おばちゃん', P.red);
             api.sfx('damage');
             api.shake(3, 0.3);
@@ -324,7 +325,7 @@
           g.say = api.pick(DAN_MSG);
           bowT = 0.9;
           st.danshi++;
-          pop(cx(g), top, 'ノーカン', P.lgray);
+          pop(cx(g), top(), 'ノーカン', P.lgray);
           result('男子は ノーカン', P.dgray);
           api.sfx('ng');
         } else {
@@ -731,15 +732,17 @@
         }
       }
       // 気分の吹き出しと、おばちゃんの「−10」（のぼりの間と、その少し手前の人だけ）
+      // 気分の吹き出しと、おばちゃんの「−10」（のぼりの間と、手前の列はその少し右の人も）
+      const bubbleBottom = (gr) => headTop(gr) - 1;
       function drawMoods(g) {
         groups.forEach((gr) => {
-          if (gr.state !== 'walk' || gr.tried || gr === sel) return;
+          if (gr.state !== 'walk' || gr.tried) return;
           const c = cx(gr);
-          const ahead = LANES[gr.lane].dir > 0 ? c >= ZONE_L - 44 && c <= ZONE_R : c <= ZONE_R + 44 && c >= ZONE_L;
+          const ahead = LANES[gr.lane].dir > 0 ? c >= ZONE_L && c <= ZONE_R : c <= ZONE_R + 44 && c >= ZONE_L; // 奥の列は、男魂くんの前を通るので、のぼりの間だけ
           if (!ahead) return;
-          const y = headTop(gr) - 1;
+          const y = bubbleBottom(gr);
           if (gr.kind === 'joshi') moodBubble(g, gr.mood, c, y - (gr.look > 0 && g.blink(3) ? 1 : 0));
-          else if (gr.kind === 'oba') tag(g, '−10', c, y - 22, P.red);
+          else if (gr.kind === 'oba') tag(g, '−' + OBA_MINUS, c, y - 21, P.red); // 頭のニワトリの上
         });
       }
       // かぎかっこ（えらべる相手は白くて細い、えらんだ相手は黄色くて太い）
@@ -751,6 +754,10 @@
           g.R(sx > 0 ? x : x - th + 1, sy > 0 ? y : y - len + 1, th, len, col);
         });
       }
+      // えらんだ相手の、小さい名札（女子は人数、男子は「男子」、おばちゃんは「おばちゃん」）
+      function shortName(g) {
+        return g.kind === 'joshi' ? g.n + '人' : g.kind === 'oba' ? 'おばちゃん' : '男子';
+      }
       function drawCursor(g) {
         if (api.ended) return;
         cands().forEach((gr) => { if (gr !== sel) corners(g, gr, P.white, 1, 3); });
@@ -759,10 +766,10 @@
         const col = oba ? P.red : P.yellow;
         corners(g, sel, P.ink, 4, 7);
         corners(g, sel, col, 2, 6);
-        // 頭の上に「▼」と名札（女子なら、気分の絵も）
-        const c = cx(sel);
+        // 吹き出しの上に「▼」と、小さい名札
+        const c = Math.round(cx(sel));
         const bob = g.blink(2) ? 1 : 0;
-        const ay = headTop(sel) - 6 + bob;
+        const ay = bubbleBottom(sel) - (sel.kind === 'joshi' ? 13 : oba ? 21 : 0) - 5 + bob;
         g.R(c - 4, ay, 9, 1, P.ink);
         g.R(c - 3, ay, 7, 1, col);
         g.R(c - 3, ay + 1, 7, 1, P.ink);
@@ -771,20 +778,15 @@
         g.R(c - 1, ay + 2, 3, 1, col);
         g.R(c - 1, ay + 3, 3, 1, P.ink);
         g.R(c, ay + 3, 1, 1, col);
-        const str = label(sel);
+        const str = shortName(sel);
         const fill = oba ? P.dred : sel.kind === 'joshi' ? P.rose : P.dgray;
-        const icon = sel.kind === 'joshi' ? 13 : 0;
-        const tw = g.measure(str, 12) + 6 + icon;
+        const tw = g.measure(str, 12) + 6;
         const lx = Math.round(Math.max(2, Math.min(W - tw - 2, c - tw / 2)));
-        const ly = ay - 15;
+        const ly = ay - 14;
         g.R(lx - 1, ly - 1, tw + 2, 15, col);
         g.R(lx, ly, tw, 13, P.ink);
         g.R(lx + 1, ly + 1, tw - 2, 11, fill);
-        g.text(str, lx + (tw - icon) / 2, ly, { size: 12, col: P.white, align: 'center' });
-        if (icon) {
-          g.R(lx + tw - 13, ly + 1, 12, 11, sel.mood === 'love' ? P.lpink : P.white);
-          moodIcon(g, sel.mood, lx + tw - 7, ly + 3);
-        }
+        g.text(str, lx + tw / 2, ly, { size: 12, col: P.white, align: 'center' });
         if (oba && g.blink(4)) g.text('！', lx + tw + 1, ly - 1, { size: 12, col: P.red, outline: P.white });
       }
       function drawBoard(g) {
@@ -827,7 +829,7 @@
           const nw = g.text(label(sel), nx, y, { size: 12, col: oba ? P.red : sel.kind === 'joshi' ? P.lpink : P.lgray });
           let x = nx + nw + 8;
           if (oba) {
-            if (g.blink(3)) g.text('−10人！ やめとけ', x, y, { size: 12, col: P.red });
+            g.text('−' + OBA_MINUS + '人！ さそうと へる', x, y, { size: 12, col: g.blink(3) ? P.red : P.pink });
           } else if (sel.kind === 'danshi') {
             g.text('男子は数に入らない', x, y, { size: 12, col: P.lgray });
           } else {

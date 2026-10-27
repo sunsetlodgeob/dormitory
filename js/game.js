@@ -32,11 +32,13 @@
   const FLOOR_IN = new Set('.,=_~;-%<*`&'.split(''));
   const WALK_EXT = new Set('".:-;^ZE{'.split(''));
   // 通れるドア（$ はカギのかかったドア）
-  const DOORS = '+/N';
+  const DOORS = '+/';
+  // 地図の links にある文字（玄関・階段・非常口 N）は通れる。非常口は 1 階にだけ links があり、2 階・3 階では調べるだけ
+  const isLink = (map, ch) => !!(map.links && map.links[ch]);
   function walkable(map, x, y) {
     const ch = at(map, x, y);
-    if (map.kind === 'ext') return WALK_EXT.has(ch);
-    return FLOOR_IN.has(ch) || DOORS.includes(ch) || 'EUV'.includes(ch);
+    if (map.kind === 'ext') return WALK_EXT.has(ch) || isLink(map, ch);
+    return FLOOR_IN.has(ch) || DOORS.includes(ch) || 'EUV'.includes(ch) || isLink(map, ch);
   }
   function placeName(map, x, y) {
     let n = labelAt(map, x, y);
@@ -200,7 +202,7 @@
     }
   }
   function go(link, via) {
-    sfx(via === 'E' ? 'door' : 'stairs');
+    sfx(via === 'E' || via === 'N' ? 'door' : 'stairs');
     fadeTo(() => enterMap(link.to, link.x, link.y, link.dir));
   }
 
