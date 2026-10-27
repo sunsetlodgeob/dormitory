@@ -470,7 +470,7 @@ async function sanpoPlain(open) {
   await waitIdle(page);
   s = await dbg(page);
   assert.ok(s.x === 9 && s.y === 6 && !s.dialog, 'ドアまで歩く');
-  // 廊下の東のつきあたりの非常口：1階は外（建物の東の面の下。自転車置き場の間）に出られて、もどれる。2階・3階は調べるだけ
+  // 廊下の東のつきあたりの非常口：1階は外（建物の東の面の下）に出られて、もどれる。2階・3階は調べるだけ
   await page.evaluate(() => window.DORM.debug.enterMap('1F', 53, 8, 'right'));
   await page.evaluate(() => window.DORM.debug.tapTile(55, 8, null));
   await page.waitForFunction(() => window.DORM.debug.S.mapId === 'EXT' && !window.DORM.debug.S.fade, null, { timeout: 8000 });

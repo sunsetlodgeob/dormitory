@@ -380,14 +380,30 @@
       }
       function drawDoor(g, d, dx, top, bot) {
         g.R(dx - 2, top - 2, DOOR_W + 4, bot - top + 2, P.dbrown); // わく
-        if (d.open) {
-          // 中が見える（2段ベッドのはしっこ）
-          g.R(dx, top, DOOR_W, bot - top, '#241a14');
-          g.R(dx + 4, top + 8, 14, 2, P.brown);
-          g.R(dx + 4, top + 22, 14, 2, P.brown);
-          g.R(dx + 4, top + 8, 2, bot - top - 8, P.brown);
-          g.R(dx + 6, top + 10, 12, 4, '#5c6c9c');
-          g.R(dx + 6, top + 24, 12, 4, '#9c5c5c');
+        if (d.open && /^\d+$/.test(d.name)) {
+          // 中が見える。ドアは部屋の右の半分（床）に開くので、見えるのは寄木の床と、奥の窓と、すみの机とイス
+          // （2段ベッドと収納は左の壁ぞいで、ここからは見えない）
+          const wallH = 15;
+          g.R(dx, top, DOOR_W, bot - top, '#7c5a38'); // 寄木の床
+          for (let y = top + wallH + 3, k = 0; y < bot; y += 5, k++) {
+            g.R(dx, y, DOOR_W, 1, '#664828');
+            for (let x = dx + (k % 2) * 3; x < dx + DOOR_W; x += 6) g.R(x, y - 4, 1, 4, '#664828');
+          }
+          g.R(dx, top, DOOR_W, wallH, '#b8ac90'); // 奥の壁（窓の壁）
+          g.R(dx, top + wallH, DOOR_W, 1, '#5a4430');
+          g.R(dx + 4, top + 3, 8, 9, '#e8e0d0'); // 窓（まん中の窓の右はしが見える）
+          g.R(dx + 5, top + 4, 6, 7, '#9cd0ec');
+          g.R(dx + 8, top + 4, 1, 7, '#e8e0d0');
+          g.R(dx + 14, top + 9, 8, 3, P.brown); // 右のすみの机
+          g.R(dx + 14, top + 12, 8, 4, '#8a5c18');
+          g.R(dx + 15, top + 18, 5, 3, '#3c3c44'); // イス
+          g.R(dx + 15, top + 13, 1, 6, '#3c3c44');
+          g.R(dx + 16, top + 21, 1, 3, '#2a2a30');
+          g.R(dx + 19, top + 21, 1, 3, '#2a2a30');
+          g.R(dx, top, 3, bot - top, P.tan); // 開いたドア
+          g.R(dx + 3, top, 1, bot - top, P.brown);
+        } else if (d.open) {
+          g.R(dx, top, DOOR_W, bot - top, '#241a14'); // 洗面所・トイレ・物置は暗い
           g.R(dx, top, 3, bot - top, P.tan); // 開いたドア
           g.R(dx + 3, top, 1, bot - top, P.brown);
         } else {

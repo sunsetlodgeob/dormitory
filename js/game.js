@@ -302,6 +302,27 @@
     if (dx === 0 && dy === 0) return;
     S.p.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : dy > 0 ? 'down' : 'up';
   }
+  // (x, y) とつながった同じ物のマス。wide なら、外の置き場のトタン屋根・バイク・自転車をひとつながりに見る。
+  // 1 マスだけのときと、壁や建物のように大きすぎるときは null（wide で外の置き場でないときも null）
+  function groupOf(x, y, wide) {
+    const map = S.map, ch = at(map, x, y);
+    const shed = map.kind === 'ext' && 'Rbo'.includes(ch);
+    if (wide && !shed) return null;
+    const same = (c) => c === ch || (wide && 'Rbo'.includes(c));
+    const seen = new Set([x + ',' + y]);
+    const out = [[x, y]];
+    for (let i = 0; i < out.length; i++) {
+      for (const d of Object.keys(DIRS)) {
+        const nx = out[i][0] + DIRS[d][0], ny = out[i][1] + DIRS[d][1];
+        const k = nx + ',' + ny;
+        if (seen.has(k) || !same(at(map, nx, ny))) continue;
+        seen.add(k);
+        out.push([nx, ny]);
+        if (out.length > 40) return null;
+      }
+    }
+    return out.length > 1 ? out : null;
+  }
   function findPath(sx, sy, isGoal) {
     const map = S.map;
     const prev = new Map([[sx + ',' + sy, null]]);
@@ -344,7 +365,25 @@
       };
       if (near(p.x, p.y) || across(p.x, p.y)) { faceTo(tx, ty); interact(); return; }
       const path = findPath(p.x, p.y, (x, y) => near(x, y) || across(x, y));
-      if (path) { S.path = path; S.pending = { x: tx, y: ty }; }
+      if (path) { S.path = path; S.pending = { x: tx, y: ty }; return; }
+      // そばまで行けない物（置き場の奥のバイク・自転車など）は、つながった同じ物のうち、行ける所を調べる。
+      // 外の置き場は、それでもだめなら、屋根・バイク・自転車をひとつながりに見る
+      if (target) return;
+      for (const wide of [false, true]) {
+        const grp = groupOf(tx, ty, wide);
+        if (!grp) continue;
+        const touch = (x, y) => grp.find(([gx, gy]) => Math.abs(gx - x) + Math.abs(gy - y) === 1);
+        const here = touch(p.x, p.y);
+        if (here) { faceTo(here[0], here[1]); interact(); return; }
+        const path2 = findPath(p.x, p.y, (x, y) => !!touch(x, y));
+        if (!path2) continue;
+        let ex = p.x, ey = p.y;
+        for (const d of path2) { ex += DIRS[d][0]; ey += DIRS[d][1]; }
+        const g = touch(ex, ey);
+        S.path = path2;
+        S.pending = { x: g[0], y: g[1] };
+        return;
+      }
       return;
     }
     const path = findPath(p.x, p.y, (x, y) => x === tx && y === ty);
@@ -591,7 +630,7 @@
   }
 
   function drawChar(c, e, sx, sy) {
-    sx = Math.round(sx);
+    sx = Math.round(sx + (e.ox || 0)); // ox：2 マスの家具のまん中に描くときの、ずらし（ドット。js/world.js の npcs）
     sy = Math.round(sy);
     if (e.cat) {
       const fr = e.move ? (Math.floor(e.dist / 6) % 2 ? 'a' : 's') : 's';
@@ -843,7 +882,9 @@
     const gx = ((e.clientX - r.left) / r.width) * VW + S.cam.x;
     const gy = ((e.clientY - r.top) / r.height) * VH + S.cam.y;
     const tx = Math.floor(gx / TS), ty = Math.floor(gy / TS);
-    const hit = npcAt(tx, ty) || (gy - ty * TS > 9 ? npcAt(tx, ty + 1) : null);
+    // ox（絵だけずらした人）は、描いた位置でも当たりにする
+    const shifted = npcs.find((n) => visible(n) && n.ox && n.y === ty && gx >= n.x * TS + n.ox && gx < n.x * TS + n.ox + TS);
+    const hit = npcAt(tx, ty) || shifted || (gy - ty * TS > 9 ? npcAt(tx, ty + 1) : null);
     if (hit) tapTile(hit.x, hit.y, hit);
     else tapTile(tx, ty, null);
   });
