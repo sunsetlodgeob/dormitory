@@ -1191,13 +1191,14 @@
         R(ctx, px + 12, py + 6, 2, 3, P.white);
         break;
       }
-      case 'R': { // 食事表（玄関の、食堂の入口わき）
-        R(ctx, px + 1, py + 1, 11, 14, '#7a5a3a');
-        R(ctx, px + 2, py + 2, 9, 12, P.white);
-        for (let j = 0; j < 5; j++) R(ctx, px + 2, py + 4 + j * 2, 9, 1, '#b8c0c8');
-        R(ctx, px + 4, py + 2, 1, 12, '#b8c0c8');
-        for (let i = 0; i < 6; i++) if (rnd(x, y, i) < 0.6) R(ctx, px + 5 + i, py + 5 + ((rnd(x, y, i + 9) * 4) | 0) * 2, 1, 1, i & 1 ? '#d8433a' : '#3a5ab8');
-        R(ctx, px + 1, py + 15, 11, 1, 'rgba(0,0,0,0.2)');
+      case 'R': { // 食事表（食堂の中の、入口わきの壁。本棚と扉のあいだ）。右が壁なら右に寄せる
+        const bx = px + (isWall(at(map, x + 1, y)) && !isWall(at(map, x - 1, y)) ? 4 : 1);
+        R(ctx, bx, py + 1, 11, 14, '#7a5a3a');
+        R(ctx, bx + 1, py + 2, 9, 12, P.white);
+        for (let j = 0; j < 5; j++) R(ctx, bx + 1, py + 4 + j * 2, 9, 1, '#b8c0c8');
+        R(ctx, bx + 3, py + 2, 1, 12, '#b8c0c8');
+        for (let i = 0; i < 6; i++) if (rnd(x, y, i) < 0.6) R(ctx, bx + 4 + i, py + 5 + ((rnd(x, y, i + 9) * 4) | 0) * 2, 1, 1, i & 1 ? '#d8433a' : '#3a5ab8');
+        R(ctx, bx, py + 15, 11, 1, 'rgba(0,0,0,0.2)');
         break;
       }
       case 's': { // 流し
@@ -1337,18 +1338,20 @@
         }
         break;
       }
-      case 'g': { // 下駄箱（クリーム色の小さな扉がずらり）
+      case 'g': { // 下駄箱（クリーム色の小さな扉がずらり）。玄関の左右の壁ぞいにある。左が壁なら左に寄せる
         const s = stackPos(map, x, y, 'g');
-        R(ctx, px + 2, py, 14, 16, '#e3dcc4');
-        R(ctx, px + 2, py, 1, 16, '#b8b098');
-        if (s.i === 0) R(ctx, px + 2, py, 14, 2, '#f2ecd8');
+        const lw = isWall(at(map, x - 1, y)) && !isWall(at(map, x + 1, y));
+        const bx = px + (lw ? 0 : 2);
+        R(ctx, bx, py, 14, 16, '#e3dcc4');
+        R(ctx, lw ? bx + 13 : bx, py, 1, 16, '#b8b098');
+        if (s.i === 0) R(ctx, bx, py, 14, 2, '#f2ecd8');
         for (let j = 0; j < 3; j++) for (let i = 0; i < 2; i++) {
-          const ox = px + 4 + i * 6, oy = py + (s.i === 0 ? 3 : 1) + j * 5;
+          const ox = bx + (lw ? 1 : 2) + i * 6, oy = py + (s.i === 0 ? 3 : 1) + j * 5;
           R(ctx, ox, oy, 5, 4, '#d4ccb2');
           R(ctx, ox + 1, oy + 1, 2, 1, P.white);
-          R(ctx, ox + 4, oy + 2, 1, 1, P.metalXd);
+          R(ctx, lw ? ox : ox + 4, oy + 2, 1, 1, P.metalXd);
         }
-        if (s.i === s.n - 1) R(ctx, px + 2, py + 15, 14, 1, '#9a9278');
+        if (s.i === s.n - 1) R(ctx, bx, py + 15, 14, 1, '#9a9278');
         break;
       }
       case 'm': { // 郵便受け（木の棚の上に灰色の小箱）
@@ -1562,22 +1565,28 @@
         if (L && Rr) R(ctx, px + 7, py + 1, 2, 6, '#6e3a2c');
         break;
       }
-      case 'o': { // 自転車：細い車輪と細いフレーム。屋根の下でも見えるよう、床の影はバイクより薄く、タイヤの上に光
+      case 'o': { // 自転車：奥の壁に前輪を向けて、ぎっしり並べた形（うしろから見る）。1 マスに 3 台。屋根の下でも見えるよう、床の影はバイクより薄く
         const d = shedDepth(map, x, y);
         if (d) shedFloor(ctx, px, py, d, true);
-        const fc = ['#c84a3a', '#3a6ab8', '#e0c040', '#5a8a4a', '#d8d4cc', '#2a2a2a'][(rnd(x, y, 3) * 6) | 0];
-        R(ctx, px + 1, py + 13, 14, 2, 'rgba(0,0,0,0.18)');
-        for (const wx of [1, 9]) {
-          R(ctx, px + wx, py + 7, 6, 6, P.ink);
-          R(ctx, px + wx + 1, py + 8, 4, 4, '#b3aea3');
-          R(ctx, px + wx + 1, py + 6, 4, 1, '#9a9aa2');
+        R(ctx, px, py + 14, 16, 1, 'rgba(0,0,0,0.18)');
+        for (let i = 0; i < 3; i++) {
+          const k = x * 3 + i, bx = px + 1 + i * 5, dy = (rnd(k, y, 7) * 2) | 0; // 少しずつ前後にずれて止めてある
+          const fc = ['#c84a3a', '#3a6ab8', '#e0c040', '#5a8a4a', '#d8d4cc', '#2a2a2a', '#e08aa8', '#9aa0a4'][(rnd(k, y, 3) * 8) | 0];
+          const Y = py + dy;
+          if (rnd(k, y, 5) < 0.5) R(ctx, bx, Y + 1, 4, 1, '#9aa0a4'); // 前のかご（ママチャリ）
+          R(ctx, bx - 1, Y + 2, 6, 1, P.ink); // ハンドル
+          R(ctx, bx + 2, Y + 3, 1, 3, fc); // フレーム
+          R(ctx, bx + 1, Y + 5, 2, 1, '#2a2628'); // サドル
+          R(ctx, bx, Y + 7, 4, 1, '#9a9aa2'); // 荷台
+          // うしろの車輪（輪っかに見えるように）。上にどろよけと反射板
+          R(ctx, bx + 1, Y + 8, 2, 1, P.ink);
+          R(ctx, bx, Y + 9, 1, 5 - dy, P.ink);
+          R(ctx, bx + 3, Y + 9, 1, 5 - dy, P.ink);
+          R(ctx, bx + 1, py + 14, 2, 1, P.ink);
+          R(ctx, bx + 1, Y + 9, 2, 5 - dy, '#c9c4b8');
+          R(ctx, bx + 1, Y + 8, 2, 1, fc);
+          R(ctx, bx + 1, Y + 10, 2, 1, '#e0502e');
         }
-        R(ctx, px + 4, py + 9, 8, 1, fc);
-        R(ctx, px + 7, py + 5, 1, 5, fc);
-        R(ctx, px + 5, py + 4, 4, 1, P.ink);
-        R(ctx, px + 11, py + 4, 1, 6, fc);
-        R(ctx, px + 10, py + 3, 3, 1, P.ink);
-        R(ctx, px + 2, py + 6, 3, 2, '#9a9aa2');
         if (d) shedFront(ctx, map, x, y, px, py, d, true);
         break;
       }
@@ -1889,12 +1898,12 @@
 
   // 道路側から見た写真（持ち主の提供。docs/dorm/dorm_reference.md の「持ち主のメモ（追加）」）でわかること：
   //  - 2階・3階の道路側にベランダ。茶色い手すりと、部屋ごとの白い仕切り。洗濯物が干してある。
-  //    西のはしの 1 部屋（202・302）と、東のはしの物置の前にはない
+  //    どの部屋にもある（持ち主の話）。東のはしの物置の前にはない
   //  - 屋上のふちは、白く厚く張り出している。その上に細い手すり
   //  - 1階：玄関のまわりに平らなひさし、勉強部屋の前に白い柱の低い柵、脱衣所と浴室の窓は高い位置で、
   //    そのあいだにメーター。2階の東のはしにエアコンの室外機
   //  - 東の面：廊下のつきあたりに非常口。2階・3階は小さな踊り場と、赤い非常はしご。1階の非常口は地面の高さ（灯油庫は 1 列右にずらして描く）
-  const BALC = { from: 5, to: 50 }; // ベランダのある列（2階・3階の地図の x）
+  const BALC = { from: 0, to: 50 }; // ベランダのある列（2階・3階の地図の x）。西のはし（202・302）から、物置の手前まで
   const PIPES = [5, 20, 30, 50]; // 雨どい（写真で見える所。仕切りのわき）
   const FACADE = { wall: '#e3ddd0', hi: '#eeebe2', sh: '#c9c2b3' };
   const BAL = {
@@ -2118,7 +2127,7 @@
         R(ctx, bx0 - 2, sy + slab - 1, bx1 - bx0 + 4, 1, BAL.slabSh);
       }
       // 部屋ごとの白い仕切り
-      for (const c of fins) drawFin(ctx, ox + c * u, railT, fy + fh, fh, big);
+      for (const c of fins) drawFin(ctx, ox + Math.max(c * u, big ? 3 : 0), railT, fy + fh, fh, big); // 西のはしの仕切りは、建物からはみ出さない
     }
     if (fins.length) R(ctx, bx0, fy1, bx1 - bx0, big ? 3 : 1, shade); // 1階の上に落ちる影
     // 玄関まわりの平らなひさし（管理人室の前から玄関まで）
