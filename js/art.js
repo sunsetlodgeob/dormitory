@@ -767,6 +767,11 @@
       r(10, T + 3, 2, 2, '#e05a7a');
       r(14, T + 4, 3, 1, '#6ac0e0');
       r(19, T + 3, 2, 2, '#7ad06a');
+      // 下の段の壁ぎわの本棚（ベッドサイドの本棚。中身はほとんどマンガ。ベッドの外には出さない）
+      r(3, T + 3, 9, 9, '#6a4630');
+      r(3, T + 3, 9, 1, '#8a6040');
+      r(4, T + 7, 7, 1, '#6a4630');
+      bookRows(ctx, b.left, b.top, wallL ? bx + 4 : bx + W - 11, by + T + 4, 7, 2, 4);
       r(1, T + 12, W - 2, 2, P.wood);
       r(1, H - 1, W - 2, 1, P.woodXd);
       r(1, T, 2, F, P.woodDk);
@@ -784,52 +789,68 @@
     });
   }
 
-  // 収納（作りつけの 2 段。上の段と下の段に、それぞれ 2 枚の引き戸）
+  // 収納（作りつけ。床から天井までの箱で、上の段＝天袋と、下の段に、それぞれ 2 枚の引き戸）
+  //  2段ベッドのドアの側のはしに、ほとんどくっついている。天井までとどくので、壁と同じように
+  //  上のはしを暗い色（天井で切った面）にして、手前の面を 1 マスより少し高く（上のマスにはみ出して）描く
+  const CLOSET_UP = 10; // 上のマスにはみ出す高さ（手前の面）
   function closet(ctx, map, x, y, px, py) {
     const b = blockOf(map, x, y, 'p');
     const bx = px - (x - b.left) * 16, by = py - (y - b.top) * 16;
     const W = b.w * 16;
-    clipTile(ctx, px, py, () => {
-      R(ctx, bx + 1, by, W - 2, 16, '#6e4a2c');
-      R(ctx, bx + 1, by, W - 2, 2, '#a07650');
-      R(ctx, bx + 1, by, W - 2, 1, '#bf966a');
-      const half = (W - 4) / 2;
-      // 部屋ごとに、上の段の戸を寄せて布団が見える／下の段の戸を寄せて荷物が見える／閉まっている
-      const k = rnd(b.left, b.top, 31);
-      const open = k < 0.35 ? 0 : k < 0.6 ? 1 : -1; // 開いている段（0＝上、1＝下）
-      [2, 9].forEach((ty, tier) => { // 上の段・下の段
-        R(ctx, bx + 2, by + ty, W - 4, 6, '#e2d2ac');
-        R(ctx, bx + 2, by + ty, W - 4, 1, '#f0e4c6');
-        R(ctx, bx + 2, by + ty + 5, W - 4, 1, '#c9b48a');
-        if (tier === open) {
-          // 右の戸を左へ寄せた：右半分は中が見える（左は戸が 2 枚重なる）
-          const ix = bx + 2 + half;
-          R(ctx, ix, by + ty, half, 6, '#3a2c22');
-          if (tier === 0) { // たたんだ布団
-            const fc = blanket(b.left, b.top, 2);
-            R(ctx, ix + 1, by + ty + 1, half - 2, 2, fc);
-            R(ctx, ix + 1, by + ty + 3, half - 2, 2, P.sheet);
-            R(ctx, ix + 1, by + ty + 1, half - 2, 1, mix(fc, '#ffffff', 0.3));
-          } else { // 段ボールと、服の山
-            R(ctx, ix + 1, by + ty + 1, 7, 5, '#c49a62');
-            R(ctx, ix + 1, by + ty + 1, 7, 1, '#d6ae78');
-            R(ctx, ix + 4, by + ty + 1, 1, 5, '#e0cfa2');
-            R(ctx, ix + 9, by + ty + 3, half - 10, 3, ['#3f6aa8', '#c94a3a', '#5d8a4a'][(rnd(b.left, b.top, 32) * 3) | 0]);
-          }
-          R(ctx, ix - 1, by + ty, 1, 6, '#8a7048');
-          R(ctx, bx + 5, by + ty + 1, 1, 3, '#6a4a2e');
-        } else {
-          // 2 枚の引き戸。右の戸が手前に重なる（さかいに影）
-          R(ctx, bx + 2 + half, by + ty, 1, 6, '#8a7048');
-          R(ctx, bx + 1 + half, by + ty, 1, 6, '#cdb88e');
-          // 引き手（戸の外がわ寄りの、たて長のくぼみ）
-          R(ctx, bx + 5, by + ty + 1, 1, 3, '#6a4a2e');
-          R(ctx, bx + W - 6, by + ty + 1, 1, 3, '#6a4a2e');
+    const top = by - CLOSET_UP - 3; // 天井で切った面（暗い帯）の上のはし
+    const face = by - CLOSET_UP; // 手前の面の上のはし
+    const FH = 16 + CLOSET_UP; // 手前の面の高さ
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(px, top, 16, by + 16 - top);
+    ctx.clip();
+    // 天井で切った面
+    R(ctx, bx + 1, top, W - 2, 3, P.wallTop);
+    R(ctx, bx + 1, top, W - 2, 1, P.wallTopHi);
+    // 手前の面：わく
+    R(ctx, bx + 1, face, W - 2, FH, '#6e4a2c');
+    R(ctx, bx + 1, face, W - 2, 1, '#a07650');
+    const half = (W - 4) / 2;
+    const tiers = [[face + 2, 6], [face + 10, FH - 12]]; // 上の段（天袋）・下の段の [上のはし, 高さ]
+    // 部屋ごとに、天袋の戸を寄せて布団が見える／下の段の戸を寄せて荷物が見える／閉まっている
+    const k = rnd(b.left, b.top, 31);
+    const open = k < 0.35 ? 0 : k < 0.6 ? 1 : -1;
+    tiers.forEach(([ty, th], tier) => {
+      R(ctx, bx + 2, ty, W - 4, th, '#e2d2ac');
+      R(ctx, bx + 2, ty, W - 4, 1, '#f0e4c6');
+      R(ctx, bx + 2, ty + th - 1, W - 4, 1, '#c9b48a');
+      const pullY = ty + (tier === 0 ? 2 : Math.round(th * 0.4)), pullH = tier === 0 ? 2 : 3;
+      if (tier === open) {
+        // 右の戸を左へ寄せた：右半分は中が見える（左は戸が 2 枚重なる）
+        const ix = bx + 2 + half;
+        R(ctx, ix, ty, half, th, '#3a2c22');
+        if (tier === 0) { // たたんだ布団
+          const fc = blanket(b.left, b.top, 2);
+          R(ctx, ix + 1, ty + 1, half - 2, 2, fc);
+          R(ctx, ix + 1, ty + 3, half - 2, 2, P.sheet);
+          R(ctx, ix + 1, ty + 1, half - 2, 1, mix(fc, '#ffffff', 0.3));
+        } else { // 段ボールと、服の山（上に、つるした服）
+          R(ctx, ix + 1, ty + th - 6, 7, 6, '#c49a62');
+          R(ctx, ix + 1, ty + th - 6, 7, 1, '#d6ae78');
+          R(ctx, ix + 4, ty + th - 6, 1, 6, '#e0cfa2');
+          R(ctx, ix + 9, ty + th - 4, half - 10, 4, ['#3f6aa8', '#c94a3a', '#5d8a4a'][(rnd(b.left, b.top, 32) * 3) | 0]);
+          R(ctx, ix + 1, ty + 1, half - 2, 1, '#8a7048');
+          for (let i = 0; i < 4; i++) R(ctx, ix + 2 + i * 3, ty + 2, 2, 4, ['#f3f0e6', '#2f2f36', '#8fb3d9', '#c94a3a'][(rnd(b.left, b.top, 33 + i) * 4) | 0]);
         }
-      });
-      R(ctx, bx + 2, by + 8, W - 4, 1, '#4f3420'); // 中段
-      R(ctx, bx + 1, by + 15, W - 2, 1, P.woodXd);
+        R(ctx, ix - 1, ty, 1, th, '#8a7048');
+        R(ctx, bx + 5, pullY, 1, pullH, '#6a4a2e');
+      } else {
+        // 2 枚の引き戸。右の戸が手前に重なる（さかいに影）
+        R(ctx, bx + 2 + half, ty, 1, th, '#8a7048');
+        R(ctx, bx + 1 + half, ty, 1, th, '#cdb88e');
+        // 引き手（戸の外がわ寄りの、たて長のくぼみ）
+        R(ctx, bx + 5, pullY, 1, pullH, '#6a4a2e');
+        R(ctx, bx + W - 6, pullY, 1, pullH, '#6a4a2e');
+      }
     });
+    R(ctx, bx + 2, face + 8, W - 4, 2, '#4f3420'); // 中段（天袋と下の段のさかい）
+    R(ctx, bx + 1, by + 15, W - 2, 1, P.woodXd);
+    ctx.restore();
   }
 
   // 机（居室は 1 マスで 1 台。窓ぎわの左右のすみ）。勉強部屋は 2 マスで 1 台
