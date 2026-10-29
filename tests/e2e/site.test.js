@@ -148,8 +148,9 @@ async function fromHome(browser, base) {
   console.log('ホームから');
   const { page, ctx, errors, outside, top } = await openSub(browser, base, '');
   // 下のリンクの一覧
-  const links = await page.$$eval('.home-nav a', (as) => as.map((a) => a.getAttribute('href')));
-  assert.deepStrictEqual(links, ['game/', 'nenpyo/', 'heya/', 'meibo/', 'sanpo/']);
+  const all = await page.$$eval('.home-nav a', (as) => as.map((a) => a.getAttribute('href')));
+  assert.deepStrictEqual(all, ['game/', 'nenpyo/', 'heya/', 'meibo/', 'sanpo/', '#post']);
+  const links = all.filter((h) => h !== '#post'); // #post は同じページの下の投稿フォーム（home.test.js で確かめる）
   for (const href of links) {
     await page.locator('.home-nav a[href="' + href + '"]').click();
     await page.waitForURL(top + href, { timeout: 5000 });

@@ -9,7 +9,7 @@
 - 年表・部屋割り・名簿は `nenpyo/`・`heya/`・`meibo/`（`js/nenpyo.js`・`js/heya.js`・`js/meibo.js`）。データは `js/site/data.js` が読む。
 - 寮さんぽ（建物を歩ける再現）は `sanpo/`。間取りは `js/world.js`（1 文字 = 1 マスのテキスト地図）、描画は `js/art.js`、操作は `js/game.js`。
 - claude.ai に公開する寮さんぽの 1 枚の HTML は `python3 tools/build_artifact.py <出力先>` で作る。
-- Google 側（フォーム・スプレッドシート・Apps Script・Gemini）は `gas/` と `docs/site/SETUP.md`（幹事向けの手順）。
+- Google 側（スプレッドシート・Apps Script・Gemini）は `gas/` と `docs/site/SETUP.md`（幹事向けの手順）。投稿フォームはトップページ（`index.html` の `#post`、`js/home/post.js`）で、受け口は `gas/Code.gs` の doPost（type 'post'）。
 - どのページも `<footer data-ob-footer></footer>` と `js/site/common.js` で、フィクションの注記を出す。リンクは相対パスで書く（サイトは `/dormitory/` の下に出る）。
 
 ## 確認のしかた

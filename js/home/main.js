@@ -126,7 +126,7 @@
 
   // ── 画面の配置（描くのと、タップの当たり判定で共通） ─────────────
   const LAY = {
-    mode: { win: [60, 60, 136, 72], item: (i) => [66, 72 + i * 26, 124, 24] },
+    mode: { win: [60, 50, 136, 98], item: (i) => [66, 62 + i * 26, 124, 24] },
     games: { win: [24, 56, 208, 100], item: (i) => [30, 68 + i * 26, 196, 24] },
     desc: [8, 168, 240, 46],
     head: [72, 14, 112, 26],
@@ -228,18 +228,30 @@
     }
     leave(it.href);
   }
+  // 下の投稿フォームへ（ページの中なので、画面は切りかえない）
+  function toPost() {
+    const sec = document.getElementById('post');
+    if (!sec) return;
+    sec.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'start' });
+    const first = sec.querySelector('input, textarea');
+    if (first) setTimeout(() => first.focus({ preventScroll: true }), still ? 0 : 400);
+    if (history.replaceState) history.replaceState(null, '', '#post');
+  }
   const SCENES = {
     title: {
       input(btn) { if (btn === 'a') pushStart(); },
     },
     mode: {
       input(btn) {
+        const n = H.MODES.length;
         if (btn === 'up' || btn === 'down') {
-          S.mode = (S.mode + 1) % H.MODES.length;
+          S.mode = (S.mode + (btn === 'up' ? n - 1 : 1)) % n;
           H.audio.sfx('move');
         } else if (btn === 'a') {
+          const m = H.MODES[S.mode];
           H.audio.sfx('ok');
-          go(H.MODES[S.mode].id === 'game' ? 'games' : 'map');
+          if (m.id === 'post') toPost();
+          else go(m.id === 'game' ? 'games' : 'map');
         } else if (btn === 'b') {
           H.audio.sfx('back');
           go('title');

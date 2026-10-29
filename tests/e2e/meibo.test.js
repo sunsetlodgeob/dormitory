@@ -28,7 +28,7 @@ async function openPage(browser, base, rel, o = {}) {
     await ctx.route('**/js/site/config.js', (r) => r.fulfill({
       status: 200, contentType: 'application/javascript; charset=utf-8',
       body: 'window.OB_CONFIG = ' + JSON.stringify(Object.assign({
-        GAS_URL: '', GOOGLE_CLIENT_ID: '', ALBUM_URL: '', FORM_TIMELINE_URL: '', FORM_MEMBER_URL: '', CONTACT_EMAIL: '',
+        GAS_URL: '', GOOGLE_CLIENT_ID: '', ALBUM_URL: '', CONTACT_EMAIL: '',
       }, o.config)) + ';',
     }));
   }
@@ -65,7 +65,7 @@ async function sampleChecks(page, tag) {
   assert.ok(await page.isVisible('.mb-note'), tag + ': 名簿についての説明がない');
   assert.ok((await page.textContent('.mb-note')).includes('名簿に載せたくない方・まちがいを見つけた方は、OB会までご連絡ください'));
   assert.ok(!(await page.isVisible('#mb-contact')), tag + ': 連絡先が空なのに出ている');
-  assert.ok(!(await page.isVisible('#mb-form')), tag + ': フォームが空なのに出ている');
+  assert.strictEqual(await page.getAttribute('#mb-form-link', 'href'), '../#post', tag + ': 追加・訂正はトップページのフォームへ');
   assert.ok(await page.isVisible('footer.ob-footer'), tag + ': 注記（フッター）がない');
   assert.ok((await page.textContent('footer')).includes('フィクション'));
   assert.ok(await page.isVisible('a.ob-back[href="../"]'), tag + ': ホームへのリンクがない');
@@ -193,7 +193,7 @@ withSite(PORT, async ({ browser, base }) => {
     let asked = '';
     const { page, ctx, errors, dialogs } = await openPage(browser, base, 'meibo/', {
       phone,
-      config: { GAS_URL: GAS, CONTACT_EMAIL: 'ob@example.com', FORM_MEMBER_URL: 'https://forms.gle/example' },
+      config: { GAS_URL: GAS, CONTACT_EMAIL: 'ob@example.com' },
       gas: (r) => {
         asked = r.request().url();
         r.fulfill({
@@ -235,8 +235,8 @@ withSite(PORT, async ({ browser, base }) => {
     assert.ok(await page.isVisible('#mb-contact'));
     assert.ok((await page.getAttribute('#mb-mail', 'href')).startsWith('mailto:ob@example.com'));
     assert.strictEqual(await page.textContent('#mb-mail'), 'ob@example.com');
-    assert.strictEqual(await page.getAttribute('#mb-form-link', 'href'), 'https://forms.gle/example');
-    assert.ok((await page.textContent('#mb-form-link')).includes('名簿への登録はこちら'));
+    assert.strictEqual(await page.getAttribute('#mb-form-link', 'href'), '../#post');
+    assert.ok((await page.textContent('#mb-form-link')).includes('名簿の追加・訂正はこちら'));
     assert.ok((await page.textContent('#mb-updated')).includes('2026年11月1日'), tag + ': 更新日がちがう');
     assert.ok(await noOverflow(page), tag + ': 横にはみ出している');
     await shot(page, tag + '-live', true);
@@ -248,9 +248,8 @@ withSite(PORT, async ({ browser, base }) => {
   // ── 4. 設定のまちがい：javascript: の URL や、おかしなメールアドレスは出さない ──
   {
     const { page, ctx, errors } = await openPage(browser, base, 'meibo/', {
-      config: { FORM_MEMBER_URL: 'javascript:alert(1)', CONTACT_EMAIL: 'a"><img src=x>@x.jp' },
+      config: { CONTACT_EMAIL: 'a"><img src=x>@x.jp' },
     });
-    assert.ok(!(await page.isVisible('#mb-form')), 'javascript: の URL が出ている');
     assert.ok(!(await page.isVisible('#mb-contact')), 'おかしなメールアドレスが出ている');
     assert.deepStrictEqual(realErrors(errors), []);
     await ctx.close();

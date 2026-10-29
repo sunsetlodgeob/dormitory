@@ -217,9 +217,8 @@
     el.loading.hidden = true;
     el.user.hidden = !OB.data.isLive();
     el.userText.textContent = email ? 'ログイン中：' + email : 'ログイン中';
-    const form = OB.safeUrl(cfg.FORM_TIMELINE_URL);
-    el.post.hidden = el.tail.hidden = !form;
-    if (form) el.post.href = el.post2.href = form;
+    el.post.hidden = el.tail.hidden = false;
+    el.post.href = el.post2.href = OB.POST_HREF;
   }
 
   function clearBoard() {

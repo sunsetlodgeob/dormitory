@@ -30,7 +30,7 @@ js/site/config.js        設定（URL など。空ならサンプルで動く）
 js/site/sample.js        サンプルデータ（すべて架空）
 js/site/data.js          データの読み込み（OB.data）、部屋割りのそろえ方（OB.data.roomsByYear）
 js/site/common.js        注記の表示（OB.DISCLAIMER）、OB.esc・OB.safeUrl・OB.wareki・OB.normSearch
-gas/                     Google Apps Script（フォーム → Gemini → スプレッドシート → サイト）
+gas/                     Google Apps Script（トップページの投稿 → Gemini → スプレッドシート → サイト）
 tools/build_artifact.py  寮さんぽを 1 枚の HTML にまとめる（claude.ai に公開する用）
 tests/e2e/               ブラウザでの確認（Playwright）
 tests/gas/               gas/Code.gs の確認（Google には出ない）
@@ -72,7 +72,7 @@ docs/site/SETUP.md       Google 側の設定手順（幹事向け）
 - `entryYear`・`year` は年度（4月はじまり）の西暦。
 - `gradYear` は卒業した年度（2007年3月に卒業したなら 2006）。名簿には「2006年度卒」と出る。無いこと（null）もある。
 - `room` は文字列で `"101"`、`"201"`〜`"217"`、`"301"`〜`"317"`（一覧は `OB.data.ROOM_NUMBERS`）。
-- 幹事が「掲載」にチェックした行だけが返る。メモに「名簿掲載NG」とある行と、入学年度のない名簿の行は返らない。
+- 「掲載」にチェックがある行だけが返る（投稿で入った行は、はじめからチェックあり）。メモに「名簿掲載NG」とある行と、入学年度のない名簿の行は返らない。
 - `members` は入学年度の順、`rooms` は年度の順（同じ年度の中は部屋の順）。
 - 設定が空のときは `js/site/sample.js` の中身を返し、`sample: true` が付く。
 
@@ -96,6 +96,34 @@ docs/site/SETUP.md       Google 側の設定手順（幹事向け）
 - `idToken` は Google Identity Services（`google.accounts.id`）のログインで受け取る credential（ID トークン）。サイトは保存しない（メモリだけ）。
 - 「見る権限」＝ シート「メンバー」にメールアドレスがある人か、そのスプレッドシートを共有されている人（閲覧者・編集者・オーナー）。
   スプレッドシートを共有すると、掲載していない投稿やメモまで見えるので、寮生は「メンバー」に書く（`docs/site/SETUP.md`）。
+
+### 投稿（トップページのフォーム。だれでも送れる）
+
+`js/home/post.js` → `POST {GAS_URL}`（`Content-Type: text/plain`）。どの欄も空でよいが、事件の見出しか本文・名簿の名前か訂正・部屋割りのどれか 1 つは要る。
+
+```json
+{
+  "type": "post", "quiz": "夕照寮", "hp": "", "by": "一年C",
+  "event":  { "when": "平成17年の4月", "title": "屋上でBBQ", "what": "…", "who": "先輩A" },
+  "member": { "name": "夕照 一郎", "entry": "2003", "grad": "", "fix": "入学年度は2004でした" },
+  "rooms":  { "text": "2005年度 305号室 自分・六浦二郎" }
+}
+```
+
+```json
+{ "ok": true, "saved": { "event": "e12", "member": "added", "rooms": { "added": 2, "same": 0, "removed": 0 } },
+  "results": ["年表：「屋上でBBQ」を載せました（2005年度）", "名簿：…", "部屋割り：2 件を載せました"] }
+{ "ok": true, "duplicate": true, "saved": {}, "results": [] }  // 10 分以内に同じ内容
+{ "ok": false, "error": "quiz" }            // いたずらよけの問い（寮の名前）がちがう
+{ "ok": false, "error": "empty" }           // 書いてある所がない
+{ "ok": false, "error": "too_many" }        // 1 時間に 30 件をこえた
+```
+
+- Apps Script は原文をシート「投稿」に残し、Gemini で整えて、年表・名簿・部屋割りに **「掲載」ありで** 入れる（幹事の確認なし。持ち主の決めたこと）。結果はシート「投稿」の「結果」にも書く。
+- `saved.member`：`added`（新しく足した）・`updated`（同じ名前の行を直した）・`same`（変えるところなし）・`removed`（「外して」で掲載を外した）。名前は空白を無視してくらべる。名前の訂正（`oldName`）は部屋割りの行も直す。
+- 部屋割りは、年度・部屋・名前の組がもうあれば足さない。「消して」は掲載を外す。「自分」は名簿の欄のお名前。
+- `hp` は人には見えない欄。何か入っていたら、入れずに `ok` だけ返す。
+- 年表・名簿・部屋割りのページの「投稿する」ボタンは `OB.POST_HREF`（`../#post`）へ。
 
 ## 4. ゲーム「男魂くんの1年」
 

@@ -17,7 +17,6 @@ const SHOTS = process.env.NENPYO_SHOTS || '';
 const GAS = 'https://script.google.com/macros/s/TEST/exec';
 const GSI = 'https://accounts.google.com/gsi/client';
 const CLIENT = '1234-test.apps.googleusercontent.com';
-const FORM = 'https://forms.gle/timeline-example';
 const XSS = '<img src=x onerror="window.__xss=1">';
 
 // にせものの Google ログイン。ボタンの代わりに印を描き、callback はテストから呼ぶ
@@ -57,7 +56,7 @@ async function openPage(browser, base, o = {}) {
     await ctx.route('**/js/site/config.js', (r) => r.fulfill({
       status: 200, contentType: 'application/javascript; charset=utf-8',
       body: 'window.OB_CONFIG = ' + JSON.stringify(Object.assign({
-        GAS_URL: '', GOOGLE_CLIENT_ID: '', ALBUM_URL: '', FORM_TIMELINE_URL: '', FORM_MEMBER_URL: '', CONTACT_EMAIL: '',
+        GAS_URL: '', GOOGLE_CLIENT_ID: '', ALBUM_URL: '', CONTACT_EMAIL: '',
       }, o.config)) + ';',
     }));
   }
@@ -123,7 +122,8 @@ withSite(PORT, async ({ browser, base }) => {
     assert.strictEqual(await page.$$eval('.np-month.is-unknown', (els) => els.length), sample.filter((e) => e.month == null).length, tag + ': 時期不明の印がちがう');
     assert.ok((await page.textContent('#ny2000 .np-month')).includes('4'), tag + ': 月の印がない');
     assert.ok((await page.textContent('#np-count')).includes('全 ' + sample.length + '件'));
-    assert.ok(!(await page.isVisible('#np-post')), tag + ': フォームが空なのに投稿ボタンが出ている');
+    assert.ok(await page.isVisible('#np-post'), tag + ': 投稿ボタンがない');
+    assert.strictEqual(await page.getAttribute('#np-post', 'href'), '../#post', tag + ': 投稿ボタンはトップページのフォームへ');
     assert.ok(await page.isVisible('footer.ob-footer') && (await page.textContent('footer')).includes('フィクション'), tag + ': 注記がない');
     assert.ok(await page.isVisible('a.ob-back[href="../"]'));
     // 読み上げでの名前に ✕ や ▶ の文字がまざらない
@@ -234,7 +234,7 @@ withSite(PORT, async ({ browser, base }) => {
   for (const phone of [false, true]) {
     const tag = phone ? 'phone' : 'pc';
     const { page, ctx, errors, dialogs, posts, gsiAsked } = await openPage(browser, base, {
-      phone, config: { GAS_URL: GAS, GOOGLE_CLIENT_ID: CLIENT, FORM_TIMELINE_URL: FORM },
+      phone, config: { GAS_URL: GAS, GOOGLE_CLIENT_ID: CLIENT },
     });
     await page.waitForSelector('#np-gbtn .fake-gsi', { timeout: 5000 });
     assert.strictEqual(gsiAsked.length, 1, tag + ': Google のスクリプトを読んでいない');
@@ -303,9 +303,9 @@ withSite(PORT, async ({ browser, base }) => {
     assert.strictEqual(await page.evaluate(() => [window.__xss, window.__xss2]).then((a) => a.filter(Boolean).length), 0, tag + ': スクリプトが動いた');
     assert.deepStrictEqual(dialogs, []);
     assert.ok(await page.isVisible('#np-post'), tag + ': 投稿ボタンがない');
-    assert.strictEqual(await page.getAttribute('#np-post', 'href'), FORM);
+    assert.strictEqual(await page.getAttribute('#np-post', 'href'), '../#post');
     assert.ok((await page.textContent('#np-post')).includes('事件を投稿する'));
-    assert.strictEqual(await page.getAttribute('#np-post2', 'href'), FORM);
+    assert.strictEqual(await page.getAttribute('#np-post2', 'href'), '../#post');
     // トークンを保存していない
     const kept = await page.evaluate(() => JSON.stringify([Object.keys(localStorage), Object.keys(sessionStorage), document.cookie]));
     assert.ok(!kept.includes('ey') && kept === '[[],[],""]', tag + ': ブラウザに何か保存している: ' + kept);

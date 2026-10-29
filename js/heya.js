@@ -35,7 +35,7 @@
     zoom: false, tile: TS, sel: null, floors: [],
   };
 
-  const formUrl = () => OB.safeUrl((window.OB_CONFIG || {}).FORM_MEMBER_URL);
+  const formUrl = () => OB.POST_HREF;
   const namesFor = (room) => (S.byYear.get(S.year) || new Map()).get(room) || [];
 
   // ── データ ─────────────────────────────────────
@@ -120,15 +120,13 @@
     const a = contactLink('情報を送る（フォーム）');
     if (a) el.form.append(' ', a);
   }
-  // 情報の送り先：フォームがあればフォーム、なければ連絡先のメール
+  // 情報の送り先：トップページの投稿フォーム（なければ連絡先のメール）
   function contactLink(label) {
     const url = formUrl();
     const mail = String((window.OB_CONFIG || {}).CONTACT_EMAIL || '').trim();
     const a = document.createElement('a');
     if (url) {
       a.href = url;
-      a.target = '_blank';
-      a.rel = 'noopener';
       a.textContent = label;
     } else if (/^[^\s@<>"'()]+@[^\s@<>"'()]+\.[^\s@<>"'()]+$/.test(mail)) {
       a.href = 'mailto:' + mail + '?subject=' + encodeURIComponent('部屋割りの情報');

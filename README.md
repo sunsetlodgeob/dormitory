@@ -60,7 +60,7 @@ Playwright は `/opt/node22/lib/node_modules/playwright` か、ふつうの `req
 
 ## Google 側の設定（幹事向け）
 
-フォーム → Gemini で整理 → スプレッドシート → サイト、の流れは Google Apps Script で動きます。設定の手順は [`docs/site/SETUP.md`](docs/site/SETUP.md)、コードは [`gas/`](gas/) です。設定が終わったら、`js/site/config.js` に URL などを書きこみます。
+トップページの投稿フォーム → Gemini で整理 → スプレッドシート（そのまま掲載）→ サイト、の流れは Google Apps Script で動きます。設定の手順は [`docs/site/SETUP.md`](docs/site/SETUP.md)、コードは [`gas/`](gas/) です。設定が終わったら、`js/site/config.js` に URL などを書きこみます。
 
 ## ファイル構成
 

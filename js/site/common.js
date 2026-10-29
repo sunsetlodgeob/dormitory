@@ -10,6 +10,8 @@
   const OB = (window.OB = window.OB || {});
 
   OB.DISCLAIMER = 'このサイトに出てくる事件やゲームの題材は誇張であり、すべてフィクションです。';
+  // 投稿フォーム（トップページの下）。中のページはどれもサイトの 1 段下にある
+  OB.POST_HREF = '../#post';
   OB.NOT_OFFICIAL = '横浜市立大学の公式サイトではありません。夕照寮OB会の有志が作っています。';
 
   OB.esc = function (s) {

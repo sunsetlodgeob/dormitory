@@ -26,22 +26,6 @@ function geminiOk(obj) {
   return { code: 200, body: { candidates: [{ content: { role: 'model', parts: [{ text: JSON.stringify(obj) }] }, finishReason: 'STOP' }] } };
 }
 
-// フォームの回答を 1 件、回答シートに入れて onFormSubmit を呼ぶ（answers は質問の文 → 答え）
-function submit(env, key, answers, { noNamed = false } = {}) {
-  const sid = env.store['RESP_SHEET_ID_' + key.toUpperCase()];
-  const sheet = env.ss.getSheets().find((s) => String(s.getSheetId()) === sid);
-  assert.ok(sheet, '回答シートがある');
-  const head = sheet.header();
-  const row = head.map((h, i) => (i === 0 ? '2026/10/24 12:00:00' : answers[h] || ''));
-  sheet.appendRow(row);
-  const r = sheet.getLastRow();
-  const named = {};
-  head.forEach((h, i) => { named[h] = [row[i]]; });
-  const e = { range: sheet.getRange(r, 1, 1, head.length), values: row };
-  if (!noNamed) e.namedValues = named;
-  return { result: env.ctx.onFormSubmit(e), sheet, row: r };
-}
-
 function freshSetup(opts) {
   const env = loadGas(opts);
   env.ctx.setup();
@@ -59,14 +43,12 @@ function rec(sheet, r) { // r 行目を { 見出し: 値 } に
   return o;
 }
 
-const TL = {
-  when: 'いつごろ？（年度・時期。だいたいでOK）', title: '見出し（ひとことで）', what: '何があった？',
-  who: '関わった人（任意。呼び名でOK）', by: '投稿者（任意）',
-};
-const MB = {
-  name: 'お名前', entry: '入学年度', grad: '卒業年度（任意）',
-  rooms: '住んでいた部屋と年度（例：2005年度 305号室、2006年度 212号室）', consent: '名簿にお名前を載せてもよいですか？（はい／いいえ）',
-};
+// トップページの投稿を 1 件送る（doPost の type 'post'。いたずらよけの問いには正しく答える）
+function send(env, body) {
+  const o = env.ctx.doPost({ postData: { contents: JSON.stringify(Object.assign({ type: 'post', quiz: '夕照寮' }, body)), type: 'text/plain' } });
+  return out(o);
+}
+const ev = (when, title, what, extra = {}) => ({ event: Object.assign({ when, title, what }, extra) });
 
 // ---- ファイル ----
 test('Code.gs は V8 で読める・appsscript.json の中身', () => {
@@ -75,10 +57,11 @@ test('Code.gs は V8 で読める・appsscript.json の中身', () => {
   assert.strictEqual(m.timeZone, 'Asia/Tokyo');
   assert.strictEqual(m.runtimeVersion, 'V8');
   assert.deepStrictEqual(m.webapp, { executeAs: 'USER_DEPLOYING', access: 'ANYONE_ANONYMOUS' });
-  assert.ok(Array.isArray(m.oauthScopes) && m.oauthScopes.length >= 4);
-  for (const s of ['spreadsheets', 'forms', 'script.external_request', 'script.scriptapp']) {
+  assert.ok(Array.isArray(m.oauthScopes) && m.oauthScopes.length >= 3);
+  for (const s of ['spreadsheets', 'script.external_request', 'userinfo.email']) {
     assert.ok(m.oauthScopes.some((x) => x.includes('/auth/' + s)), 'スコープ ' + s);
   }
+  assert.ok(!m.oauthScopes.some((x) => /\/auth\/(forms|script\.scriptapp)/.test(x)), 'フォームとトリガーはもう使わない');
   assert.ok(!m.oauthScopes.some((x) => /\/auth\/(drive|gmail|script\.send_mail|documents)/.test(x)), '要らない権限はない');
 });
 
@@ -91,7 +74,7 @@ test('部屋番号の一覧が js/site/data.js と同じ', () => {
 });
 
 // ---- setup ----
-test('setup：シート・見出し・チェックボックス・フォーム・トリガーを作る', () => {
+test('setup：シート・見出し・チェックボックスを作る（フォーム・トリガーは作らない）', () => {
   const env = freshSetup();
   const names = env.ss.getSheets().map((s) => s.getName());
   assert.ok(!names.includes('シート1'), '空のシート1は消す');
@@ -100,6 +83,7 @@ test('setup：シート・見出し・チェックボックス・フォーム・
     '名簿': ['名前', '入学年度', '卒業年度', '掲載', '元の回答', 'メモ'],
     '部屋割り': ['年度', '部屋', '名前', '掲載', '元の回答', 'メモ'],
     'メンバー': ['メールアドレス', 'メモ'],
+    '投稿': ['日時', '内容', '結果'],
   };
   for (const [n, h] of Object.entries(want)) {
     const sh = env.ss.getSheetByName(n);
@@ -115,40 +99,12 @@ test('setup：シート・見出し・チェックボックス・フォーム・
   }
   assert.strictEqual(env.ss.getSheetByName('部屋割り').formats.get('2,2'), '@', '部屋は文字のまま');
 
-  // フォーム 2 つ
-  assert.strictEqual(env.forms.size, 2);
-  const fs2 = [...env.forms.values()];
-  const tl = fs2.find((f) => f.title === '事件投稿フォーム');
-  const mb = fs2.find((f) => f.title === '名簿・部屋割りの登録フォーム');
-  assert.ok(tl && mb);
-  assert.deepStrictEqual(tl.items.map((i) => [i.title, i.type, i.required]), [
-    [TL.when, 'TEXT', true], [TL.title, 'TEXT', true], [TL.what, 'PARAGRAPH_TEXT', true], [TL.who, 'TEXT', false], [TL.by, 'TEXT', false],
-  ]);
-  assert.deepStrictEqual(mb.items.map((i) => [i.title, i.type, i.required]), [
-    [MB.name, 'TEXT', true], [MB.entry, 'TEXT', true], [MB.grad, 'TEXT', false], [MB.rooms, 'PARAGRAPH_TEXT', false], [MB.consent, 'MULTIPLE_CHOICE', true],
-  ]);
-  assert.deepStrictEqual(plain(mb.items[4].choices), ['はい', 'いいえ']);
-  for (const f of fs2) {
-    assert.strictEqual(f.dest, env.ss.getId(), '回答はこのスプレッドシートへ');
-    assert.strictEqual(f.published, true, '公開する');
-    assert.strictEqual(f.collectEmail, false, 'メールアドレスは集めない');
-  }
-  // 回答シート：名前を付けなおし、id と名前を覚える
-  assert.ok(env.ss.getSheetByName('回答：事件投稿').getFormUrl());
-  assert.ok(env.ss.getSheetByName('回答：名簿・部屋割り').getFormUrl());
-  assert.strictEqual(env.store.RESP_SHEET_TIMELINE, '回答：事件投稿');
-  assert.strictEqual(env.store.RESP_SHEET_ID_TIMELINE, String(env.ss.getSheetByName('回答：事件投稿').getSheetId()));
-  assert.strictEqual(env.store.RESP_SHEET_MEMBER, '回答：名簿・部屋割り');
-  assert.strictEqual(env.store.FORM_ID_TIMELINE, tl.id);
-  assert.strictEqual(env.store.FORM_ID_MEMBER, mb.id);
-  assert.strictEqual(env.store.FORM_URL_TIMELINE, tl.getPublishedUrl());
-  // トリガー 1 つ
-  assert.strictEqual(env.triggers.length, 1);
-  assert.strictEqual(env.triggers[0].fn, 'onFormSubmit');
-  assert.strictEqual(env.triggers[0].type, 'ON_FORM_SUBMIT');
-  // フォームの URL がログに出る
-  const log = env.logs.join('\n');
-  assert.ok(log.includes(tl.getPublishedUrl()) && log.includes(mb.getPublishedUrl()), 'URL をログに出す');
+  // 投稿の原文を残すシート
+  assert.deepStrictEqual(env.ss.getSheetByName('投稿').header(), ['日時', '内容', '結果']);
+  // フォームもトリガーも作らない（投稿はトップページから）
+  assert.strictEqual(env.forms.size, 0);
+  assert.strictEqual(env.triggers.length, 0);
+  assert.ok(env.logs.join('\n').includes('ウェブアプリ'), '次の手順をログに出す');
 });
 
 test('setup：2 回目も増えない・データは消えない', () => {
@@ -159,28 +115,7 @@ test('setup：2 回目も増えない・データは消えない', () => {
   env.ctx.setup();
   env.ctx.setup();
   assert.deepStrictEqual(env.ss.getSheets().map((s) => s.getName()).sort(), before);
-  assert.strictEqual(env.forms.size, 2);
-  assert.strictEqual(env.triggers.length, 1);
   assert.deepStrictEqual(meibo.table(), [['夕照 一郎', 2003, 2007, true, '', '']]);
-  // 回答シートの名前を変えても、同じシートを使う
-  env.ss.getSheetByName('回答：事件投稿').setName('事件の回答');
-  env.ctx.setup();
-  assert.strictEqual(env.forms.size, 2);
-  assert.strictEqual(env.store.RESP_SHEET_TIMELINE, '事件の回答');
-  assert.ok(!env.ss.getSheetByName('回答：事件投稿'));
-});
-
-test('setup：回答シートを消してしまっても、つなぎなおす。トリガーが重なっていたら 1 つに', () => {
-  const env = freshSetup();
-  env.ss.deleteSheet(env.ss.getSheetByName('回答：事件投稿'));
-  env.ctx.ScriptApp.newTrigger('onFormSubmit').forSpreadsheet(env.ss).onFormSubmit().create();
-  assert.strictEqual(env.triggers.length, 2);
-  env.ctx.setup();
-  assert.strictEqual(env.forms.size, 2, 'フォームは作りなおさない');
-  const sh = env.ss.getSheetByName('回答：事件投稿');
-  assert.ok(sh && sh.getFormUrl(), '回答シートができた');
-  assert.strictEqual(env.store.RESP_SHEET_ID_TIMELINE, String(sh.getSheetId()));
-  assert.strictEqual(env.triggers.length, 1);
 });
 
 // ---- doGet ----
@@ -389,7 +324,7 @@ function geminiEnv(handler, props = { GEMINI_API_KEY: 'test-key' }) {
   return freshSetup({ props, fetch: handler });
 }
 
-test('onFormSubmit 事件：Gemini で整理して、掲載なしで 1 行足す', () => {
+test('投稿 事件：Gemini で整理して、掲載ありで年表に 1 行。原文は「投稿」に残る', () => {
   const seen = [];
   const env = geminiEnv((url, p) => {
     seen.push({ url, p });
@@ -397,11 +332,10 @@ test('onFormSubmit 事件：Gemini で整理して、掲載なしで 1 行足す
   });
   // setup で付けたチェックボックスの範囲（はじめの 1000 行）をこえた行のつもりで、いったん消す
   env.ss.getSheetByName('年表').validation.clear();
-  const { result, row } = submit(env, 'timeline', {
-    [TL.when]: '平成17年の4月ごろ', [TL.title]: '新歓で机が足りない', [TL.what]: '新入生が多くてつくえが足りなかった',
-    [TL.who]: '先輩A、同期B', [TL.by]: '一年C',
-  });
-  assert.strictEqual(result.gemini, true);
+  const res = send(env, Object.assign(ev('平成17年の4月ごろ', '新歓で机が足りない', '新入生が多くてつくえが足りなかった', { who: '先輩A、同期B' }), { by: '一年C' }));
+  assert.strictEqual(res.ok, true);
+  assert.strictEqual(res.saved.event, 'e1');
+  assert.ok(res.results[0].startsWith('年表：'));
   const t = env.ss.getSheetByName('年表');
   assert.strictEqual(t.getLastRow(), 2);
   const r = rec(t, 2);
@@ -411,13 +345,18 @@ test('onFormSubmit 事件：Gemini で整理して、掲載なしで 1 行足す
   assert.strictEqual(r['見出し'], 'あ'.repeat(30), '見出しは 30 字まで');
   assert.strictEqual(r['本文'], '新入生が多くて\n机が足りなかった。\n\n食堂の机も使った。');
   assert.strictEqual(r['タグ'], '新歓、食堂、机', 'タグは 3 つまで、# をとって重なりなし');
-  assert.strictEqual(r['掲載'], false);
+  assert.strictEqual(r['掲載'], true, '確認なしで、そのまま載せる');
   assert.deepStrictEqual(t.validation.get('2,' + (col(t, '掲載') + 1)), { kind: 'checkbox' });
-  const respId = env.store.RESP_SHEET_ID_TIMELINE;
-  assert.strictEqual(r['元の回答'], '=HYPERLINK("#gid=' + respId + '&range=A' + row + '","回答：事件投稿 ' + row + '行目")');
+  const posts = env.ss.getSheetByName('投稿');
+  assert.strictEqual(r['元の回答'], '=HYPERLINK("#gid=' + posts.getSheetId() + '&range=A2","投稿 2行目")');
   assert.ok(t.isFormula(2, col(t, '元の回答') + 1), '元の回答はリンク');
   assert.ok(r['メモ'].includes('関わった人：先輩A、同期B') && r['メモ'].includes('投稿者：一年C') && r['メモ'].includes('いつごろ（原文）：平成17年の4月ごろ'));
   assert.ok(!r['メモ'].includes('Gemini失敗'));
+  // 投稿シート：原文と結果
+  const pr = rec(posts, 2);
+  assert.ok(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(pr['日時']), '日時 ' + pr['日時']);
+  assert.ok(pr['内容'].includes('【事件・出来事】') && pr['内容'].includes('新入生が多くてつくえが足りなかった') && pr['内容'].includes('投稿者：一年C'));
+  assert.ok(pr['結果'].startsWith('年表：'));
 
   // Gemini への頼み方
   assert.strictEqual(seen.length, 1);
@@ -434,15 +373,15 @@ test('onFormSubmit 事件：Gemini で整理して、掲載なしで 1 行足す
   assert.ok(sent.includes('つくえが足りなかった') && sent.includes('平成17年の4月ごろ'));
   assert.ok(!sent.includes('先輩A') && !sent.includes('一年C'), '関わった人・投稿者は Gemini に送らない');
 
-  // 2 件目は e2
-  submit(env, 'timeline', { [TL.when]: '2006', [TL.title]: 'x', [TL.what]: 'y' });
+  // 2 件目は e2。年表はすぐ読める（掲載あり）
+  send(env, ev('2006', 'x', 'y'));
   assert.strictEqual(rec(t, 3).ID, 'e2');
   assert.strictEqual(rec(t, 3)['メモ'], 'いつごろ（原文）：2006');
 });
 
-test('onFormSubmit 事件：範囲外の年度・おかしな月は空にしてメモ', () => {
+test('投稿 事件：範囲外の年度・おかしな月は空にしてメモ', () => {
   const env = geminiEnv(() => geminiOk({ year: 2025, month: 13, title: '', body: '', tags: 'タグじゃない' }));
-  submit(env, 'timeline', { [TL.when]: '去年', [TL.title]: '見出しの原文', [TL.what]: '本文の原文' });
+  send(env, { event: { when: '去年', title: '見出しの原文', what: '本文の原文' } });
   const r = rec(env.ss.getSheetByName('年表'), 2);
   assert.strictEqual(r['年度'], '');
   assert.strictEqual(r['月'], '');
@@ -452,12 +391,10 @@ test('onFormSubmit 事件：範囲外の年度・おかしな月は空にして�
   assert.ok(r['メモ'].includes('年度を確認'));
 });
 
-test('onFormSubmit 事件：Gemini が失敗しても、原文を残す（メモ：Gemini失敗）', () => {
+test('投稿 事件：Gemini が失敗しても、原文を残す（メモ：Gemini失敗）', () => {
   let n = 0;
   const env = geminiEnv(() => { n++; return { code: 500, body: { error: { message: 'internal' } } }; });
-  submit(env, 'timeline', {
-    [TL.when]: '平成17年の秋、10月ごろ', [TL.title]: '=IMPORTXML("http://example.com","//a")', [TL.what]: '何かがあった。\n2行目。', [TL.by]: '一年C',
-  });
+  send(env, { event: { when: '平成17年の秋、10月ごろ', title: '=IMPORTXML("http://example.com","//a")', what: '何かがあった。\n2行目。' }, by: '一年C' });
   assert.strictEqual(n, 2, '1 回だけやりなおす');
   const t = env.ss.getSheetByName('年表');
   const r = rec(t, 2);
@@ -467,137 +404,177 @@ test('onFormSubmit 事件：Gemini が失敗しても、原文を残す（メモ
   assert.strictEqual(r['見出し'], '=IMPORTXML("http://example.com","//a")');
   assert.ok(!t.isFormula(2, col(t, '見出し') + 1), '回答の文字は式にしない');
   assert.strictEqual(r['本文'], '何かがあった。\n2行目。');
-  assert.strictEqual(r['掲載'], false);
+  assert.strictEqual(r['掲載'], true, 'Gemini がだめでも原文のまま載せる（幹事があとで直す）');
   assert.ok(r['メモ'].startsWith('Gemini失敗：手で整理してください'));
   assert.ok(r['メモ'].includes('投稿者：一年C'));
 });
 
-test('onFormSubmit 事件：API キーがない・返事が JSON でない・混んでいたら 1 回やりなおす', () => {
+test('投稿 事件：API キーがない・返事が JSON でない・混んでいたら 1 回やりなおす', () => {
   // キーなし：Gemini を呼ばない
   const env = geminiEnv(() => { throw new Error('呼ばないはず'); }, {});
-  submit(env, 'timeline', { [TL.when]: 'わからない', [TL.title]: 'a', [TL.what]: 'b' });
+  send(env, { event: { when: 'わからない', title: 'a', what: 'b' } });
   const r = rec(env.ss.getSheetByName('年表'), 2);
   assert.ok(r['メモ'].includes('Gemini失敗：手で整理してください') && r['メモ'].includes('APIキーが未設定'));
   assert.strictEqual(env.calls.fetch.length, 0);
   // JSON でない
   const env2 = geminiEnv(() => ({ code: 200, body: { candidates: [{ content: { parts: [{ text: 'すみません、わかりません' }] } }] } }));
-  submit(env2, 'timeline', { [TL.when]: '2003', [TL.title]: 'a', [TL.what]: 'b' });
+  send(env2, { event: { when: '2003', title: 'a', what: 'b' } });
   assert.ok(rec(env2.ss.getSheetByName('年表'), 2)['メモ'].includes('Gemini失敗'));
   // 安全のため止められた（候補なし）
   const env3 = geminiEnv(() => ({ code: 200, body: { promptFeedback: { blockReason: 'SAFETY' } } }));
-  submit(env3, 'timeline', { [TL.when]: '2003', [TL.title]: 'a', [TL.what]: 'b' });
+  send(env3, { event: { when: '2003', title: 'a', what: 'b' } });
   assert.ok(rec(env3.ss.getSheetByName('年表'), 2)['メモ'].includes('Gemini失敗'));
   // 429 → 200
   let k = 0;
   const env4 = geminiEnv(() => (++k === 1 ? { code: 429, body: {} } : geminiOk({ year: 2003, month: null, title: 't', body: 'b', tags: [] })));
-  submit(env4, 'timeline', { [TL.when]: '2003', [TL.title]: 'a', [TL.what]: 'b' });
+  send(env4, { event: { when: '2003', title: 'a', what: 'b' } });
   const r4 = rec(env4.ss.getSheetByName('年表'), 2);
   assert.strictEqual(r4['年度'], 2003);
   assert.ok(!r4['メモ'].includes('Gemini失敗'));
   assert.strictEqual(env4.calls.sleep, 1);
 });
 
-test('onFormSubmit：モデル名は GEMINI_MODEL で変えられる（おかしな名前は使わない）', () => {
+test('投稿：モデル名は GEMINI_MODEL で変えられる（おかしな名前は使わない）', () => {
   const urls = [];
   const h = (url) => { urls.push(url); return geminiOk({ year: null, month: null, title: 't', body: 'b', tags: [] }); };
   const env = geminiEnv(h, { GEMINI_API_KEY: 'k', GEMINI_MODEL: 'models/gemini-3-flash' });
-  submit(env, 'timeline', { [TL.when]: '?', [TL.title]: 'a', [TL.what]: 'b' });
+  send(env, { event: { when: '?', title: 'a', what: 'b' } });
   const env2 = geminiEnv(h, { GEMINI_API_KEY: 'k', GEMINI_MODEL: '../../evil?x=' });
-  submit(env2, 'timeline', { [TL.when]: '?', [TL.title]: 'a', [TL.what]: 'b' });
+  send(env2, { event: { when: '?', title: 'a', what: 'b' } });
   assert.deepStrictEqual(urls, [
     'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash:generateContent',
     'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent',
   ]);
 });
 
-test('onFormSubmit：namedValues がなくても回答シートから読む。シート名を変えても見分ける', () => {
-  const env = geminiEnv(() => geminiOk({ year: 2001, month: 5, title: 'BBQ', body: '肉', tags: ['屋上'] }));
-  env.ss.getSheetByName('回答：事件投稿').setName('名前を変えた');
-  submit(env, 'timeline', { [TL.when]: '2001年5月', [TL.title]: 'BBQ', [TL.what]: '肉を焼いた', [TL.by]: '同期B' }, { noNamed: true });
-  const r = rec(env.ss.getSheetByName('年表'), 2);
-  assert.strictEqual(r['見出し'], 'BBQ');
-  assert.ok(r['メモ'].includes('投稿者：同期B'));
-});
+// ---- 投稿：名簿の追加・訂正、部屋割り ----
+const mbOk = (o) => geminiOk(Object.assign({ name: '', oldName: null, entryYear: null, gradYear: null, remove: false }, o));
+const isMember = (p) => JSON.parse(p.payload).generationConfig.responseSchema.properties.oldName;
 
-// ---- onFormSubmit：名簿・部屋割り ----
-test('onFormSubmit 名簿：名簿 1 行と部屋割りを足す（ない部屋はメモ）。名前は Gemini に送らない', () => {
+test('投稿 名簿：新しい人は掲載ありで 1 行足す。同じ名前があれば、その行を直す（メモに前の値）', () => {
   const seen = [];
-  const env = geminiEnv((url, p) => {
-    seen.push(p.payload);
-    return geminiOk({ entryYear: 2003, gradYear: null, rooms: [
-      { year: 2005, room: '305号室' }, { year: 2006, room: '２１２' }, { year: 2006, room: '212' }, { year: 2007, room: '999' }, { year: 1960, room: '301' },
-    ] });
-  });
+  let reply = mbOk({ name: '夕照　一郎', entryYear: 2003 });
+  const env = geminiEnv((url, p) => { seen.push(p.payload); return reply; });
   env.ss.getSheetByName('名簿').validation.clear();
-  env.ss.getSheetByName('部屋割り').validation.clear();
-  const { result, row } = submit(env, 'member', {
-    [MB.name]: '夕照　一郎', [MB.entry]: '平成15年', [MB.grad]: '', [MB.rooms]: '2005年度 305号室、2006年度 212号室、2007年度 999号室', [MB.consent]: 'はい',
-  });
-  assert.deepStrictEqual(plain(result), { form: 'member', rooms: 2, gemini: true, consent: true });
+  const r1 = send(env, { member: { name: '夕照　一郎', entry: '平成15年' } });
+  assert.strictEqual(r1.saved.member, 'added');
   const meibo = env.ss.getSheetByName('名簿');
-  const m = rec(meibo, 2);
+  let m = rec(meibo, 2);
   assert.strictEqual(m['名前'], '夕照 一郎', '全角の空白をそろえる');
   assert.strictEqual(m['入学年度'], 2003);
-  assert.strictEqual(m['卒業年度'], '');
-  assert.strictEqual(m['掲載'], false);
-  assert.deepStrictEqual(meibo.validation.get('2,' + (col(meibo, '掲載') + 1)), { kind: 'checkbox' });
-  assert.ok(m['元の回答'].includes('range=A' + row));
-  assert.ok(m['メモ'].includes('部屋番号・年度を確認') && m['メモ'].includes('999') && m['メモ'].includes('1960'));
-  assert.ok(!m['メモ'].includes('名簿掲載NG'));
-  const heya = env.ss.getSheetByName('部屋割り');
-  assert.deepStrictEqual(heya.table().map((r) => r.slice(0, 4)), [[2005, '305', '夕照 一郎', false], [2006, '212', '夕照 一郎', false]]);
-  assert.deepStrictEqual(heya.validation.get('3,' + (col(heya, '掲載') + 1)), { kind: 'checkbox' });
-  assert.strictEqual(seen.length, 1);
-  assert.ok(seen[0].includes('平成15年') && seen[0].includes('305号室'));
-  assert.ok(!seen[0].includes('夕照') && !seen[0].includes('はい'), 'お名前と「載せてよいか」は送らない');
+  assert.strictEqual(m['掲載'], true);
+  assert.ok(m['元の回答'].includes('投稿 2行目'));
   const sch = JSON.parse(seen[0]).generationConfig.responseSchema;
-  assert.deepStrictEqual(Object.keys(sch.properties).sort(), ['entryYear', 'gradYear', 'rooms']);
-  // まだ掲載していないので、サイトには出ない
-  const d = out(env.ctx.doGet({ parameter: { type: 'public' } }));
-  assert.deepStrictEqual([d.members.length, d.rooms.length], [0, 0]);
+  assert.deepStrictEqual(Object.keys(sch.properties).sort(), ['entryYear', 'gradYear', 'name', 'oldName', 'remove']);
+  // すぐサイトに出る
+  assert.deepStrictEqual(out(env.ctx.doGet({ parameter: { type: 'public' } })).members, [{ name: '夕照 一郎', entryYear: 2003, gradYear: null }]);
+
+  // 訂正：空白のちがいは同じ人とみなして、入学年度と卒業年度を直す
+  reply = mbOk({ name: '夕照一郎', entryYear: 2004, gradYear: 2007 });
+  const r2 = send(env, { member: { name: '夕照一郎', fix: '入学は2004年度でした。2008年3月に卒業' } });
+  assert.strictEqual(r2.saved.member, 'updated');
+  assert.strictEqual(meibo.getLastRow(), 2, '行は増やさない');
+  m = rec(meibo, 2);
+  assert.strictEqual(m['名前'], '夕照 一郎', '名前の書き方はそのまま');
+  assert.strictEqual(m['入学年度'], 2004);
+  assert.strictEqual(m['卒業年度'], 2007);
+  assert.ok(m['メモ'].includes('投稿で直した：入学年度 2003→2004、卒業年度 空→2007'));
+  assert.ok(r2.results[0].includes('入学年度 2003→2004'));
+  assert.deepStrictEqual(out(env.ctx.doGet({ parameter: { type: 'public' } })).members, [{ name: '夕照 一郎', entryYear: 2004, gradYear: 2007 }], 'キャッシュを消して、すぐ反映');
+  // 変えるところがない
+  reply = mbOk({ name: '夕照 一郎', entryYear: 2004 });
+  assert.strictEqual(send(env, { member: { name: '夕照 一郎', entry: '2004' } }).saved.member, 'same');
 });
 
-test('onFormSubmit 名簿：「いいえ」の人は名簿掲載NG。チェックを入れてもサイトに出ない', () => {
-  const env = geminiEnv(() => geminiOk({ entryYear: 2004, gradYear: 2008, rooms: [{ year: 2004, room: '201' }] }));
-  submit(env, 'member', { [MB.name]: '六浦 二郎', [MB.entry]: '2004', [MB.rooms]: '2004年度 201号室', [MB.consent]: 'いいえ' });
-  submit(env, 'member', { [MB.name]: '金沢 三郎', [MB.entry]: '2004', [MB.rooms]: '2004年度 201号室', [MB.consent]: '' }); // 答えなしも載せない
-  submit(env, 'member', { [MB.name]: '八景 四郎', [MB.entry]: '2004', [MB.rooms]: '2004年度 201号室', [MB.consent]: 'はい' });
+test('投稿 名簿：名前の訂正は、名簿と部屋割りの両方を直す。「外して」は掲載を外す', () => {
+  let reply;
+  const env = geminiEnv(() => reply);
   const meibo = env.ss.getSheetByName('名簿');
   const heya = env.ss.getSheetByName('部屋割り');
-  const m = rec(meibo, 2);
-  assert.strictEqual(m['掲載'], false);
-  assert.ok(m['メモ'].startsWith('名簿掲載NG'));
-  assert.ok(rec(heya, 2)['メモ'].startsWith('名簿掲載NG'), '部屋割りの行にも書く');
-  assert.ok(rec(meibo, 3)['メモ'].startsWith('名簿掲載NG'));
-  assert.ok(!rec(meibo, 4)['メモ'].includes('名簿掲載NG'));
-  // 幹事がうっかり全部チェックしても
-  for (const sh of [meibo, heya]) for (let r = 2; r <= sh.getLastRow(); r++) sh.write(r, col(sh, '掲載') + 1, true);
-  env.ctx.onEdit({});
+  meibo.appendRow(['夕照 一朗', 2003, '', true, '', '']);
+  heya.appendRow([2005, '305', '夕照 一朗', true, '', '']);
+  heya.appendRow([2005, '305', '六浦 二郎', true, '', '']);
+  reply = mbOk({ name: '夕照 一郎', oldName: '夕照 一朗' });
+  const r = send(env, { member: { name: '夕照 一郎', fix: '名前の漢字は「一朗」ではなく「一郎」です' } });
+  assert.strictEqual(r.saved.member, 'updated');
+  assert.strictEqual(rec(meibo, 2)['名前'], '夕照 一郎');
+  assert.strictEqual(rec(heya, 2)['名前'], '夕照 一郎');
+  assert.strictEqual(rec(heya, 3)['名前'], '六浦 二郎', 'ほかの人は変えない');
+  // 外してほしい
+  reply = mbOk({ name: '夕照 一郎', remove: true });
+  assert.strictEqual(send(env, { member: { name: '夕照 一郎', fix: '名簿から外してください' } }).saved.member, 'removed');
+  assert.strictEqual(rec(meibo, 2)['掲載'], false);
+  assert.strictEqual(rec(heya, 2)['掲載'], false);
+  assert.strictEqual(rec(heya, 3)['掲載'], true);
   const d = out(env.ctx.doGet({ parameter: { type: 'public' } }));
-  assert.deepStrictEqual(d.members, [{ name: '八景 四郎', entryYear: 2004, gradYear: 2008 }]);
-  assert.deepStrictEqual(d.rooms, [{ year: 2004, room: '201', name: '八景 四郎' }]);
+  assert.deepStrictEqual(d.members, []);
+  assert.deepStrictEqual(d.rooms, [{ year: 2005, room: '305', name: '六浦 二郎' }]);
+  // 直す前の名前が見つからなければ、新しく足す（メモに書く）
+  reply = mbOk({ name: '金沢 三郎', oldName: '金沢 三朗', entryYear: 2005 });
+  assert.strictEqual(send(env, { member: { name: '金沢 三郎', fix: '三朗→三郎' } }).saved.member, 'added');
+  assert.ok(rec(meibo, 3)['メモ'].includes('金沢 三朗'));
 });
 
-test('onFormSubmit 名簿：Gemini が失敗したら、読み取れる分だけ読んで原文をメモ', () => {
-  const env = geminiEnv(() => { throw new Error('通信できません'); });
-  submit(env, 'member', {
-    [MB.name]: 'ﾉｼﾞﾏ ｸﾛｳ', [MB.entry]: '平成15年', [MB.grad]: 'H19', [MB.rooms]: '2005年度 305号室\nH18 212号室、どこか 2007年度', [MB.consent]: 'はい',
+test('投稿 部屋割り：年度・部屋・名前の組で足す。同じ組は足さない。「自分」は名簿の欄の名前', () => {
+  const seen = [];
+  const env = geminiEnv((url, p) => {
+    seen.push(JSON.parse(p.payload));
+    if (isMember(p)) return mbOk({ name: '夕照 一郎', entryYear: 2003 });
+    return geminiOk({ entries: [
+      { year: 2005, room: '305号室', name: '夕照　一郎', remove: false },
+      { year: 2005, room: '３０５', name: '六浦 二郎', remove: false },
+      { year: 2005, room: '305', name: '六浦二郎', remove: false }, // 同じ人
+      { year: 2007, room: '999', name: '金沢 三郎', remove: false }, // ない部屋
+      { year: 1960, room: '301', name: '金沢 三郎', remove: false }, // 範囲外
+    ] });
   });
+  env.ss.getSheetByName('部屋割り').validation.clear();
+  const r = send(env, { member: { name: '夕照 一郎', entry: '2003' }, rooms: { text: '2005年度 305号室：自分と六浦二郎\n2007 999 金沢三郎' } });
+  assert.strictEqual(r.ok, true);
+  assert.deepStrictEqual(r.saved.rooms, { added: 2, same: 1, removed: 0 });
+  const heya = env.ss.getSheetByName('部屋割り');
+  assert.deepStrictEqual(heya.table().map((x) => x.slice(0, 4)), [[2005, '305', '夕照 一郎', true], [2005, '305', '六浦 二郎', true]]);
+  assert.ok(rec(heya, 2)['メモ'].includes('読み取れなかった組') && rec(heya, 2)['メモ'].includes('999'));
+  const roomsReq = seen.find((b) => b.generationConfig.responseSchema.properties.entries);
+  assert.ok(JSON.stringify(roomsReq).includes('夕照 一郎'), '「自分」のために、名簿の欄の名前を渡す');
+  assert.strictEqual(r.results.length, 2);
+  assert.ok(r.results[1].startsWith('部屋割り：2 件を載せました'));
+  // サイトにすぐ出る
+  assert.deepStrictEqual(out(env.ctx.doGet({ parameter: { type: 'public' } })).rooms.map((x) => x.name), ['夕照 一郎', '六浦 二郎']);
+});
+
+test('投稿 部屋割り：「まちがいなので消して」は掲載を外す。Gemini が失敗しても行を読む', () => {
+  const env = geminiEnv(() => geminiOk({ entries: [{ year: 2005, room: '305', name: '六浦 二郎', remove: true }] }));
+  const heya = env.ss.getSheetByName('部屋割り');
+  heya.appendRow([2005, '305', '六浦 二郎', true, '', '']);
+  assert.deepStrictEqual(send(env, { rooms: { text: '2005年度の305に六浦二郎とあるのはまちがい。消してください' } }).saved.rooms, { added: 0, same: 0, removed: 1 });
+  assert.strictEqual(rec(heya, 2)['掲載'], false);
+  // Gemini なし
+  const env2 = geminiEnv(() => { throw new Error('通信できません'); });
+  const r2 = send(env2, { rooms: { text: '2005年度 305号室 ﾉｼﾞﾏ ｸﾛｳ・湘南二郎さん\nH18 212号室：鎌倉三郎\nよく覚えていない' } });
+  assert.deepStrictEqual(r2.saved.rooms, { added: 3, same: 0, removed: 0 });
+  const h2 = env2.ss.getSheetByName('部屋割り');
+  assert.deepStrictEqual(h2.table().map((x) => x.slice(0, 4)), [[2005, '305', 'ノジマ クロウ', true], [2005, '305', '湘南二郎', true], [2006, '212', '鎌倉三郎', true]], '「さん」をとる。H18 → 2006');
+  assert.ok(rec(h2, 2)['メモ'].startsWith('Gemini失敗'));
+});
+
+test('投稿 名簿：Gemini が失敗したら、欄に書いてあるとおりに入れる（訂正の文はメモ）', () => {
+  const env = geminiEnv(() => { throw new Error('通信できません'); });
+  const r = send(env, { member: { name: 'ﾉｼﾞﾏ ｸﾛｳ', entry: '平成15年', grad: 'H19', fix: 'よろしく' } });
+  assert.strictEqual(r.saved.member, 'added');
   const m = rec(env.ss.getSheetByName('名簿'), 2);
   assert.strictEqual(m['名前'], 'ノジマ クロウ', '半角カナをそろえる');
   assert.strictEqual(m['入学年度'], 2003);
   assert.strictEqual(m['卒業年度'], 2007);
-  assert.strictEqual(m['掲載'], false);
+  assert.strictEqual(m['掲載'], true);
   assert.ok(m['メモ'].startsWith('Gemini失敗：手で整理してください'));
-  assert.ok(m['メモ'].includes('部屋（原文）：2005年度 305号室 H18 212号室'));
-  const heya = env.ss.getSheetByName('部屋割り');
-  assert.deepStrictEqual(heya.table().map((r) => r.slice(0, 4)), [[2005, '305', 'ノジマ クロウ', false], [2006, '212', 'ノジマ クロウ', false]]);
-  assert.ok(rec(heya, 2)['メモ'].includes('Gemini失敗'));
+  assert.ok(m['メモ'].includes('訂正したいこと（原文）：よろしく'));
 });
 
-test('onFormSubmit 名簿：名前が = で始まっても式にしない', () => {
-  const env = geminiEnv(() => geminiOk({ entryYear: 2004, gradYear: null, rooms: [{ year: 2004, room: '202' }] }));
-  submit(env, 'member', { [MB.name]: '=IMAGE("http://e.example/a.png")', [MB.entry]: '2004', [MB.rooms]: '2004 202', [MB.consent]: 'はい' });
+test('投稿 名簿：名前が = で始まっても式にしない', () => {
+  const env = geminiEnv((url, p) => (isMember(p) ? mbOk({ name: '=IMAGE("http://e.example/a.png")', entryYear: 2004 })
+    : geminiOk({ entries: [{ year: 2004, room: '202', name: '=IMAGE("http://e.example/a.png")', remove: false }] })));
+  send(env, { member: { name: '=IMAGE("http://e.example/a.png")', entry: '2004' }, rooms: { text: '2004 202 =IMAGE' } });
   const meibo = env.ss.getSheetByName('名簿');
   const heya = env.ss.getSheetByName('部屋割り');
   assert.ok(!meibo.isFormula(2, 1) && !heya.isFormula(2, 3));
@@ -605,14 +582,54 @@ test('onFormSubmit 名簿：名前が = で始まっても式にしない', () =
   assert.strictEqual(heya.cell(2, 3), '=IMAGE("http://e.example/a.png")');
 });
 
-test('onFormSubmit：どのフォームか分からないときは何もしない', () => {
-  const env = geminiEnv(() => { throw new Error('呼ばないはず'); });
-  const other = env.ss.insertSheet('ほか');
-  other.appendRow(['a', 'b']);
-  other.appendRow(['1', '2']);
-  const res = env.ctx.onFormSubmit({ range: other.getRange(2, 1, 1, 2), namedValues: { a: ['1'], b: ['2'] } });
-  assert.strictEqual(res, null);
-  assert.strictEqual(env.ss.getSheetByName('年表').getLastRow(), 1);
+test('投稿：いたずらよけ（問い・わなの欄・空・同じ内容の 2 回目・1 時間の上限）', () => {
+  let n = 0;
+  const env = geminiEnv(() => { n++; return geminiOk({ year: 2005, month: null, title: 't', body: 'b', tags: [] }); });
+  const raw = (b) => out(env.ctx.doPost({ postData: { contents: JSON.stringify(b) } }));
+  assert.deepStrictEqual(raw({ type: 'post', quiz: 'わからない', event: { title: 'a' } }), { ok: false, error: 'quiz' });
+  assert.deepStrictEqual(raw({ type: 'post', event: { title: 'a' } }), { ok: false, error: 'quiz' });
+  for (const q of ['夕照寮', ' 夕照 ', 'せきしょうりょう', 'ｾｷｼｮｳ']) assert.notStrictEqual(raw({ type: 'post', quiz: q }).error, 'quiz', q);
+  assert.deepStrictEqual(send(env, {}), { ok: false, error: 'empty' });
+  assert.deepStrictEqual(send(env, { event: { when: '2005', who: 'x' }, member: { entry: '2003' }, rooms: { text: '   ' } }), { ok: false, error: 'empty' }, '見出しも本文も名前もない');
+  // わな：入れずに ok だけ返す
+  assert.strictEqual(send(env, Object.assign(ev('2005', 'わな', 'b'), { hp: 'http://spam.example' })).ok, true);
+  assert.strictEqual(env.ss.getSheetByName('投稿').getLastRow(), 1);
+  assert.strictEqual(n, 0, 'Gemini も呼ばない');
+  // 同じ内容は 2 回入れない
+  send(env, ev('2005', '一度だけ', 'b'));
+  assert.strictEqual(send(env, ev('2005', '一度だけ', 'b')).duplicate, true);
+  assert.strictEqual(env.ss.getSheetByName('年表').getLastRow(), 2);
+  // 1 時間の上限
+  for (let i = 0; i < 40; i++) send(env, ev('2005', '連投' + i, 'b'));
+  assert.strictEqual(env.ss.getSheetByName('年表').getLastRow(), 1 + env.get('POST_PER_HOUR'));
+  assert.deepStrictEqual(send(env, ev('2005', 'もう一件', 'b')), { ok: false, error: 'too_many' });
+});
+
+test('投稿：3 つ全部いっしょでも、それぞれのシートへ。1 つがエラーでも、ほかは入る', () => {
+  const env = geminiEnv((url, p) => {
+    const sch = JSON.parse(p.payload).generationConfig.responseSchema.properties;
+    if (sch.oldName) return mbOk({ name: '夕照 一郎', entryYear: 2003 });
+    if (sch.entries) return geminiOk({ entries: [{ year: 2005, room: '305', name: '夕照 一郎', remove: false }] });
+    return geminiOk({ year: 2005, month: 4, title: '新歓', body: 'b', tags: [] });
+  });
+  // 名簿のシートを幹事が消してしまっていても作りなおす
+  env.ss.deleteSheet(env.ss.getSheetByName('名簿'));
+  const r = send(env, Object.assign(ev('2005', '新歓', 'b'), { member: { name: '夕照 一郎', entry: '2003' }, rooms: { text: '2005 305 自分' } }));
+  assert.deepStrictEqual(plain(r.saved), { event: 'e1', member: 'added', rooms: { added: 1, same: 0, removed: 0 } });
+  assert.strictEqual(r.results.length, 3);
+  const pr = rec(env.ss.getSheetByName('投稿'), 2);
+  assert.strictEqual(pr['結果'].split('\n').length, 3);
+  assert.ok(pr['内容'].includes('【名簿の追加・訂正】') && pr['内容'].includes('【部屋割り】'));
+  // 部屋割りだけ書けなかった：ほかは入り、結果にそう書く
+  const env3 = geminiEnv((url, p) => (JSON.parse(p.payload).generationConfig.responseSchema.properties.entries
+    ? geminiOk({ entries: [{ year: 2005, room: '305', name: 'a', remove: false }] }) : geminiOk({ year: 2005, month: 4, title: 't', body: 'b', tags: [] })));
+  const sheetOf = env3.ctx.sheetOf;
+  env3.ctx.sheetOf = (ss, def) => { if (def.name === '部屋割り') throw new Error('書けない'); return sheetOf(ss, def); };
+  const r3 = send(env3, Object.assign(ev('2005', 't', 'b'), { rooms: { text: '2005 305 a' } }));
+  assert.strictEqual(r3.ok, true);
+  assert.strictEqual(r3.saved.event, 'e1');
+  assert.ok(r3.results[1].startsWith('部屋割り：うまく入れられませんでした'));
+  assert.ok(rec(env3.ss.getSheetByName('投稿'), 2)['結果'].includes('部屋割り：うまく入れられませんでした'));
 });
 
 // ---- サイトの読み込み（js/site/data.js）と形が合うか ----
@@ -649,19 +666,16 @@ test('js/site/data.js が doGet・doPost の返事をそのまま読める', asy
 });
 
 // ---- 見直しで足した確認 ----
-test('setup：オーナー以外のアカウントで実行したら止める（フォームもトリガーも増やさない）', () => {
+test('setup：オーナー以外のアカウントで実行したら止める', () => {
   const env = loadGas({ runAs: 'kanji.personal@example.com' });
   assert.throws(() => env.ctx.setup(), /オーナー/);
-  assert.strictEqual(env.forms.size, 0);
-  assert.strictEqual(env.triggers.length, 0);
+  assert.strictEqual(env.ss.getSheetByName('年表'), null);
   // オーナーで作ったあと、ほかの人がもう一度実行しても、何も変わらない
   const env2 = freshSetup();
   const before = Object.assign({}, env2.store);
   const env2b = env2; // 同じスプレッドシートのまま、実行する人だけ変える
   env2b.ctx.Session.getEffectiveUser = () => ({ getEmail: () => 'kanji.personal@example.com' });
   assert.throws(() => env2b.ctx.setup(), /オーナー/);
-  assert.strictEqual(env2.forms.size, 2);
-  assert.strictEqual(env2.triggers.length, 1);
   assert.deepStrictEqual(env2.store, before);
 });
 
@@ -671,28 +685,23 @@ test('appsscript.json：スプレッドシートの権限は spreadsheets（curr
   assert.ok(m.oauthScopes.includes('https://www.googleapis.com/auth/userinfo.email'), 'オーナーかどうかを確かめるのに使う');
 });
 
-test('onFormSubmit：数・日付・TRUE に見える文字や、\' で始まる文字も、そのまま文字で入る', () => {
+test('投稿：数・日付・TRUE に見える文字や、\' で始まる文字も、そのまま文字で入る', () => {
   const env = geminiEnv(() => geminiOk({ year: 2005, month: 4, title: '4/1', body: "'引用' から始まる本文", tags: ['2005', 'TRUE'] }));
   const t = env.ss.getSheetByName('年表');
   // チェックボックスや書式を付けた範囲（はじめの 1000 行）をこえた行のつもりで、書式を消す
   t.formats.clear();
-  submit(env, 'timeline', { [TL.when]: '2005年4月1日', [TL.title]: '4/1', [TL.what]: 'x' });
+  send(env, { event: { when: '2005年4月1日', title: '4/1', what: 'x' } });
   const r = rec(t, 2);
   assert.strictEqual(r['見出し'], '4/1', '日付に化けない');
   assert.strictEqual(r['本文'], "'引用' から始まる本文", '先頭の \' が消えない');
   assert.strictEqual(r['タグ'], '2005、TRUE');
   // 名簿・部屋割り：部屋番号は書式なしの行でも "305" のまま
-  const env2 = geminiEnv(() => geminiOk({ entryYear: 2004, gradYear: null, rooms: [{ year: 2005, room: '305' }] }));
+  const env2 = geminiEnv((url, p) => (isMember(p) ? mbOk({ name: '1234', entryYear: 2004 }) : geminiOk({ entries: [{ year: 2005, room: '305', name: '1234', remove: false }] })));
   env2.ss.getSheetByName('部屋割り').formats.clear();
-  submit(env2, 'member', { [MB.name]: '1234', [MB.entry]: '2004', [MB.rooms]: '2005年度 305号室', [MB.consent]: 'はい' });
+  send(env2, { member: { name: '1234', entry: '2004' }, rooms: { text: '2005年度 305号室 自分' } });
   assert.strictEqual(rec(env2.ss.getSheetByName('名簿'), 2)['名前'], '1234');
   // 部屋番号は、書式なしテキストの範囲をこえると数の 305 になる（本物と同じ）。サイトには "305" で出る
   assert.strictEqual(String(rec(env2.ss.getSheetByName('部屋割り'), 2)['部屋']), '305');
-  const sh2 = env2.ss.getSheetByName('部屋割り');
-  sh2.write(2, col(sh2, '掲載') + 1, true);
-  const sh3 = env2.ss.getSheetByName('名簿');
-  sh3.write(2, col(sh3, '掲載') + 1, true);
-  env2.ctx.onEdit({});
   const d2 = out(env2.ctx.doGet({ parameter: { type: 'public' } }));
   assert.deepStrictEqual(d2.rooms, [{ year: 2005, room: '305', name: '1234' }]);
   assert.deepStrictEqual(d2.members, [{ name: '1234', entryYear: 2004, gradYear: null }]);
@@ -721,27 +730,6 @@ test('キャッシュ：分けるときに絵文字をまん中で切らない',
   }
 });
 
-test('onFormSubmit：よそのフォーム（「お名前」だけ同じ）の回答は、名簿に入れない', () => {
-  const env = geminiEnv(() => { throw new Error('呼ばないはず'); });
-  const other = env.ss.insertSheet('寮生大会の出欠');
-  other.appendRow(['タイムスタンプ', 'お名前', '参加しますか？']);
-  other.appendRow(['2026/11/01 10:00:00', '先輩A', 'はい']);
-  const res = env.ctx.onFormSubmit({ range: other.getRange(2, 1, 1, 3), namedValues: { 'タイムスタンプ': ['2026/11/01 10:00:00'], 'お名前': ['先輩A'], '参加しますか？': ['はい'] } });
-  assert.strictEqual(res, null);
-  assert.strictEqual(env.ss.getSheetByName('名簿').getLastRow(), 1);
-  // 覚えている回答シートの情報が消えていても、質問がそろっていれば見分ける
-  const env2 = geminiEnv(() => geminiOk({ entryYear: 2004, gradYear: null, rooms: [] }));
-  for (const k of Object.keys(env2.store)) if (/^RESP_SHEET/.test(k)) delete env2.store[k];
-  const sh = env2.ss.getSheetByName('回答：名簿・部屋割り');
-  const head = sh.header();
-  const ans = { [MB.name]: '先輩B', [MB.entry]: '2004', [MB.consent]: 'はい' };
-  sh.appendRow(head.map((h, i) => (i === 0 ? 'ts' : ans[h] || '')));
-  const named = {};
-  head.forEach((h) => { named[h] = [h === head[0] ? 'ts' : ans[h] || '']; });
-  const res2 = env2.ctx.onFormSubmit({ range: sh.getRange(2, 1, 1, head.length), namedValues: named });
-  assert.strictEqual(res2 && res2.form, 'member');
-});
-
 test('Gemini：既定のモデルは gemini-flash-latest。古いモデル名で 404 なら既定に切りかえる。temperature は決めない', () => {
   const urls = [];
   const bodies = [];
@@ -752,12 +740,12 @@ test('Gemini：既定のモデルは gemini-flash-latest。古いモデル名で
     return geminiOk({ year: 2005, month: 4, title: 't', body: 'b', tags: [] });
   };
   const env = geminiEnv(h);
-  submit(env, 'timeline', { [TL.when]: '2005', [TL.title]: 'a', [TL.what]: 'b' });
+  send(env, { event: { when: '2005', title: 'a', what: 'b' } });
   assert.deepStrictEqual(urls, ['https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent']);
   assert.ok(!('temperature' in bodies[0].generationConfig), 'Gemini 3 では温度を下げないほうがよい');
   urls.length = 0;
   const env2 = geminiEnv(h, { GEMINI_API_KEY: 'k', GEMINI_MODEL: 'gemini-2.5-flash' });
-  submit(env2, 'timeline', { [TL.when]: '2005', [TL.title]: 'a', [TL.what]: 'b' });
+  send(env2, { event: { when: '2005', title: 'a', what: 'b' } });
   assert.deepStrictEqual(urls, [
     'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
     'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent',
@@ -767,14 +755,14 @@ test('Gemini：既定のモデルは gemini-flash-latest。古いモデル名で
   assert.ok(!r['メモ'].includes('Gemini失敗'));
   // 既定のモデルも 404 なら、原文のまま残してメモに HTTP 404
   const env3 = geminiEnv(() => ({ code: 404, body: {} }));
-  submit(env3, 'timeline', { [TL.when]: '2005', [TL.title]: 'a', [TL.what]: 'b' });
+  send(env3, { event: { when: '2005', title: 'a', what: 'b' } });
   assert.ok(rec(env3.ss.getSheetByName('年表'), 2)['メモ'].includes('HTTP 404'));
   assert.strictEqual(env3.calls.fetch.length, 1);
 });
 
 test('Gemini の返事が式でも、シートでは式として動かない', () => {
   const env = geminiEnv(() => geminiOk({ year: 2005, month: 4, title: '=IMAGE("http://e.example/x")', body: '+cmd|calc', tags: ['=1+1', '@x'] }));
-  submit(env, 'timeline', { [TL.when]: '2005', [TL.title]: 'a', [TL.what]: 'b' });
+  send(env, { event: { when: '2005', title: 'a', what: 'b' } });
   const t = env.ss.getSheetByName('年表');
   for (const h of ['見出し', '本文', 'タグ']) assert.ok(!t.isFormula(2, col(t, h) + 1), h);
   assert.strictEqual(rec(t, 2)['見出し'], '=IMAGE("http://e.example/x")');

@@ -1,15 +1,17 @@
 /*
  * 夕照寮OB会サイト ― Google Apps Script（鍵付きのスプレッドシートに付けて使う）
  *
- *   寮生 ─ Google フォーム ─▶ 回答シート ─ onFormSubmit ─ Gemini で整理 ─▶ 年表・名簿・部屋割り シート
- *   幹事が「掲載」にチェックした行だけを、サイトが doGet / doPost で読む
+ *   寮生 ─ トップページの投稿フォーム ─ doPost ─ Gemini で整理 ─▶ 年表・名簿・部屋割り シート（そのまま掲載）
+ *   サイトは、シートの「掲載」にチェックがある行を doGet / doPost で読む
  *
- *  - setup()        ：最初に 1 回だけ実行する。シート・フォーム・トリガーを作る（何度実行しても増えない）
- *  - onFormSubmit(e)：フォームの回答が来たら呼ばれる（setup が作るトリガー）
- *  - doGet(e)       ：?type=public で名簿・部屋割り（誰でも見られる）
- *  - doPost(e)      ：年表（Google でログインした、見る権限のある人だけ）
- *  - onEdit(e)      ：シートを手で直したら、サイト用のキャッシュを消す（すぐ反映されるように）
+ *  - setup()  ：最初に 1 回だけ実行する。シートを作る（何度実行しても増えない）
+ *  - doGet(e) ：?type=public で名簿・部屋割り（誰でも見られる）
+ *  - doPost(e)：type 'timeline' … 年表（Google でログインした、見る権限のある人だけ）
+ *               type 'post'     … トップページの投稿（事件・名簿の追加と訂正・部屋割り。どれも空欄でよい）
+ *  - onEdit(e)：シートを手で直したら、サイト用のキャッシュを消す（すぐ反映されるように）
  *
+ * 投稿は、幹事の確認なしでそのまま載る（持ち主の決めたこと）。原文はシート「投稿」に残るので、
+ * おかしなものは、あとで幹事がシートを直す。
  * サイトとのデータの形は docs/site/ARCH.md の「データの形」、設定の手順は docs/site/SETUP.md。
  */
 
@@ -20,12 +22,13 @@ const SHEETS = {
   members: { name: '名簿', headers: ['名前', '入学年度', '卒業年度', '掲載', '元の回答', 'メモ'] },
   rooms: { name: '部屋割り', headers: ['年度', '部屋', '名前', '掲載', '元の回答', 'メモ'] },
   access: { name: 'メンバー', headers: ['メールアドレス', 'メモ'] },
+  posts: { name: '投稿', headers: ['日時', '内容', '結果'] },
 };
 const PUBLISH_COL = '掲載';
 // 文字のまま扱う列（"101" が数字に化けないように）
 const TEXT_COLS = ['ID', '部屋'];
 // 幹事が読みやすいように広げる列
-const WIDE_COLS = { '本文': 420, 'メモ': 320, '元の回答': 160, '見出し': 220, 'メールアドレス': 260 };
+const WIDE_COLS = { '本文': 420, 'メモ': 320, '元の回答': 160, '見出し': 220, 'メールアドレス': 260, '内容': 420, '結果': 360, '日時': 140 };
 
 // 年度（4月はじまりの西暦）として受けつける範囲
 const YEAR_MIN = 1970;
@@ -40,8 +43,8 @@ const ROOM_NUMBERS = (function () {
 })();
 
 // メモに書く決まり文句
+// 幹事が手でメモに書くと、掲載にチェックがあってもサイトに出なくなる言葉（本人が載せたくないと言ったときなど）
 const NG_MARK = '名簿掲載NG';
-const NG_NOTE = NG_MARK + '（本人が「いいえ」。この言葉がある行は、掲載にチェックしてもサイトに出ません）';
 const GEMINI_FAIL = 'Gemini失敗：手で整理してください';
 
 // いちばん新しい Flash モデルをさす名前（モデルが引退しても、自動で次のモデルになる）
@@ -54,40 +57,9 @@ const CACHE_MEMBERS = 'members_v1';
 const CACHE_PUBLIC_SEC = 300; // 名簿・部屋割り：5 分
 const CACHE_MEMBERS_SEC = 120; // 見る権限のある人の一覧：2 分
 
-// フォーム（質問の文はサイトの説明と合わせてある。変えるときは setup をやり直す）
-const FORMS = {
-  timeline: {
-    title: '事件投稿フォーム',
-    sheetName: '回答：事件投稿',
-    description:
-      '夕照寮であった事件・出来事を教えてください。\n' +
-      '幹事が確認してから、OB会サイトの年表（見る権限のある寮生だけが読めるページ）に載せます。\n' +
-      '文章は、読みやすくするために Google の AI（Gemini）で整えます。「関わった人」と「投稿者」は AI に送りません。',
-    confirmation: 'ありがとうございました。幹事が確認してから年表に載せます。',
-    items: [
-      { key: 'when', type: 'text', title: 'いつごろ？（年度・時期。だいたいでOK）', help: '例：2005年度の4月、平成17年の秋ごろ', required: true },
-      { key: 'title', type: 'text', title: '見出し（ひとことで）', help: '例：屋上でBBQ', required: true },
-      { key: 'what', type: 'paragraph', title: '何があった？', required: true },
-      { key: 'who', type: 'text', title: '関わった人（任意。呼び名でOK）', required: false },
-      { key: 'by', type: 'text', title: '投稿者（任意）', required: false },
-    ],
-  },
-  member: {
-    title: '名簿・部屋割りの登録フォーム',
-    sheetName: '回答：名簿・部屋割り',
-    description:
-      'OB会サイトの名簿（入学年度と名前）と部屋割りに使います。サイトは誰でも見られます。\n' +
-      '載せるのは、幹事が確認したものだけです。年度と部屋の書き方は、Google の AI（Gemini）で整えます（お名前は AI に送りません）。',
-    confirmation: 'ありがとうございました。幹事が確認してから載せます。',
-    items: [
-      { key: 'name', type: 'text', title: 'お名前', help: '例：夕照 一郎', required: true },
-      { key: 'entry', type: 'text', title: '入学年度', help: '例：2003（平成15年度）', required: true },
-      { key: 'grad', type: 'text', title: '卒業年度（任意）', help: '例：2006（2007年3月に卒業したなら 2006）', required: false },
-      { key: 'rooms', type: 'paragraph', title: '住んでいた部屋と年度（例：2005年度 305号室、2006年度 212号室）', help: 'おぼえている分だけでOK', required: false },
-      { key: 'consent', type: 'choice', title: '名簿にお名前を載せてもよいですか？（はい／いいえ）', choices: ['はい', 'いいえ'], help: '「いいえ」なら、名簿にも部屋割りにもお名前は出しません。', required: true },
-    ],
-  },
-};
+// 投稿のいたずらよけ
+const POST_PER_HOUR = 30; // 1 時間に受けつける投稿の数（全員で）
+const POST_DUP_SEC = 600; // 同じ内容は 10 分のあいだ 2 回入れない
 
 // ---- setup：最初の準備 -------------------------------------------------------
 
@@ -101,23 +73,16 @@ function setup() {
     Object.keys(SHEETS).forEach(function (k) { ensureSheet(ss, SHEETS[k]); });
     removeBlankDefaultSheet(ss);
     props().setProperty('SPREADSHEET_ID', ss.getId());
-    const result = {};
-    Object.keys(FORMS).forEach(function (k) { result[k] = ensureForm(ss, k); });
-    ensureTrigger(ss);
     clearCache();
-    Logger.log('準備ができました。');
-    Object.keys(result).forEach(function (k) {
-      Logger.log('【' + result[k].title + '】\n  回答用の URL（寮生に配る）：' + result[k].url + '\n  編集用の URL（幹事だけ）：' + result[k].editUrl);
-    });
+    Logger.log('準備ができました。シート：' + Object.keys(SHEETS).map(function (k) { return SHEETS[k].name; }).join('・'));
     Logger.log('次は「デプロイ → 新しいデプロイ → ウェブアプリ」です（docs/site/SETUP.md）。');
-    return result;
+    return { sheets: Object.keys(SHEETS).map(function (k) { return SHEETS[k].name; }) };
   } finally {
     lock.releaseLock();
   }
 }
 
-// フォームとトリガーは「実行した人」のものになる。ほかのアカウントで実行すると、
-// そのフォームを開けずに新しいフォームを作り、トリガーも重なって回答が 2 重に入るので、オーナーだけにする
+// ウェブアプリは「デプロイした人」として動くので、準備もオーナー（OB会のアカウント）でそろえる
 function checkOwner(ss) {
   let owner = '';
   let me = '';
@@ -126,16 +91,6 @@ function checkOwner(ss) {
   if (owner && me && normEmail(owner) !== normEmail(me)) {
     throw new Error('setup は、このスプレッドシートのオーナー（OB会のアカウント ' + owner + '）でログインして実行してください。いまは ' + me + ' で実行しています。');
   }
-}
-
-// フォームの URL をもう一度ログに出す
-function showFormUrls() {
-  const p = props();
-  Object.keys(FORMS).forEach(function (k) {
-    const K = k.toUpperCase();
-    Logger.log('【' + FORMS[k].title + '】\n  回答用：' + (p.getProperty('FORM_URL_' + K) || '（まだ。setup を実行してください）') +
-      '\n  編集用：' + (p.getProperty('FORM_EDIT_URL_' + K) || '―'));
-  });
 }
 
 // シートがなければ作り、1 行目に見出しを入れる。「掲載」列はチェックボックスにする
@@ -177,247 +132,6 @@ function removeBlankDefaultSheet(ss) {
   });
 }
 
-// フォームがなければ作り、このスプレッドシートに回答が入るようにつなぐ
-function ensureForm(ss, key) {
-  const def = FORMS[key];
-  const K = key.toUpperCase();
-  const p = props();
-  let form = null;
-  const id = p.getProperty('FORM_ID_' + K);
-  if (id) {
-    try { form = FormApp.openById(id); } catch (err) { form = null; }
-  }
-  if (form) {
-    // スプレッドシートごとコピーしたときなど、よそのシートにつながっているフォームは横取りしない
-    let dest = null;
-    try { dest = form.getDestinationId(); } catch (err) { dest = null; }
-    if (dest && dest !== ss.getId()) {
-      Logger.log('フォーム「' + def.title + '」は別のスプレッドシートにつながっているので、新しく作ります。');
-      form = null;
-    }
-  }
-  if (!form) {
-    form = FormApp.create(def.title);
-    buildForm(form, def);
-    p.setProperty('FORM_ID_' + K, form.getId());
-    Logger.log('フォーム「' + def.title + '」を作りました。');
-  }
-
-  let sheet = findResponseSheet(ss, form, key);
-  if (!sheet) sheet = linkForm(ss, form, def);
-  p.setProperties({
-    ['RESP_SHEET_' + K]: sheet.getName(),
-    ['RESP_SHEET_ID_' + K]: String(sheet.getSheetId()),
-    ['FORM_URL_' + K]: form.getPublishedUrl(),
-    ['FORM_EDIT_URL_' + K]: form.getEditUrl(),
-  });
-  return { title: def.title, url: form.getPublishedUrl(), editUrl: form.getEditUrl(), sheet: sheet.getName() };
-}
-
-function buildForm(form, def) {
-  form.setDescription(def.description);
-  form.setConfirmationMessage(def.confirmation);
-  try { form.setCollectEmail(false); } catch (err) { /* メールアドレスは集めない */ }
-  form.setAllowResponseEdits(false);
-  // 2025 年からのフォームは「公開」しないと回答できないことがある
-  try { if (typeof form.setPublished === 'function') form.setPublished(true); } catch (err) { /* 古い形のフォーム */ }
-  try { form.setAcceptingResponses(true); } catch (err) { /* そのまま */ }
-  def.items.forEach(function (it) {
-    let item;
-    if (it.type === 'paragraph') item = form.addParagraphTextItem();
-    else if (it.type === 'choice') item = form.addMultipleChoiceItem().setChoiceValues(it.choices);
-    else item = form.addTextItem();
-    item.setTitle(it.title).setRequired(!!it.required);
-    if (it.help) item.setHelpText(it.help);
-  });
-}
-
-// このフォームの回答が入るシートを探す（なければ null）
-function findResponseSheet(ss, form, key) {
-  let dest = '';
-  try { dest = form.getDestinationId(); } catch (err) { return null; } // つながっていない
-  if (dest !== ss.getId()) return null;
-  const sheets = ss.getSheets();
-  const sid = props().getProperty('RESP_SHEET_ID_' + key.toUpperCase());
-  if (sid) {
-    const hit = sheets.filter(function (s) { return String(s.getSheetId()) === sid && s.getFormUrl(); })[0];
-    if (hit) return hit;
-  }
-  return sheets.filter(function (s) { return isSheetOfForm(s, form); })[0] || null;
-}
-
-function isSheetOfForm(sheet, form) {
-  const url = sheet.getFormUrl();
-  if (!url) return false;
-  try { return FormApp.openByUrl(url).getId() === form.getId(); } catch (err) { return false; }
-}
-
-function linkForm(ss, form, def) {
-  const before = {};
-  ss.getSheets().forEach(function (s) { before[s.getSheetId()] = true; });
-  try { form.removeDestination(); } catch (err) { /* つながっていなかった */ }
-  form.setDestination(FormApp.DestinationType.SPREADSHEET, ss.getId());
-  // 回答シートはすぐには見えないことがあるので、少し待ちながら探す
-  let sheet = null;
-  for (let i = 0; i < 10 && !sheet; i++) {
-    SpreadsheetApp.flush();
-    const all = (SpreadsheetApp.getActive() || ss).getSheets();
-    sheet = all.filter(function (s) { return !before[s.getSheetId()] && s.getFormUrl(); })[0] ||
-      all.filter(function (s) { return isSheetOfForm(s, form); })[0] || null;
-    if (!sheet) Utilities.sleep(1000);
-  }
-  if (!sheet) throw new Error('「' + def.title + '」の回答シートが見つかりません。少し待ってから、もう一度 setup を実行してください');
-  if (!ss.getSheetByName(def.sheetName)) sheet.setName(def.sheetName);
-  return sheet;
-}
-
-function ensureTrigger(ss) {
-  const mine = ScriptApp.getProjectTriggers().filter(function (t) {
-    return t.getHandlerFunction() === 'onFormSubmit' && t.getEventType() === ScriptApp.EventType.ON_FORM_SUBMIT;
-  });
-  if (!mine.length) {
-    ScriptApp.newTrigger('onFormSubmit').forSpreadsheet(ss).onFormSubmit().create();
-    Logger.log('フォームの回答を受けとるトリガーを作りました。');
-  }
-  mine.slice(1).forEach(function (t) { ScriptApp.deleteTrigger(t); }); // 重なっていたら 1 つにする
-}
-
-// ---- onFormSubmit：フォームの回答を整理して、シートに足す --------------------
-
-function onFormSubmit(e) {
-  const key = formKeyOf(e);
-  if (!key) {
-    Logger.log('どのフォームの回答か分かりませんでした（回答シートには残っています）');
-    return null;
-  }
-  const a = answersOf(e, FORMS[key]);
-  const ref = responseRef(e);
-  return key === 'timeline' ? submitTimeline(a, ref) : submitMember(a, ref);
-}
-
-// 回答シートの id・名前、だめなら質問の文で見分ける
-function formKeyOf(e) {
-  const sheet = e && e.range && e.range.getSheet ? e.range.getSheet() : null;
-  const p = props();
-  if (sheet) {
-    const sid = String(sheet.getSheetId());
-    const name = sheet.getName();
-    for (const k of Object.keys(FORMS)) {
-      const K = k.toUpperCase();
-      if (p.getProperty('RESP_SHEET_ID_' + K) === sid || p.getProperty('RESP_SHEET_' + K) === name) return k;
-    }
-  }
-  // 回答シートを覚えていないとき：必ず答える質問がぜんぶそろっているフォームだけ（「お名前」だけ同じ、よそのフォームは入れない）
-  const named = namedOf(e);
-  for (const k of Object.keys(FORMS)) {
-    const need = FORMS[k].items.filter(function (it) { return it.required; });
-    if (need.every(function (it) { return pickAnswer(named, it.title) != null; })) return k;
-  }
-  return null;
-}
-
-// { 質問の文: [答え] } の形にする（e.namedValues がないときは回答シートから読む）
-function namedOf(e) {
-  if (e && e.namedValues) return e.namedValues;
-  const named = {};
-  if (e && e.range && e.range.getSheet) {
-    const sheet = e.range.getSheet();
-    const width = sheet.getLastColumn();
-    if (width > 0) {
-      const head = sheet.getRange(1, 1, 1, width).getValues()[0];
-      const vals = sheet.getRange(e.range.getRow(), 1, 1, width).getValues()[0];
-      head.forEach(function (h, i) { if (h !== '') named[String(h)] = [vals[i]]; });
-    }
-  }
-  return named;
-}
-
-// 質問の文で答えを探す。幹事が質問の文を少し直しても見つかるように、（ より前でも比べる
-function pickAnswer(named, title) {
-  if (!named) return null;
-  const join = function (v) { return Array.isArray(v) ? v.join(', ') : (v == null ? '' : String(v)); };
-  if (Object.prototype.hasOwnProperty.call(named, title)) return join(named[title]);
-  const stem = function (s) { return String(s).split(/[（(？?]/)[0].trim(); };
-  const want = stem(title);
-  for (const k of Object.keys(named)) if (want && stem(k) === want) return join(named[k]);
-  return null;
-}
-
-function answersOf(e, def) {
-  const named = namedOf(e);
-  const a = {};
-  def.items.forEach(function (it) {
-    const v = pickAnswer(named, it.title) || '';
-    a[it.key] = it.type === 'paragraph' ? cleanBlock(v, 5000) : cleanLine(v, 500);
-  });
-  return a;
-}
-
-// 元の回答の行へのリンク（年表などのシートから、ワンクリックで原文を見られる）
-function responseRef(e) {
-  if (!e || !e.range || !e.range.getSheet) return '';
-  const sheet = e.range.getSheet();
-  const row = e.range.getRow();
-  const label = (sheet.getName() + ' ' + row + '行目').replace(/"/g, '""');
-  return { formula: '=HYPERLINK("#gid=' + sheet.getSheetId() + '&range=A' + row + '","' + label + '")' };
-}
-
-// 事件の投稿 → 年表
-function submitTimeline(a, ref) {
-  const notes = [];
-  let ev = null;
-  try {
-    ev = normalizeTimeline(callGemini(timelinePrompt(a), TIMELINE_SCHEMA), a, notes);
-  } catch (err) {
-    Logger.log('Gemini（年表）：' + errText(err));
-    notes.length = 0;
-    ev = rawTimeline(a, notes, errText(err));
-  }
-  if (a.when) notes.push('いつごろ（原文）：' + a.when);
-  if (a.who) notes.push('関わった人：' + a.who);
-  if (a.by) notes.push('投稿者：' + a.by);
-  return withLock(function () {
-    const sheet = sheetOf(book(), SHEETS.timeline);
-    const id = nextEventId(sheet);
-    appendRecord(sheet, {
-      'ID': id, '年度': ev.year, '月': ev.month, '見出し': ev.title, '本文': ev.body, 'タグ': ev.tags.join('、'),
-      '掲載': false, '元の回答': ref, 'メモ': notes.join('／'),
-    });
-    return { form: 'timeline', id: id, gemini: !ev.raw };
-  });
-}
-
-// 名簿・部屋割りの登録 → 名簿 1 行 ＋ 部屋割り（部屋の数だけ）
-function submitMember(a, ref) {
-  const notes = [];
-  const name = cleanName(a.name);
-  const ok = /^\s*はい/.test(a.consent); // はっきり「はい」のときだけ載せてよい
-  let m = null;
-  try {
-    m = normalizeMember(callGemini(memberPrompt(a), MEMBER_SCHEMA), a, notes);
-  } catch (err) {
-    Logger.log('Gemini（名簿）：' + errText(err));
-    notes.length = 0;
-    m = rawMember(a, notes, errText(err));
-  }
-  if (!name) notes.push('お名前が空です');
-  if (!ok) notes.unshift(NG_NOTE);
-  const roomNote = [];
-  if (!ok) roomNote.push(NG_NOTE);
-  if (m.raw) roomNote.push(GEMINI_FAIL);
-  return withLock(function () {
-    const ss = book();
-    appendRecord(sheetOf(ss, SHEETS.members), {
-      '名前': name, '入学年度': m.entryYear, '卒業年度': m.gradYear, '掲載': false, '元の回答': ref, 'メモ': notes.join('／'),
-    });
-    const rs = sheetOf(ss, SHEETS.rooms);
-    m.rooms.forEach(function (r) {
-      appendRecord(rs, { '年度': r.year, '部屋': r.room, '名前': name, '掲載': false, '元の回答': ref, 'メモ': roomNote.join('／') });
-    });
-    return { form: 'member', rooms: m.rooms.length, gemini: !m.raw, consent: ok };
-  });
-}
-
 // シートを返す。幹事が消してしまっていたら作りなおす
 function sheetOf(ss, def) {
   return ss.getSheetByName(def.name) || ensureSheet(ss, def);
@@ -441,7 +155,7 @@ function nextEventId(sheet) {
   return 'e' + (max + 1);
 }
 
-// 見出しの名前で列を合わせて 1 行足す。「掲載」はチェックなしのチェックボックス
+// 見出しの名前で列を合わせて 1 行足す。「掲載」はチェックボックス（rec の掲載が true ならチェックあり）。足した行の番号を返す
 function appendRecord(sheet, rec) {
   const heads = headerRow(sheet, null);
   const row = heads.map(function (h) {
@@ -450,8 +164,27 @@ function appendRecord(sheet, rec) {
     return TEXT_COLS.indexOf(h) >= 0 && /^\w+$/.test(String(rec[h])) ? String(rec[h]) : toCell(rec[h]);
   });
   sheet.appendRow(row);
+  const at = sheet.getLastRow();
   const pub = heads.indexOf(PUBLISH_COL);
-  if (pub >= 0) sheet.getRange(sheet.getLastRow(), pub + 1).insertCheckboxes();
+  if (pub >= 0) sheet.getRange(at, pub + 1).insertCheckboxes().setValue(rec[PUBLISH_COL] === true);
+  return at;
+}
+
+// 見出しの名前で、1 つのマスを書きかえる
+function setCell(sheet, row, name, value) {
+  const c = headerRow(sheet, null).indexOf(name);
+  if (c < 0) return;
+  const v = TEXT_COLS.indexOf(name) >= 0 && /^\w+$/.test(String(value)) ? String(value) : toCell(value);
+  sheet.getRange(row, c + 1).setValue(v);
+}
+
+// メモの列に書き足す
+function addNote(sheet, row, text) {
+  const c = headerRow(sheet, null).indexOf('メモ');
+  if (c < 0 || !text) return;
+  const cell = sheet.getRange(row, c + 1);
+  const was = String(cell.getValue() || '');
+  cell.setValue(toCell(was ? was + '／' + text : text));
 }
 
 // シートに入れる値。文字は、入力したときと同じように読まれてしまうので、
@@ -493,21 +226,33 @@ const TIMELINE_SCHEMA = {
 const MEMBER_SCHEMA = {
   type: 'OBJECT',
   properties: {
-    entryYear: { type: 'INTEGER', nullable: true, description: '入学年度（西暦）' },
+    name: { type: 'STRING', description: '名簿に載せる（正しい）名前。書かれていなければ空の文字' },
+    oldName: { type: 'STRING', nullable: true, description: '名前そのものを直すときの、いまの（まちがった）名前。名前を直さないなら null' },
+    entryYear: { type: 'INTEGER', nullable: true, description: '入学年度（西暦）。書かれていなければ null' },
     gradYear: { type: 'INTEGER', nullable: true, description: '卒業した年度（4月はじまりの西暦）。書かれていなければ null' },
-    rooms: {
+    remove: { type: 'BOOLEAN', description: '名簿から外してほしい、と書いてあるときだけ true' },
+  },
+  required: ['name', 'oldName', 'entryYear', 'gradYear', 'remove'],
+};
+
+const ROOMS_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    entries: {
       type: 'ARRAY',
       items: {
         type: 'OBJECT',
         properties: {
           year: { type: 'INTEGER', description: '年度（西暦）' },
           room: { type: 'STRING', description: '部屋番号（数字 3 けた。例 "305"）' },
+          name: { type: 'STRING', description: 'その部屋にいた人の名前（1 人）' },
+          remove: { type: 'BOOLEAN', description: 'まちがいなので消してほしい、と書いてあるときだけ true' },
         },
-        required: ['year', 'room'],
+        required: ['year', 'room', 'name', 'remove'],
       },
     },
   },
-  required: ['entryYear', 'gradYear', 'rooms'],
+  required: ['entries'],
 };
 
 // 「関わった人」「投稿者」は送らない
@@ -521,13 +266,25 @@ function timelinePrompt(a) {
     '回答（JSON）：\n' + JSON.stringify({ いつごろ: a.when, 見出し: a.title, 何があった: a.what });
 }
 
-// お名前と「載せてよいか」は送らない
+// 名簿は誰でも見られるページなので、名前も送る（直す相手を見つけるのに要る）
 function memberPrompt(a) {
-  return '寮生の登録フォームの回答から、入学年度・卒業年度・住んでいた部屋を整理してください。\n' +
-    '- entryYear：入学年度（西暦）。分からなければ null。\n' +
-    '- gradYear：卒業した年度（4月はじまりの西暦）。「○年3月卒業」のように月まで書いてあれば、年度はその前の年（2007年3月卒業なら 2006）。書かれていなければ null。\n' +
-    '- rooms：住んでいた部屋と年度の組。room は部屋番号の数字 3 けた（例 "305"）。年度がはっきり書かれていない部屋は入れない。\n\n' +
-    '回答（JSON）：\n' + JSON.stringify({ 入学年度: a.entry, 卒業年度: a.grad, 住んでいた部屋と年度: a.rooms });
+  return '寮生の名簿の追加・訂正の投稿を整理してください。\n' +
+    '- name：名簿に載せる、正しい名前。\n' +
+    '- oldName：「名前の漢字がちがう」のように名前そのものを直すときだけ、いま名簿に載っている（まちがった）名前。それ以外は null。\n' +
+    '- entryYear：入学年度（西暦）。訂正の文に書いてあれば、そちらを使う。分からなければ null。\n' +
+    '- gradYear：卒業した年度（4月はじまりの西暦）。「○年3月卒業」なら、年度はその前の年（2007年3月卒業なら 2006）。分からなければ null。\n' +
+    '- remove：「名簿から外してほしい」「載せないで」と書いてあるときだけ true。\n\n' +
+    '投稿（JSON）：\n' + JSON.stringify({ お名前: a.name, 入学年度: a.entry, 卒業年度: a.grad, 訂正したいこと: a.fix });
+}
+
+function roomsPrompt(a, self) {
+  return '寮の部屋割りの投稿を、「年度・部屋・名前」の組に整理してください。\n' +
+    '- 1 つの部屋に 2 人いれば、2 つの組にする。名前は書いてあるとおり（敬称・「さん」はとる）。\n' +
+    '- year：年度（西暦。4月はじまり）。和暦は西暦に直す。年度が分からない組は入れない。\n' +
+    '- room：部屋番号の数字 3 けた（例 "305"）。\n' +
+    '- 「自分」「私」「僕」は、投稿した人の名前（下の「投稿した人」。空なら、その組は入れない）。\n' +
+    '- remove：「まちがいなので消して」のように、消してほしいと書いてある組だけ true。\n\n' +
+    '投稿（JSON）：\n' + JSON.stringify({ 部屋割り: a.text, 投稿した人: self || '' });
 }
 
 function callGemini(prompt, schema) {
@@ -601,42 +358,303 @@ function rawTimeline(a, notes, why) {
 }
 
 function normalizeMember(g, a, notes) {
+  const name = cleanName(g.name) || a.name;
+  let oldName = cleanName(g.oldName);
+  if (normName(oldName) === normName(name)) oldName = '';
   let entryYear = toYear(g.entryYear);
-  if (entryYear == null) {
+  if (entryYear == null && a.entry) {
     entryYear = looseYear(a.entry);
     notes.push('入学年度を確認');
   }
   let gradYear = toYear(g.gradYear, GRAD_MAX);
   if (gradYear != null && entryYear != null && gradYear < entryYear) gradYear = null;
   if (gradYear == null && a.grad) notes.push('卒業年度を確認');
-  const bad = [];
-  const rooms = [];
-  const seen = {};
-  (Array.isArray(g.rooms) ? g.rooms : []).forEach(function (r) {
-    const year = toYear(r && r.year);
-    const room = toRoom(r && r.room);
-    if (year == null || !room) {
-      bad.push(cleanLine((r && r.year) || '?', 10) + '年度 ' + cleanLine((r && r.room) || '?', 10));
-      return;
-    }
-    if (seen[year + '-' + room]) return;
-    seen[year + '-' + room] = true;
-    rooms.push({ year: year, room: room });
-  });
-  if (bad.length) notes.push('部屋番号・年度を確認：' + bad.join('、'));
-  if (a.rooms && (bad.length || !rooms.length)) notes.push('部屋（原文）：' + cleanLine(a.rooms, 300));
-  return { entryYear: entryYear, gradYear: gradYear, rooms: rooms, raw: false };
+  return { name: name, oldName: oldName, entryYear: entryYear, gradYear: gradYear, remove: g.remove === true, raw: false };
 }
 
+// Gemini が使えないとき：欄に書いてあるとおり（訂正の文はメモに残す）
 function rawMember(a, notes, why) {
   notes.push(GEMINI_FAIL + '（' + why + '）');
   const entryYear = looseYear(a.entry);
   const gradYear = looseYear(a.grad, GRAD_MAX);
-  const rooms = looseRooms(a.rooms);
   if (entryYear == null && a.entry) notes.push('入学年度（原文）：' + a.entry);
   if (gradYear == null && a.grad) notes.push('卒業年度（原文）：' + a.grad);
-  if (a.rooms) notes.push('部屋（原文）：' + cleanLine(a.rooms, 300));
-  return { entryYear: entryYear, gradYear: gradYear, rooms: rooms, raw: true };
+  if (a.fix) notes.push('訂正したいこと（原文）：' + cleanLine(a.fix, 300));
+  return { name: a.name, oldName: '', entryYear: entryYear, gradYear: gradYear, remove: false, raw: true };
+}
+
+function normalizeRooms(g, notes) {
+  const out = [];
+  const bad = [];
+  (Array.isArray(g && g.entries) ? g.entries : []).forEach(function (e) {
+    const year = toYear(e && e.year);
+    const room = toRoom(e && e.room);
+    const name = cleanName(e && e.name);
+    if (year == null || !room || !name) {
+      bad.push(cleanLine((e && e.year) || '?', 10) + '年度 ' + cleanLine((e && e.room) || '?', 10) + ' ' + (name || '?'));
+      return;
+    }
+    out.push({ year: year, room: room, name: name, remove: e.remove === true });
+  });
+  if (bad.length) notes.push('読み取れなかった組：' + bad.join('、'));
+  return out;
+}
+
+// Gemini が使えないとき：「2005年度 305号室 夕照一郎・湘南二郎」のような行を読む
+function rawRooms(text, notes, why) {
+  notes.push(GEMINI_FAIL + '（' + why + '）');
+  const out = [];
+  String(text || '').normalize('NFKC').split(/\n+/).forEach(function (line) {
+    const year = looseYear(line);
+    const rest = line.replace(/(19|20)\d{2}\s*年?度?|(?:平成|昭和|[HS])\s*(?:元|\d{1,2})\s*年?度?/gi, ' ');
+    const m = rest.match(/(?:^|\D)(\d{3})(?!\d)\s*(?:号室|号)?/);
+    const room = m ? toRoom(m[1]) : '';
+    if (year == null || !room) return;
+    rest.slice(rest.indexOf(m[1]) + 3).replace(/^\s*(?:号室|号)/, '').split(/[、,・/／:：]+|\s{2,}/).forEach(function (n) {
+      const name = cleanName(n.replace(/(さん|君|くん|先輩)$/, ''));
+      if (name) out.push({ year: year, room: room, name: name, remove: false });
+    });
+  });
+  if (!out.length) notes.push('部屋割り（原文）：' + cleanLine(text, 300));
+  return out;
+}
+
+// ---- 投稿（トップページのフォーム）：そのまま年表・名簿・部屋割りに入れる -----
+
+function handlePost(body) {
+  // 人には見えない欄（わな）に何か入っていたら、機械の投稿とみなして、入れずに「受けとった」とだけ返す
+  if (cleanLine(body.hp, 100)) return { ok: true, saved: {}, results: [] };
+  if (!quizOk(body.quiz)) return { ok: false, error: 'quiz' };
+  const p = readPost(body);
+  if (!p.event && !p.member && !p.rooms) return { ok: false, error: 'empty' };
+  const ss = book();
+  if (!ss) return { ok: false, error: 'not_configured' };
+
+  const cache = CacheService.getScriptCache();
+  const sig = 'post_sig_' + hashText(JSON.stringify(p));
+  if (cache.get(sig)) return { ok: true, duplicate: true, saved: {}, results: [] };
+  const hourKey = 'post_n_' + Math.floor(Date.now() / 3600000);
+  const n = Number(cache.get(hourKey)) || 0;
+  if (n >= POST_PER_HOUR) return { ok: false, error: 'too_many' };
+  cache.put(hourKey, String(n + 1), 3600);
+  cache.put(sig, '1', POST_DUP_SEC);
+
+  // 1. 原文を「投稿」シートに残す（Gemini がだめでも、投稿はなくならない）
+  const posts = sheetOf(ss, SHEETS.posts);
+  const logRow = withLock(function () {
+    return appendRecord(posts, { '日時': nowText(), '内容': postText(p), '結果': '整理中…' });
+  });
+  const ref = { formula: '=HYPERLINK("#gid=' + posts.getSheetId() + '&range=A' + logRow + '","投稿 ' + logRow + '行目")' };
+
+  // 2. Gemini で整えて、それぞれのシートへ
+  const saved = {};
+  const results = [];
+  const run = function (key, fn) {
+    try {
+      const r = fn(ss, p, ref);
+      saved[key] = r.saved;
+      results.push(r.text);
+    } catch (err) {
+      Logger.log('投稿（' + key + '）：' + errText(err));
+      results.push(({ event: '年表', member: '名簿', rooms: '部屋割り' })[key] + '：うまく入れられませんでした（幹事が「投稿」シートから手で入れます）');
+    }
+  };
+  if (p.event) run('event', saveEvent);
+  if (p.member) run('member', saveMember);
+  if (p.rooms) run('rooms', saveRooms);
+  setCell(posts, logRow, '結果', results.join('\n'));
+  clearCache();
+  return { ok: true, saved: saved, results: results };
+}
+
+// いたずらよけの問い「寮の名前は？」
+function quizOk(v) {
+  const t = String(v == null ? '' : v).normalize('NFKC').replace(/\s/g, '');
+  return t.length <= 30 && /夕照|せきしょう|セキショウ/.test(t);
+}
+
+function readPost(body) {
+  const obj = function (o) { return o && typeof o === 'object' && !Array.isArray(o) ? o : {}; };
+  const ev = obj(body.event), mb = obj(body.member), rm = obj(body.rooms);
+  const event = { when: cleanLine(ev.when, 200), title: cleanLine(ev.title, 200), what: cleanBlock(ev.what, 5000), who: cleanLine(ev.who, 300) };
+  const member = { name: cleanName(mb.name), entry: cleanLine(mb.entry, 100), grad: cleanLine(mb.grad, 100), fix: cleanBlock(mb.fix, 1000) };
+  const rooms = { text: cleanBlock(rm.text, 3000) };
+  return {
+    by: cleanLine(body.by, 100),
+    event: event.title || event.what ? event : null,
+    member: member.name || member.fix ? member : null,
+    rooms: rooms.text ? rooms : null,
+  };
+}
+
+// 「投稿」シートに残す原文
+function postText(p) {
+  const out = [];
+  const add = function (label, v) { if (v) out.push(label + '：' + v); };
+  if (p.event) {
+    out.push('【事件・出来事】');
+    add('いつごろ', p.event.when); add('見出し', p.event.title); add('何があった', p.event.what); add('関わった人', p.event.who);
+  }
+  if (p.member) {
+    out.push('【名簿の追加・訂正】');
+    add('お名前', p.member.name); add('入学年度', p.member.entry); add('卒業年度', p.member.grad); add('訂正したいこと', p.member.fix);
+  }
+  if (p.rooms) {
+    out.push('【部屋割り】');
+    out.push(p.rooms.text);
+  }
+  add('投稿者', p.by);
+  return cut(out.join('\n'), 9000);
+}
+
+// 事件 → 年表に 1 行（「関わった人」「投稿者」は Gemini に送らず、メモに残す）
+function saveEvent(ss, p, ref) {
+  const a = p.event;
+  const notes = [];
+  let ev;
+  try {
+    ev = normalizeTimeline(callGemini(timelinePrompt(a), TIMELINE_SCHEMA), a, notes);
+  } catch (err) {
+    Logger.log('Gemini（年表）：' + errText(err));
+    notes.length = 0;
+    ev = rawTimeline(a, notes, errText(err));
+  }
+  if (a.when) notes.push('いつごろ（原文）：' + a.when);
+  if (a.who) notes.push('関わった人：' + a.who);
+  if (p.by) notes.push('投稿者：' + p.by);
+  return withLock(function () {
+    const sheet = sheetOf(ss, SHEETS.timeline);
+    const id = nextEventId(sheet);
+    appendRecord(sheet, {
+      'ID': id, '年度': ev.year, '月': ev.month, '見出し': ev.title, '本文': ev.body, 'タグ': ev.tags.join('、'),
+      '掲載': true, '元の回答': ref, 'メモ': notes.join('／'),
+    });
+    return { saved: id, text: '年表：「' + ev.title + '」を載せました' + (ev.year == null ? '（年度不明のところ）' : '（' + ev.year + '年度）') };
+  });
+}
+
+// 名簿の追加・訂正：同じ名前の行があれば直す、なければ足す
+function saveMember(ss, p, ref) {
+  const a = p.member;
+  const notes = [];
+  let m;
+  try {
+    m = normalizeMember(callGemini(memberPrompt(a), MEMBER_SCHEMA), a, notes);
+  } catch (err) {
+    Logger.log('Gemini（名簿）：' + errText(err));
+    notes.length = 0;
+    m = rawMember(a, notes, errText(err));
+  }
+  if (p.by) notes.push('投稿者：' + p.by);
+  if (!m.name) return { saved: null, text: '名簿：名前が分からなかったので、名簿は変えていません（幹事が「投稿」シートを見ます）' };
+  const stamp = nowText().slice(0, 10);
+  return withLock(function () {
+    const sheet = sheetOf(ss, SHEETS.members);
+    const rooms = sheetOf(ss, SHEETS.rooms);
+    const key = normName(m.oldName || m.name);
+    const hits = readTable(sheet).filter(function (r) { return normName(r['名前']) === key; });
+    const roomHits = function () { return readTable(rooms).filter(function (r) { return normName(r['名前']) === key; }); };
+
+    if (m.remove) {
+      if (!hits.length) return { saved: null, text: '名簿：外したい人（' + m.name + '）が名簿に見つかりませんでした' };
+      hits.forEach(function (r) { setCell(sheet, r._row, PUBLISH_COL, false); addNote(sheet, r._row, stamp + ' 投稿で名簿から外した'); });
+      roomHits().forEach(function (r) { setCell(rooms, r._row, PUBLISH_COL, false); addNote(rooms, r._row, stamp + ' 投稿で名簿から外した'); });
+      return { saved: 'removed', text: '名簿：' + m.name + ' を名簿と部屋割りから外しました' };
+    }
+
+    if (hits.length) {
+      const r = hits[0];
+      const changes = [];
+      if (m.oldName && cleanName(r['名前']) !== m.name) {
+        changes.push('名前 ' + cleanName(r['名前']) + '→' + m.name);
+        setCell(sheet, r._row, '名前', m.name);
+        roomHits().forEach(function (x) { setCell(rooms, x._row, '名前', m.name); addNote(rooms, x._row, stamp + ' 投稿で名前を直した'); });
+      }
+      const was = toYear(r['入学年度']);
+      if (m.entryYear != null && was !== m.entryYear) {
+        changes.push('入学年度 ' + (was == null ? '空' : was) + '→' + m.entryYear);
+        setCell(sheet, r._row, '入学年度', m.entryYear);
+      }
+      const wasGrad = toYear(r['卒業年度'], GRAD_MAX);
+      if (m.gradYear != null && wasGrad !== m.gradYear) {
+        changes.push('卒業年度 ' + (wasGrad == null ? '空' : wasGrad) + '→' + m.gradYear);
+        setCell(sheet, r._row, '卒業年度', m.gradYear);
+      }
+      if (!changes.length) return { saved: 'same', text: '名簿：' + m.name + ' は、もう載っています（変えるところはありませんでした）' };
+      addNote(sheet, r._row, stamp + ' 投稿で直した：' + changes.join('、') + (hits.length > 1 ? '（同じ名前がほかにも ' + (hits.length - 1) + ' 行）' : ''));
+      return { saved: 'updated', text: '名簿：' + m.name + ' を直しました（' + changes.join('、') + '）' };
+    }
+
+    if (m.oldName) notes.push('直す前の名前「' + m.oldName + '」は名簿に見つからなかったので、新しく足した');
+    if (m.entryYear == null) notes.push('入学年度が空：入れるとサイトに出ます');
+    appendRecord(sheet, {
+      '名前': m.name, '入学年度': m.entryYear, '卒業年度': m.gradYear, '掲載': true, '元の回答': ref, 'メモ': notes.join('／'),
+    });
+    return { saved: 'added', text: '名簿：' + m.name + ' を載せました' + (m.entryYear == null ? '（入学年度が分からないので、サイトにはまだ出ません）' : '（' + m.entryYear + '年度入学）') };
+  });
+}
+
+// 部屋割り：年度・部屋・名前の組を足す（同じ組がもうあれば足さない。「消して」なら掲載を外す）
+function saveRooms(ss, p, ref) {
+  const self = p.member ? p.member.name : '';
+  const notes = [];
+  let list;
+  try {
+    list = normalizeRooms(callGemini(roomsPrompt(p.rooms, self), ROOMS_SCHEMA), notes);
+  } catch (err) {
+    Logger.log('Gemini（部屋割り）：' + errText(err));
+    notes.length = 0;
+    list = rawRooms(p.rooms.text, notes, errText(err));
+  }
+  if (p.by) notes.push('投稿者：' + p.by);
+  return withLock(function () {
+    const sheet = sheetOf(ss, SHEETS.rooms);
+    const rows = readTable(sheet);
+    const keyOf = function (y, r, n) { return y + '|' + r + '|' + normName(n); };
+    const have = {};
+    rows.forEach(function (r) {
+      const k = keyOf(toYear(r['年度']), toRoom(r['部屋']), r['名前']);
+      (have[k] = have[k] || []).push(r);
+    });
+    const stamp = nowText().slice(0, 10);
+    let added = 0, same = 0, removed = 0;
+    list.forEach(function (e) {
+      const k = keyOf(e.year, e.room, e.name);
+      if (e.remove) {
+        (have[k] || []).forEach(function (r) {
+          setCell(sheet, r._row, PUBLISH_COL, false);
+          addNote(sheet, r._row, stamp + ' 投稿で消してほしいとあった');
+          removed++;
+        });
+        return;
+      }
+      if (have[k]) { same++; return; }
+      appendRecord(sheet, { '年度': e.year, '部屋': e.room, '名前': e.name, '掲載': true, '元の回答': ref, 'メモ': notes.join('／') });
+      have[k] = [{}];
+      added++;
+    });
+    const parts = [];
+    if (added) parts.push(added + ' 件を載せました');
+    if (same) parts.push(same + ' 件はもう載っていました');
+    if (removed) parts.push(removed + ' 件を外しました');
+    if (!parts.length) parts.push('読み取れる組がありませんでした（幹事が「投稿」シートを見ます）');
+    return { saved: { added: added, same: same, removed: removed }, text: '部屋割り：' + parts.join('、') };
+  });
+}
+
+// 名前をくらべるとき：空白（全角も）を無視する
+function normName(v) {
+  return cleanName(v).replace(/\s+/g, '');
+}
+
+function nowText() {
+  return Utilities.formatDate(new Date(), 'Asia/Tokyo', "yyyy-MM-dd'T'HH:mm:ssXXX").slice(0, 16).replace('T', ' ');
+}
+
+function hashText(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (Math.imul(h, 31) + s.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36) + '_' + s.length;
 }
 
 // ---- doGet：名簿・部屋割り（誰でも見られる） ---------------------------------
@@ -686,12 +704,13 @@ function isChecked(v) {
   return v === true || String(v).trim().toUpperCase() === 'TRUE';
 }
 
-// ---- doPost：年表（ログインした、見る権限のある人だけ） ----------------------
+// ---- doPost：年表（ログインした、見る権限のある人だけ）と、投稿 ----------------
 
 function doPost(e) {
   try {
     let body = null;
     try { body = JSON.parse((e && e.postData && e.postData.contents) || ''); } catch (err) { body = null; }
+    if (body && typeof body === 'object' && body.type === 'post') return jsonOut(handlePost(body));
     if (!body || typeof body !== 'object' || body.type !== 'timeline') return jsonOut({ ok: false, error: 'bad_request' });
     const clientId = String(props().getProperty('CLIENT_ID') || '').trim();
     const ss = book();
@@ -927,23 +946,6 @@ function looseYear(v, max) {
     return null;
   }
   return null;
-}
-
-// 「2005年度 305号室、2006年度 212号室」のような文字から部屋を読む（予備）
-function looseRooms(text) {
-  const out = [];
-  const seen = {};
-  String(text || '').normalize('NFKC').split(/[、,;\n/]+/).forEach(function (seg) {
-    const year = looseYear(seg);
-    const rest = seg.replace(/(19|20)\d{2}|(?:平成|昭和|[HS])\s*(?:元|\d{1,2})/gi, ' ');
-    const m = rest.match(/(?:^|\D)(\d{3})(?!\d)/);
-    const room = m ? toRoom(m[1]) : '';
-    if (year != null && room && !seen[year + '-' + room]) {
-      seen[year + '-' + room] = true;
-      out.push({ year: year, room: room });
-    }
-  });
-  return out;
 }
 
 // ---- キャッシュ（1 つの値は 100KB までなので、分けて入れる） -----------------

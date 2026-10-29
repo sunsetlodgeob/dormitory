@@ -71,7 +71,8 @@ async function desktop(open, base) {
   const footer = await page.locator('footer.ob-footer').innerText();
   assert.ok(footer.includes('すべてフィクションです'), '注記がない: ' + footer);
   const hrefs = await page.$$eval('.home-nav a', (as) => as.map((a) => a.getAttribute('href')));
-  assert.deepStrictEqual(hrefs, ['game/', 'nenpyo/', 'heya/', 'meibo/', 'sanpo/']);
+  assert.deepStrictEqual(hrefs, ['game/', 'nenpyo/', 'heya/', 'meibo/', 'sanpo/', '#post']);
+  assert.ok(await page.locator('#post-form').isVisible(), 'JS がなくても投稿フォームは見える');
   assert.ok((await page.locator('#home-album').innerText()).includes('写真館'));
   assert.ok((await page.locator('#home-album-note').innerText()).includes('じゅんびちゅう'));
   assert.strictEqual(await page.locator('.home-keys').isVisible(), true, 'パソコンではキーの説明を出す');
@@ -309,7 +310,7 @@ async function album(open) {
   await ctx.route('**/js/site/config.js', (r) => r.fulfill({
     status: 200,
     contentType: 'application/javascript',
-    body: "window.OB_CONFIG = { GAS_URL: '', GOOGLE_CLIENT_ID: '', ALBUM_URL: 'https://example.com/album', FORM_TIMELINE_URL: '', FORM_MEMBER_URL: '', CONTACT_EMAIL: '' };",
+    body: "window.OB_CONFIG = { GAS_URL: '', GOOGLE_CLIENT_ID: '', ALBUM_URL: 'https://example.com/album', CONTACT_EMAIL: '' };",
   }));
   await ctx.route('https://example.com/**', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: STUB }));
   await page.reload();
@@ -371,6 +372,107 @@ async function reduced(open) {
   await ctx.close();
 }
 
+// 投稿フォーム：メニューの「投稿」から下のフォームへ。書いたところだけ送り、AI の結果を出す
+async function postForm(open, base) {
+  const GAS = 'https://script.google.com/macros/s/TEST/exec';
+  // 1. GAS_URL がないとき：準備中で、送れない
+  {
+    const { page, errors, ctx } = await open('', { wait: 300 });
+    assert.ok(await page.locator('#post-off').isVisible(), '準備中の注意');
+    assert.ok(await page.locator('#post-send').isDisabled(), '送るボタンは押せない');
+    assert.deepStrictEqual(realErrors(errors), []);
+    await ctx.close();
+  }
+  for (const phone of [false, true]) {
+    const tag = phone ? 'スマホ' : 'パソコン';
+    const { page, errors, ctx } = await open('', { wait: 100, phone });
+    await ctx.route('**/js/site/config.js', (r) => r.fulfill({
+      status: 200, contentType: 'application/javascript', body: 'window.OB_CONFIG = { GAS_URL: ' + JSON.stringify(GAS) + ' };',
+    }));
+    const sent = [];
+    await ctx.route(GAS + '*', async (r) => {
+      const body = JSON.parse(r.request().postData() || '{}');
+      sent.push({ body, type: r.request().headers()['content-type'] });
+      const res = body.quiz !== '夕照寮' ? { ok: false, error: 'quiz' }
+        : { ok: true, saved: { member: 'added', rooms: { added: 2, same: 0, removed: 0 } }, results: ['名簿：夕照 一郎 を載せました（2003年度入学）', '部屋割り：2 件を載せました'] };
+      await new Promise((ok) => setTimeout(ok, 300)); // AI が整えるあいだ
+      await r.fulfill({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(res) });
+    });
+    await page.reload();
+    await page.waitForTimeout(400);
+    assert.ok(!(await page.locator('#post-off').isVisible()));
+    // メニューの「投稿」（いちばん下。↑ で回りこむ）
+    if (phone) {
+      await page.locator('#home-screen').tap();
+    } else {
+      await page.locator('#home-screen').focus();
+      await page.keyboard.press('Enter');
+    }
+    await waitScene(page, 'mode');
+    if (phone) {
+      const it = await page.evaluate(() => window.HOME.hit.LAY.mode.item(2));
+      await tapAt(page, it[0] + it[2] / 2, it[1] + it[3] / 2);
+    } else {
+      await page.keyboard.press('ArrowUp');
+      assert.strictEqual((await state(page)).mode, 2, '↑ で「投稿」へ回りこむ');
+      await page.keyboard.press('Enter');
+    }
+    await page.waitForFunction(() => document.activeElement && document.activeElement.name === 'ev_when', null, { timeout: 4000 });
+    assert.strictEqual((await state(page)).scene, 'mode', '画面はそのまま');
+    await page.waitForTimeout(700); // なめらかにスクロールし終わるまで
+    const pos = await page.evaluate(() => [document.getElementById('post').getBoundingClientRect().top, innerHeight, scrollY]);
+    assert.ok(pos[2] > 0 && pos[0] >= -2 && pos[0] < pos[1] * 0.7, tag + '：フォームまで動いた ' + pos);
+    // 入力中の Z や矢印で、メニューが動かない
+    await page.keyboard.type('zx');
+    assert.strictEqual(await page.inputValue('[name=ev_when]'), 'zx');
+    assert.strictEqual((await state(page)).mode, 2);
+    await page.fill('[name=ev_when]', '');
+    // 何も書かずに送る
+    await page.click('#post-send');
+    assert.ok((await page.textContent('#post-status')).includes('どこか 1 つは'), tag + '：空のとき');
+    assert.strictEqual(sent.length, 0);
+    // 確認の答えなし → 答えちがい
+    await page.fill('[name=mb_name]', '夕照 一郎');
+    await page.fill('[name=mb_entry]', '平成15年度');
+    await page.fill('[name=rm_text]', '2005年度 305号室 自分・六浦二郎');
+    await page.click('#post-send');
+    assert.ok((await page.textContent('#post-status')).includes('寮の名前'), tag + '：確認の欄が空');
+    assert.strictEqual(sent.length, 0);
+    await page.fill('[name=quiz]', 'ちがう寮');
+    await page.click('#post-send');
+    await page.waitForSelector('#post-status.is-error');
+    assert.ok((await page.textContent('#post-status')).includes('確認の答えがちがいます'));
+    assert.strictEqual(await page.inputValue('[name=rm_text]'), '2005年度 305号室 自分・六浦二郎', 'まちがえても書いた内容は残る');
+    // 正しく送る
+    await page.fill('[name=quiz]', '夕照寮');
+    await page.fill('[name=by]', '一年C');
+    await page.click('#post-send');
+    assert.ok(await page.locator('#post-send').isDisabled(), '送っているあいだは押せない');
+    assert.ok((await page.textContent('#post-status')).includes('送っています'));
+    await page.waitForSelector('#post-status.is-done');
+    const st = await page.textContent('#post-status');
+    assert.ok(st.includes('送りました') && st.includes('部屋割り：2 件を載せました'), st);
+    const last = sent[sent.length - 1];
+    assert.ok(/^text\/plain/.test(last.type), 'text/plain で送る（プリフライトなし）');
+    assert.strictEqual(last.body.type, 'post');
+    assert.deepStrictEqual(last.body.member, { name: '夕照 一郎', entry: '平成15年度', grad: '', fix: '' });
+    assert.deepStrictEqual(last.body.rooms, { text: '2005年度 305号室 自分・六浦二郎' });
+    assert.deepStrictEqual(last.body.event, { when: '', title: '', what: '', who: '' });
+    assert.strictEqual(last.body.by, '一年C');
+    assert.strictEqual(last.body.hp, '', 'わなの欄は空');
+    assert.strictEqual(await page.inputValue('[name=rm_text]'), '', '送ったら中身は消す');
+    assert.strictEqual(await page.inputValue('[name=by]'), '一年C', '投稿者は残す');
+    assert.ok(!(await page.locator('#post-send').isDisabled()));
+    // 横にはみ出さない
+    const sw = await page.evaluate(() => [document.documentElement.scrollWidth, innerWidth]);
+    assert.ok(sw[0] <= sw[1], tag + '：横にはみ出す ' + sw);
+    if (SHOTS) await page.locator('#post').screenshot({ path: path.join(SHOTS, 'post-' + (phone ? 'phone' : 'pc') + '.png') });
+    const errs = realErrors(errors);
+    assert.deepStrictEqual(errs, [], tag + '：エラー ' + errs.join('\n'));
+    await ctx.close();
+  }
+}
+
 // JS なし：下のメニューだけで行き先がわかる
 async function noJs(browser, base) {
   const ctx = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 390, height: 780 } });
@@ -378,7 +480,8 @@ async function noJs(browser, base) {
   await page.goto(base);
   assert.strictEqual(await page.locator('.home-console').isVisible(), false);
   const hrefs = await page.$$eval('.home-nav a', (as) => as.map((a) => a.getAttribute('href')));
-  assert.deepStrictEqual(hrefs, ['game/', 'nenpyo/', 'heya/', 'meibo/', 'sanpo/']);
+  assert.deepStrictEqual(hrefs, ['game/', 'nenpyo/', 'heya/', 'meibo/', 'sanpo/', '#post']);
+  assert.ok(await page.locator('#post-form').isVisible(), 'JS がなくても投稿フォームは見える');
   await ctx.close();
 }
 
@@ -413,6 +516,8 @@ withSite(PORT, async ({ open, base, browser }) => {
   console.log('ok 写真館');
   await reduced(open);
   console.log('ok 動きをへらす');
+  await postForm(open, base);
+  console.log('ok 投稿フォーム');
   await noJs(browser, base);
   console.log('ok JS なし');
   await landscape(browser, base);

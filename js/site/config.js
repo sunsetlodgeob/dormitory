@@ -10,10 +10,6 @@ window.OB_CONFIG = {
   GOOGLE_CLIENT_ID: '',
   // 写真館（Google フォトの共有アルバムなど）の URL
   ALBUM_URL: '',
-  // 事件（年表）を投稿するフォームの URL
-  FORM_TIMELINE_URL: '',
-  // 名簿・部屋割りを登録するフォームの URL
-  FORM_MEMBER_URL: '',
   // OB会の連絡先メールアドレス（名簿から外してほしいとき等）
   CONTACT_EMAIL: '',
 };

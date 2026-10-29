@@ -61,7 +61,45 @@
       <li class="is-off"><span class="home-off" id="home-album">写真館</span><span id="home-album-note">寮の写真のアルバム。じゅんびちゅう。</span></li>
       <li><a href="sanpo/">寮さんぽ</a><span>ドット絵の寮の中を、歩いて回れる。</span></li>
     </ul>
+    <h3>投稿</h3>
+    <ul>
+      <li><a href="#post">情報を送る</a><span>事件・出来事、名簿の追加や訂正、部屋割り。</span></li>
+    </ul>
   </nav>
+
+  <section class="home-post" id="post" aria-labelledby="post-title">
+    <h2 id="post-title">情報を送る</h2>
+    <p>寮の事件・出来事、名簿の追加や訂正、部屋割りを教えてください。<strong>書きたいところだけ</strong>書けば送れます（ほかは空欄のままで大丈夫）。</p>
+    <p>送った内容は、Google の AI（Gemini）が形を整えて、そのまま年表・名簿・部屋割りに載ります。まちがいは、あとで幹事が直します。写真はここでは受けつけていません。</p>
+    <p class="ob-notice" id="post-off" hidden>投稿フォームは、いま準備中です。もうしばらくお待ちください。</p>
+    <form class="home-post-form" id="post-form" novalidate>
+      <fieldset class="fc-window">
+        <legend>事件・出来事<small>年表に載ります（見られるのは、ログインした寮生だけ）</small></legend>
+        <label>いつごろ？<small>だいたいでOK。例：2005年度の4月、平成17年の秋</small><input name="ev_when" maxlength="200" autocomplete="off"></label>
+        <label>見出し<small>ひとことで。例：屋上でBBQ</small><input name="ev_title" maxlength="200" autocomplete="off"></label>
+        <label>何があった？<textarea name="ev_what" rows="5" maxlength="5000"></textarea></label>
+        <label>関わった人<small>任意。呼び名でOK（年表には出ず、幹事のメモに残ります）</small><input name="ev_who" maxlength="300" autocomplete="off"></label>
+      </fieldset>
+      <fieldset class="fc-window">
+        <legend>名簿の追加・訂正<small>名簿はだれでも見られます</small></legend>
+        <label>お名前<small>例：夕照 一郎</small><input name="mb_name" maxlength="40" autocomplete="off"></label>
+        <label>入学年度<small>例：2003、平成15年度</small><input name="mb_entry" maxlength="100" autocomplete="off"></label>
+        <label>卒業年度<small>任意。2007年3月に卒業したなら 2006</small><input name="mb_grad" maxlength="100" autocomplete="off"></label>
+        <label>訂正したいこと<small>任意。例：入学年度は2004でした／名前の漢字は「一郎」です／名簿から外してください</small><textarea name="mb_fix" rows="3" maxlength="1000"></textarea></label>
+      </fieldset>
+      <fieldset class="fc-window">
+        <legend>部屋割り<small>部屋割りのページに載ります（だれでも見られます）</small></legend>
+        <label>年度・部屋・名前<small>1 行に 1 部屋。例：2005年度 305号室 夕照一郎・六浦二郎（自分のことは「自分」でOK。名簿の欄のお名前になります）</small><textarea name="rm_text" rows="4" maxlength="3000"></textarea></label>
+      </fieldset>
+      <div class="fc-window home-post-send">
+        <label>投稿者<small>任意。呼び名でOK（サイトには出ません）</small><input name="by" maxlength="100" autocomplete="off"></label>
+        <label>確認：寮の名前を漢字で<small>いたずら防止のためです</small><input name="quiz" maxlength="30" autocomplete="off"></label>
+        <label class="home-post-hp" aria-hidden="true">この欄は空のままにしてください<input name="hp" tabindex="-1" autocomplete="off"></label>
+        <button type="submit" class="fc-btn" id="post-send">送る ▶</button>
+        <div class="home-post-status" id="post-status" role="status" aria-live="polite"></div>
+      </div>
+    </form>
+  </section>
 </main>
 
 <footer data-ob-footer></footer>
@@ -72,5 +110,6 @@
 <script src="js/home/art.js"></script>
 <script src="js/home/audio.js"></script>
 <script src="js/home/main.js"></script>
+<script src="js/home/post.js"></script>
 </body>
 </html>

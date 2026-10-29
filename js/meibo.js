@@ -56,11 +56,8 @@
       el.mail.textContent = mail;
       el.contact.hidden = false;
     }
-    const form = OB.safeUrl(cfg.FORM_MEMBER_URL);
-    if (form) {
-      el.formLink.href = form;
-      el.form.hidden = false;
-    }
+    el.formLink.href = OB.POST_HREF;
+    el.form.hidden = false;
   }
 
   // ── 名簿を組み立てる ──────────────────────────────

@@ -109,7 +109,7 @@ async function heyaDesktop(open) {
   await page.click('.heya-room[data-room="' + unknown + '"]');
   assert.strictEqual(await page.textContent('#panel-title'), unknown + '号室（2005年度）');
   assert.strictEqual(await page.textContent('.heya-panel-none'), 'まだ情報がありません。情報募集中です。');
-  assert.strictEqual(await page.$('.heya-panel-form'), null, 'フォームの URL が空なら、リンクは出さない');
+  assert.strictEqual(await page.getAttribute('.heya-panel-form', 'href'), '../#post', '情報募集：トップページの投稿フォームへ');
   await shot(page, 'desk-panel');
   await page.keyboard.press('Escape');
   assert.ok(await page.isHidden('#heya-panel'), 'Esc でとじる');
@@ -224,11 +224,6 @@ async function heyaSafety(browser, base) {
     const body = fs.readFileSync(path.join(ROOT, 'js/site/sample.js'), 'utf8') + '\nwindow.OB.SAMPLE.rooms.push(...' + JSON.stringify(extra) + ');';
     await route.fulfill({ status: 200, contentType: 'text/javascript', body });
   });
-  let form = 'https://example.com/form';
-  await ctx.route('**/js/site/config.js', async (route) => {
-    const body = fs.readFileSync(path.join(ROOT, 'js/site/config.js'), 'utf8').replace("FORM_MEMBER_URL: ''", 'FORM_MEMBER_URL: ' + JSON.stringify(form));
-    await route.fulfill({ status: 200, contentType: 'text/javascript', body });
-  });
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
@@ -261,7 +256,7 @@ async function heyaSafety(browser, base) {
   assert.deepStrictEqual(await page.$$eval('.heya-panel-names li', (l) => l.map((x) => x.textContent)), all305, 'ウインドウには全員');
   const empty = Object.keys(SAMPLE[2005]).indexOf('307') < 0 ? '307' : '308';
   await page.click('.heya-room[data-room="' + empty + '"]');
-  assert.strictEqual(await page.getAttribute('.heya-panel-form', 'href'), form, '情報募集のフォームへのリンク');
+  assert.strictEqual(await page.getAttribute('.heya-panel-form', 'href'), '../#post', '情報募集のフォームへのリンク');
   assert.ok((await page.textContent('#heya-form')).includes('情報を送る'));
   await shot(page, 'safety-many');
 
@@ -279,12 +274,6 @@ async function heyaSafety(browser, base) {
   assert.deepStrictEqual((await dbg(page)).dialog, ['コンコン…', '316号室（2005年度）\n全角 六郎']);
   await readDialog(page);
 
-  // javascript: などは出さない
-  form = 'javascript:alert(1)';
-  await page.goto(base + 'heya/?year=2005');
-  await waitHeya(page);
-  await page.click('.heya-room[data-room="' + empty + '"]');
-  assert.strictEqual(await page.$('.heya-panel-form'), null, 'あやしい URL はリンクにしない');
   assert.deepStrictEqual(errors, []);
   await ctx.close();
 }
