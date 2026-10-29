@@ -20,16 +20,19 @@ game/index.html          ゲーム「男魂くんの1年」
   js/otoko/games/*.js    ミニゲーム（1 本 1 ファイル）
                          寸劇の背景に、寮さんぽの js/world.js（地図）と js/art.js（絵）も読む
 nenpyo/index.html        年表（Google ログイン）   js/nenpyo.js  css/nenpyo.css
+d1/index.html            D-1選手権の歴代記録（Google ログイン。データは年表といっしょに来る）  js/d1.js  css/d1.css
 heya/index.html          部屋割り                  js/heya.js    css/heya.css
 meibo/index.html         名簿                      js/meibo.js   css/meibo.css
 sanpo/index.html         寮さんぽ（建物を歩ける再現）  js/world.js js/art.js js/game.js css/style.css
                          （?year= の部屋割りと注記のために js/site/ の 4 つも読む）
 status/index.html        進捗（作る人と幹事向け。ホームからはリンクしない）  status/status.js に中身
 css/site.css             コンテンツのページ共通の見た目
+css/login.css            Google でログインして見るページ（年表・D-1）の入り口の見た目
 js/site/config.js        設定（URL など。空ならサンプルで動く）
 js/site/sample.js        サンプルデータ（すべて架空）
 js/site/data.js          データの読み込み（OB.data）、部屋割りのそろえ方（OB.data.roomsByYear）
 js/site/common.js        注記の表示（OB.DISCLAIMER）、OB.esc・OB.safeUrl・OB.wareki・OB.normSearch
+js/site/login.js         Google のログインの入り口（OB.loginGate）。年表と D-1選手権で使う
 gas/                     Google Apps Script（トップページの投稿 → Gemini → スプレッドシート → サイト）
 tools/build_artifact.py  寮さんぽを 1 枚の HTML にまとめる（claude.ai に公開する用）
 tests/e2e/               ブラウザでの確認（Playwright）
@@ -76,12 +79,15 @@ docs/site/SETUP.md       Google 側の設定手順（幹事向け）
 - `members` は入学年度の順、`rooms` は年度の順（同じ年度の中は部屋の順）。
 - 設定が空のときは `js/site/sample.js` の中身を返し、`sample: true` が付く。
 
-### 年表（Google でログインした、見る権限のある人だけ）
+### 年表と D-1選手権（Google でログインした、見る権限のある人だけ）
 
 `OB.data.loadTimeline(idToken)` → `POST {GAS_URL}`、本文 `{"type":"timeline","idToken":"…"}`（`Content-Type: text/plain`）
 
 ```json
-{ "ok": true, "events": [ { "id": "e12", "year": 2005, "month": 4, "title": "…", "body": "…", "tags": ["新歓"] } ] }
+{ "ok": true,
+  "events": [ { "id": "e12", "year": 2005, "month": 4, "title": "…", "body": "…", "tags": ["新歓"] } ],
+  "d1": [ { "year": 2004, "winner": ["夕照 一郎"], "second": ["六浦 二郎"], "members": ["夕照 一郎", "六浦 二郎", "金沢 三郎"],
+            "host": "八景 四郎", "referee": "八景 四郎", "kuroko": "平潟 五郎", "note": "" } ] }
 { "ok": false, "error": "not_member" }      // 権限がない
 { "ok": false, "error": "invalid_token" }   // ログインが切れた・不正
 { "ok": false, "error": "not_configured" }  // Apps Script 側の設定がまだ
@@ -89,8 +95,12 @@ docs/site/SETUP.md       Google 側の設定手順（幹事向け）
 { "ok": false, "error": "server_error" }    // Apps Script の中でエラー
 ```
 
-- `OB.data.loadTimeline()` は、失敗すると `code` 付きの Error を投げる。`code` は上の `error` の値か、通信できなかったときの `'network'`。
-- 年表のページは `not_member`・`invalid_token`・`not_configured`・`network` で、それぞれの文を出す。ほかは「うまく読み込めませんでした」。
+- `OB.data.loadTimeline()` は `{ events, d1, sample }` を返す（設定が空のときは `js/site/sample.js` の `events`・`d1`）。失敗すると `code` 付きの Error を投げる。`code` は上の `error` の値か、通信できなかったときの `'network'`。
+- 年表と D-1選手権のページは `not_member`・`invalid_token`・`not_configured`・`network` で、それぞれの文を出す。ほかは「うまく読み込めませんでした」。
+  ログインの流れ（デモ・準備中・ログイン・ログアウト）は `js/site/login.js` の `OB.loginGate()` にまとめてある。
+- `d1` は D-1選手権の歴代記録（1 行 = 1 年度）。`year` は分からなければ null。`winner`（優勝）・`second`（準優勝）・`members`（出場メンバー）は名前の配列で、空のこともある。
+  `host`（主催者）・`referee`（レフェリー）・`kuroko`（黒子）・`note`（補足）は文字で、空のこともある。ページは古い年度から並べる（年度不明は最後）。
+  `d1` がない返事（古い Apps Script）は、記録 0 件として扱う。
 
 - `year`・`month` は分からなければ null。
 - `idToken` は Google Identity Services（`google.accounts.id`）のログインで受け取る credential（ID トークン）。サイトは保存しない（メモリだけ）。
@@ -204,7 +214,7 @@ OTK.register({
 | 寮さんぽ | localStorage | `sekisho-dorm-save-v1` | 進み具合 |
 | 寮さんぽ | localStorage | `sekisho-sound` | 音のオン・オフ |
 
-年表のログインで受け取る ID トークンは、どこにも保存しない（メモリだけ）。
+年表・D-1選手権のログインで受け取る ID トークンは、どこにも保存しない（メモリだけ）。
 
 ## 6. 確認のしかた
 
@@ -212,7 +222,7 @@ OTK.register({
 - ぜんぶまとめて動かすときは `sh tests/run-all.sh`（1 つでも失敗すると、終了コードが 0 以外になる）。30 分ほどかかる。
 - `gas/Code.gs` の確認は `node tests/gas/run.js`（Google には出ない。Apps Script のまねをして動かす）。
 - 同時に動かしても重ならないように、ポートを分ける：
-  ゲームのエンジン 8801、ホーム 8802、部屋割り 8803、名簿・年表 8804、ミニゲーム 8811〜8815、サイト全体 8805、ゲームの寸劇 8806、確認役 8821〜。
+  ゲームのエンジン 8801、ホーム 8802、部屋割り 8803、名簿・年表 8804、ミニゲーム 8811〜8815、サイト全体 8805、ゲームの寸劇 8806、D-1選手権 8807、確認役 8821〜。
 - どの確認も、環境変数 `PORT` でポートを変えられる（例：`PORT=8821 node tests/e2e/home.test.js`）。古い名前の `HOME_PORT`・`HEYA_PORT`・`MEIBO_PORT`・`NENPYO_PORT` も使える。
 - このリポジトリの外（Google Fonts など）には出られないことがある。フォントが読めないことによるエラーは無視してよい（`realErrors()`）。
 - 確認のための入り口：

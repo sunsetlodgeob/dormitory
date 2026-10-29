@@ -1,0 +1,75 @@
+/*
+ * 夕照寮OB会サイト ― Google でログインして見るページの入り口（年表・D-1選手権）
+ * 動きは js/site/login.js（OB.loginGate）。共通の色・ウインドウ・ボタンは css/site.css。
+ */
+
+/* ── ログイン・準備中のウインドウ ── */
+.ob-gate {
+  width: calc(100% - 10px);
+  max-width: 640px;
+  margin: 24px auto 28px;
+  text-align: center;
+  padding: 20px 18px 16px;
+}
+.ob-gate h2 { font-size: 21px; margin: 6px 0 12px; }
+.ob-gate p { margin: 0 0 8px; word-break: auto-phrase; text-wrap: pretty; }
+.ob-lock { display: block; margin: 0 auto; image-rendering: pixelated; animation: ob-bob 1.6s steps(2) infinite; }
+@keyframes ob-bob { 50% { transform: translateY(-3px); } }
+.ob-gbtn {
+  display: flex;
+  justify-content: center;
+  min-height: 48px;
+  margin: 18px auto 12px;
+  max-width: 320px;
+}
+.ob-status {
+  margin: 4px auto 12px;
+  padding: 10px 12px;
+  max-width: 480px;
+  border: 2px solid var(--fc-white);
+  background: var(--fc-night);
+  font-size: 14px;
+  text-align: left;
+}
+.ob-status p { margin: 0; word-break: auto-phrase; }
+.ob-status .ob-status-sub { margin-top: 6px; font-size: 13px; color: var(--fc-gray); overflow-wrap: anywhere; }
+.ob-status.is-error { border-color: var(--fc-red); color: #ffd0c4; }
+.ob-status.is-busy { border-style: dashed; border-color: var(--fc-yellow); color: var(--fc-yellow-2); text-align: center; }
+.ob-status.is-busy p::after { content: "▮"; margin-left: 4px; animation: ob-blink 0.8s steps(1) infinite; }
+.ob-status.is-ok { border-color: var(--fc-lime); color: var(--fc-lime); text-align: center; }
+.ob-reload { margin: 0 auto 12px; }
+.ob-small { font-size: 12px; color: var(--fc-gray); }
+.ob-setup .ob-small { margin-top: 14px; overflow-wrap: anywhere; }
+.ob-setup code { font-family: ui-monospace, Menlo, Consolas, monospace; color: var(--fc-yellow-2); }
+
+.ob-loading {
+  font: 16px/1.6 var(--font-pixel);
+  padding: 24px 8px;
+  text-align: center;
+}
+.ob-blink { color: var(--fc-yellow); animation: ob-blink 0.8s steps(1) infinite; }
+@keyframes ob-blink { 50% { opacity: 0; } }
+
+/* ── ログイン中の帯 ── */
+.ob-user {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px 12px;
+  margin: 0 5px 8px;
+  font-size: 13px;
+  color: var(--fc-gray);
+}
+.ob-user-text { display: inline-flex; align-items: flex-start; gap: 6px; min-width: 0; overflow-wrap: anywhere; }
+/* 長いメールアドレスで折り返しても、印は 1 行目の横に置く */
+.ob-user-dot { flex: none; width: 8px; height: 8px; margin-top: 0.55em; background: var(--fc-lime); box-shadow: 0 0 0 2px var(--fc-green); }
+.ob-logout { font-size: 13px; padding: 6px 10px; }
+
+/* ── スマホ ── */
+@media (max-width: 560px) {
+  .ob-gate { padding: 18px 12px 14px; }
+  .ob-gate h2 { font-size: 19px; }
+  .ob-gate p { font-size: 14px; text-align: left; }
+  .ob-gate .ob-small { font-size: 12px; }
+}

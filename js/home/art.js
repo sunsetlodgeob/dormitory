@@ -241,6 +241,13 @@
     '.ccKwwKcSSSSSc..', '.ccKKKKcSSSSSc..', '.ccccccbSsSSSc..', '.cNNNccbbbbbbc..',
     '.cNyNcccccccccc.', '.cNNNcccccccccc.', '.gggggggggggggg.', '................',
   ];
+  // リング（D-1選手権）：コーナーの柱、赤いロープ、青いマット、エプロン
+  const RING = [
+    '................', '................', '................', '..W..........W..',
+    '..wRRRRRRRRRRw..', '..w..........w..', '.WwRRRRRRRRRRwW.', '.wwuuuuuuuuuuww.',
+    '.wRRRRRRRRRRRRw.', '.wuuuuuuuuuuuuw.', '.wRRRRRRRRRRRRw.', '.wuuuuuuuuuuuuw.',
+    '.WWWWWWWWWWWWWW.', '.BBBBBBBBBBBBBB.', '.BBYYBBBBBBYYBB.', '.gggggggggggggg.',
+  ];
   const CAR = [
     '................', '...XXXXXX.......', '..XSSXXSSX......', '.XXSSXXSSXXX....',
     'XXXXXXXXXXXXXx..', 'XXXXXXXXXXXXXx..', 'xKKxxxxxxxKKxx..', '.KgK.....KgK....',
@@ -264,6 +271,7 @@
     S.gate = spr(GATE);
     S.board = spr(BOARD);
     S.studio = spr(STUDIO);
+    S.ring = spr(RING);
     S.carR = spr(CAR, { X: 'R', x: 'r' });
     S.carB = spr(CAR, { X: 'u', x: 'B' });
     S.duck = spr(DUCK);
@@ -675,6 +683,7 @@
         else if (ch === 'E') { g.drawImage(S.gate, x, y); flag(g, x + 14, y - 7, fp); }
         else if (ch === 'M') { g.drawImage(S.board, x, y); flag(g, x + 12, y - 8, fp); }
         else if (ch === 'P') { g.drawImage(S.studio, x, y); flag(g, x + 12, y - 8, fp); }
+        else if (ch === 'G') { g.drawImage(S.ring, x, y); flag(g, x + 12, y - 8, fp); }
         else if (ch === 'c') g.drawImage(S.konbini, x, y);
         else if (ch === 'D' && !dormDone) { dorm(g, x, y, fp); dormDone = true; }
         else if (ch === 'S' && !stationDone) { station(g, x, y); stationDone = true; }

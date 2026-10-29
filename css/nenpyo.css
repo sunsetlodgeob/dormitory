@@ -4,69 +4,8 @@
  * 左に点線の「道」を引き、年度の看板と事件のカードを並べる。
  */
 
-/* ── ログイン・準備中のウインドウ ── */
-.np-gate {
-  width: calc(100% - 10px);
-  max-width: 640px;
-  margin: 24px auto 28px;
-  text-align: center;
-  padding: 20px 18px 16px;
-}
-.np-gate h2 { font-size: 21px; margin: 6px 0 12px; }
-.np-gate p { margin: 0 0 8px; word-break: auto-phrase; text-wrap: pretty; }
-.np-lock { display: block; margin: 0 auto; image-rendering: pixelated; animation: np-bob 1.6s steps(2) infinite; }
-@keyframes np-bob { 50% { transform: translateY(-3px); } }
-.np-gbtn {
-  display: flex;
-  justify-content: center;
-  min-height: 48px;
-  margin: 18px auto 12px;
-  max-width: 320px;
-}
-.np-status {
-  margin: 4px auto 12px;
-  padding: 10px 12px;
-  max-width: 480px;
-  border: 2px solid var(--fc-white);
-  background: var(--fc-night);
-  font-size: 14px;
-  text-align: left;
-}
-.np-status p { margin: 0; word-break: auto-phrase; }
-.np-status .np-status-sub { margin-top: 6px; font-size: 13px; color: var(--fc-gray); overflow-wrap: anywhere; }
-.np-status.is-error { border-color: var(--fc-red); color: #ffd0c4; }
-.np-status.is-busy { border-style: dashed; border-color: var(--fc-yellow); color: var(--fc-yellow-2); text-align: center; }
-.np-status.is-busy p::after { content: "▮"; margin-left: 4px; animation: np-blink 0.8s steps(1) infinite; }
-.np-status.is-ok { border-color: var(--fc-lime); color: var(--fc-lime); text-align: center; }
-.np-reload { margin: 0 auto 12px; }
-.np-small { font-size: 12px; color: var(--fc-gray); }
-.np-setup .np-small { margin-top: 14px; overflow-wrap: anywhere; }
-.np-setup code { font-family: ui-monospace, Menlo, Consolas, monospace; color: var(--fc-yellow-2); }
-
-.np-loading {
-  font: 16px/1.6 var(--font-pixel);
-  padding: 24px 8px;
-  text-align: center;
-}
-.np-blink { color: var(--fc-yellow); animation: np-blink 0.8s steps(1) infinite; }
-@keyframes np-blink { 50% { opacity: 0; } }
-
-/* ── ログイン中の帯 ── */
+/* ログイン・準備中のウインドウと、ログイン中の帯は css/login.css */
 .np-board:focus { outline: none; }
-.np-user {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 6px 12px;
-  margin: 0 5px 8px;
-  font-size: 13px;
-  color: var(--fc-gray);
-}
-.np-user-text { display: inline-flex; align-items: flex-start; gap: 6px; min-width: 0; overflow-wrap: anywhere; }
-/* 長いメールアドレスで折り返しても、印は 1 行目の横に置く */
-.np-user-dot { flex: none; width: 8px; height: 8px; margin-top: 0.55em; background: var(--fc-lime); box-shadow: 0 0 0 2px var(--fc-green); }
-.np-logout { font-size: 13px; padding: 6px 10px; }
 
 /* ── さがす・しぼる ── */
 .np-bar { padding: 12px 14px 10px; }
@@ -284,10 +223,6 @@
 
 /* ── スマホ ── */
 @media (max-width: 560px) {
-  .np-gate { padding: 18px 12px 14px; }
-  .np-gate h2 { font-size: 19px; }
-  .np-gate p { font-size: 14px; text-align: left; }
-  .np-gate .np-small { font-size: 12px; }
   .np-bar { padding: 10px 10px 8px; }
   .np-bar select { min-width: 0; width: 8.6em; }
   .np-chip { min-height: 30px; font-size: 13px; padding: 2px 8px; }

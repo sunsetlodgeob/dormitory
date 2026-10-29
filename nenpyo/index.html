@@ -12,6 +12,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=DotGothic16&display=swap">
 <link rel="stylesheet" href="../css/site.css">
+<link rel="stylesheet" href="../css/login.css">
 <link rel="stylesheet" href="../css/nenpyo.css">
 </head>
 <body class="nenpyo">
@@ -24,15 +25,15 @@
   <p class="ob-notice" id="np-demo" hidden>デモ表示です（サンプルの事件）。本番では Google でログインした寮生だけが見られます。</p>
 
   <!-- 設定がまだのとき -->
-  <section class="fc-window np-gate np-setup" id="np-setup" aria-labelledby="np-setup-title" hidden>
+  <section class="fc-window ob-gate ob-setup" id="np-setup" aria-labelledby="np-setup-title" hidden>
     <h2 id="np-setup-title">年表は準備中です</h2>
     <p>ログインのしくみを、いま用意しています。もうしばらくお待ちください。</p>
-    <p class="np-small">幹事の方へ：<code>js/site/config.js</code> の <code>GOOGLE_CLIENT_ID</code> が空です。<code>docs/site/SETUP.md</code> を見て設定してください。</p>
+    <p class="ob-small">幹事の方へ：<code>js/site/config.js</code> の <code>GOOGLE_CLIENT_ID</code> が空です。<code>docs/site/SETUP.md</code> を見て設定してください。</p>
   </section>
 
   <!-- ログイン -->
-  <section class="fc-window np-gate np-login" id="np-login" aria-labelledby="np-login-title" hidden>
-    <svg class="np-lock" viewBox="0 0 12 13" width="48" height="52" shape-rendering="crispEdges" aria-hidden="true">
+  <section class="fc-window ob-gate" id="np-login" aria-labelledby="np-login-title" hidden>
+    <svg class="ob-lock" viewBox="0 0 12 13" width="48" height="52" shape-rendering="crispEdges" aria-hidden="true">
       <rect x="3" y="0" width="6" height="1" fill="#fcfcfc"/>
       <rect x="2" y="1" width="1" height="4" fill="#bcbcbc"/><rect x="9" y="1" width="1" height="4" fill="#7c7c7c"/>
       <rect x="0" y="5" width="12" height="8" fill="#ac7c00"/>
@@ -43,21 +44,21 @@
     <h2 id="np-login-title">ログインが必要です</h2>
     <p>年表（寮の事件簿）は、見る権限のある寮生だけが見られます。</p>
     <p>見る権限をもらった Google アカウントで、ログインしてください。</p>
-    <div class="np-gbtn" id="np-gbtn"></div>
-    <div class="np-status" id="np-status" role="status" aria-live="polite" hidden></div>
-    <button type="button" class="fc-btn np-reload" id="np-reload" hidden>ページを読み込みなおす</button>
-    <p class="np-small">ログインの情報は、このページを開いている間だけ使います。保存はしません。</p>
+    <div class="ob-gbtn" id="np-gbtn"></div>
+    <div class="ob-status" id="np-status" role="status" aria-live="polite" hidden></div>
+    <button type="button" class="fc-btn ob-reload" id="np-reload" hidden>ページを読み込みなおす</button>
+    <p class="ob-small">ログインの情報は、このページを開いている間だけ使います。保存はしません。</p>
   </section>
 
-  <div class="np-loading" id="np-loading" role="status" hidden>
-    <span class="np-blink" aria-hidden="true">▶</span> 読み込んでいます…
+  <div class="ob-loading" id="np-loading" role="status" hidden>
+    <span class="ob-blink" aria-hidden="true">▶</span> 読み込んでいます…
   </div>
 
   <!-- 年表 -->
   <section class="np-board" id="np-board" aria-label="事件簿の年表" tabindex="-1" hidden>
-    <div class="np-user" id="np-user" hidden>
-      <span class="np-user-text"><span class="np-user-dot" aria-hidden="true"></span><span id="np-user-text">ログイン中</span></span>
-      <button type="button" class="fc-btn np-logout" id="np-logout">ログアウト</button>
+    <div class="ob-user" id="np-user" hidden>
+      <span class="ob-user-text"><span class="ob-user-dot" aria-hidden="true"></span><span id="np-user-text">ログイン中</span></span>
+      <button type="button" class="fc-btn ob-logout" id="np-logout">ログアウト</button>
     </div>
 
     <div class="fc-window np-bar">
@@ -106,6 +107,7 @@
 <script src="../js/site/sample.js"></script>
 <script src="../js/site/data.js"></script>
 <script src="../js/site/common.js"></script>
+<script src="../js/site/login.js"></script>
 <script src="../js/nenpyo.js"></script>
 </body>
 </html>

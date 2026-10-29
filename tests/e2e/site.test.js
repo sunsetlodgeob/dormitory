@@ -26,6 +26,7 @@ const PAGES = [
   { rel: '', title: '夕照寮OB会', head: '.home-name' },
   { rel: 'game/', title: '男魂くんの1年 ― 夕照寮OB会', head: '.otk-name' },
   { rel: 'nenpyo/', title: '年表 ― 夕照寮OB会', head: '.ob-title' },
+  { rel: 'd1/', title: 'D-1選手権 ― 夕照寮OB会', head: '.ob-title' },
   { rel: 'heya/', title: '部屋割り ― 夕照寮OB会', head: '.ob-title' },
   { rel: 'meibo/', title: '名簿 ― 夕照寮OB会', head: '.ob-title' },
   { rel: 'sanpo/', title: '寮さんぽ ― 夕照寮OB会', head: '.logo-name' },
@@ -71,7 +72,7 @@ function staticChecks() {
     assert.ok(/<footer[^>]*data-ob-footer/.test(s), name + ': <footer data-ob-footer>');
     assert.ok(/js\/site\/common\.js/.test(s), name + ': js/site/common.js を読む');
     assert.ok(/family=[^"]*DotGothic16/.test(s), name + ': DotGothic16 を読む');
-    // 外のスクリプトは使わない（Google のログイン用は年表の JS が必要なときだけ読む）
+    // 外のスクリプトは使わない（Google のログイン用は js/site/login.js が必要なときだけ読む）
     const ext = (s.match(/<script[^>]+src="https?:[^"]+"/g) || []);
     assert.deepStrictEqual(ext, [], name + ': 外のスクリプトを読んでいる');
   }
@@ -149,7 +150,7 @@ async function fromHome(browser, base) {
   const { page, ctx, errors, outside, top } = await openSub(browser, base, '');
   // 下のリンクの一覧
   const all = await page.$$eval('.home-nav a', (as) => as.map((a) => a.getAttribute('href')));
-  assert.deepStrictEqual(all, ['game/', 'nenpyo/', 'heya/', 'meibo/', 'sanpo/', '#post']);
+  assert.deepStrictEqual(all, ['game/', 'nenpyo/', 'd1/', 'heya/', 'meibo/', 'sanpo/', '#post']);
   const links = all.filter((h) => h !== '#post'); // #post は同じページの下の投稿フォーム（home.test.js で確かめる）
   for (const href of links) {
     await page.locator('.home-nav a[href="' + href + '"]').click();
@@ -158,7 +159,7 @@ async function fromHome(browser, base) {
     await page.goBack();
     await page.waitForURL(top, { timeout: 5000 });
   }
-  check(true, 'ホームの下のリンクから 5 ページへ行って、もどれる');
+  check(true, 'ホームの下のリンクから ' + links.length + ' ページへ行って、もどれる');
 
   // 地図の旗（部屋割り）から
   await page.waitForFunction(() => window.HOME && window.HOME.state && !window.HOME.state.wipe && !window.HOME.state.leaving);

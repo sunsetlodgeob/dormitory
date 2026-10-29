@@ -11,7 +11,7 @@ const { withSite, realErrors } = require('./lib');
 
 const PORT = Number(process.env.HOME_PORT || process.env.PORT) || 8802; // 確認役が別のポートで動かすときは HOME_PORT
 const SHOTS = process.env.HOME_SHOTS || '';
-const TARGETS = /\/(game|nenpyo|heya|meibo|sanpo)\/$/;
+const TARGETS = /\/(game|nenpyo|d1|heya|meibo|sanpo)\/$/;
 const STUB = '<!doctype html><html lang="ja"><meta charset="utf-8"><title>stub</title><p>stub</p></html>';
 
 async function shot(page, name) {
@@ -71,7 +71,7 @@ async function desktop(open, base) {
   const footer = await page.locator('footer.ob-footer').innerText();
   assert.ok(footer.includes('すべてフィクションです'), '注記がない: ' + footer);
   const hrefs = await page.$$eval('.home-nav a', (as) => as.map((a) => a.getAttribute('href')));
-  assert.deepStrictEqual(hrefs, ['game/', 'nenpyo/', 'heya/', 'meibo/', 'sanpo/', '#post']);
+  assert.deepStrictEqual(hrefs, ['game/', 'nenpyo/', 'd1/', 'heya/', 'meibo/', 'sanpo/', '#post']);
   assert.ok(await page.locator('#post-form').isVisible(), 'JS がなくても投稿フォームは見える');
   assert.ok((await page.locator('#home-album').innerText()).includes('写真館'));
   assert.ok((await page.locator('#home-album-note').innerText()).includes('じゅんびちゅう'));
@@ -480,7 +480,7 @@ async function noJs(browser, base) {
   await page.goto(base);
   assert.strictEqual(await page.locator('.home-console').isVisible(), false);
   const hrefs = await page.$$eval('.home-nav a', (as) => as.map((a) => a.getAttribute('href')));
-  assert.deepStrictEqual(hrefs, ['game/', 'nenpyo/', 'heya/', 'meibo/', 'sanpo/', '#post']);
+  assert.deepStrictEqual(hrefs, ['game/', 'nenpyo/', 'd1/', 'heya/', 'meibo/', 'sanpo/', '#post']);
   assert.ok(await page.locator('#post-form').isVisible(), 'JS がなくても投稿フォームは見える');
   await ctx.close();
 }

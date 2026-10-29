@@ -2,14 +2,12 @@
  * 夕照寮OB会サイト ― 年表（nenpyo/）
  * 事件簿を年度ごとに並べる。本番（GAS_URL あり）では、Google でログインして
  * 見る権限があると確かめられた人にだけ表示する。
- *  - ログインで受け取った ID トークンは、読み込みに使うだけで保存しない（メモリだけ）
+ *  - ログインまわり（Google のボタン・権限の確かめ・ログアウト）は js/site/login.js（OB.loginGate）
  *  - スプレッドシートから来た文字は、すべて OB.esc() を通してから HTML に入れる
  */
 (function () {
   'use strict';
   const OB = window.OB;
-  const cfg = window.OB_CONFIG || {};
-  const GSI_SRC = 'https://accounts.google.com/gsi/client';
   const $ = (id) => document.getElementById(id);
   const el = {
     demo: $('np-demo'), setup: $('np-setup'), login: $('np-login'), gbtn: $('np-gbtn'), status: $('np-status'),
@@ -20,20 +18,9 @@
     tail: $('np-tail'), top: $('np-top'),
   };
 
-  const MSG = {
-    not_member: 'このアカウントには見る権限がありません。幹事に連絡して、見る権限をもらってください。',
-    invalid_token: 'ログインを確かめられませんでした（時間がたって切れたのかもしれません）。もう一度ログインしてください。',
-    not_configured: '年表の準備がまだ終わっていません（Apps Script の設定がまだです）。しばらくしてから、もう一度ためしてください。',
-    network: '通信に失敗しました。電波のよい所で、もう一度ログインしてください。',
-    gsi: 'Google のログインを読み込めませんでした。電波のよい所で、ページを読み込みなおしてください。',
-    other: 'うまく読み込めませんでした。時間をおいて、もう一度ためしてください。',
-  };
-
   let events = [];        // 整えた事件の一覧
   let tagList = [];       // [{ tag, n }]
   let curTag = '';        // しぼりこみ中のタグ（空ならすべて）
-  let gsiReady = false;
-  let tries = 0;          // ログインの回数（古い返事を捨てるため）
 
   // ── 小物 ──────────────────────────────────────
   const wareki = OB.wareki; // 年度の元号（js/site/common.js）
@@ -73,20 +60,6 @@
       i = j + q.length;
     }
     return out + OB.esc(s.slice(last));
-  }
-  // ID トークンの中のメールアドレス（表示に使うだけ。確かめるのは Apps Script 側）
-  function emailOf(jwt) {
-    try {
-      let p = String(jwt).split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-      p += '='.repeat((4 - (p.length % 4)) % 4);
-      const bin = atob(p);
-      const bytes = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      const o = JSON.parse(new TextDecoder().decode(bytes));
-      return typeof o.email === 'string' ? o.email.slice(0, 200) : '';
-    } catch (e) {
-      return '';
-    }
   }
   const reduceMotion = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -204,19 +177,15 @@
     }
   }
 
-  function showBoard(list, email) {
-    events = tidy(list);
+  // ログインが通ったら（デモではすぐに）描く。ログインまわりは js/site/login.js
+  function showBoard(d) {
+    events = tidy(d.events);
     tagList = countTags();
     curTag = '';
     el.q.value = '';
     el.q.disabled = !events.length;
     renderTags();
     renderTimeline();
-    el.board.hidden = false;
-    el.login.hidden = true;
-    el.loading.hidden = true;
-    el.user.hidden = !OB.data.isLive();
-    el.userText.textContent = email ? 'ログイン中：' + email : 'ログイン中';
     el.post.hidden = el.tail.hidden = false;
     el.post.href = el.post2.href = OB.POST_HREF;
   }
@@ -231,140 +200,6 @@
     el.year.innerHTML = '';
     el.count.textContent = '';
     el.board.hidden = true;
-  }
-
-  // ── ログイン ──────────────────────────────────────
-  function setStatus(text, kind) {
-    el.status.hidden = !text;
-    el.status.className = 'np-status' + (kind ? ' is-' + kind : '');
-    el.status.textContent = '';
-    if (!text) return;
-    String(text).split('\n').forEach((line, i) => {
-      const p = document.createElement('p');
-      p.textContent = line;
-      if (i) p.className = 'np-status-sub';
-      el.status.appendChild(p);
-    });
-  }
-
-  function showLogin() {
-    el.login.hidden = false;
-    renderButton();
-  }
-
-  function loadGsi() {
-    if (window.google && google.accounts && google.accounts.id) { initGsi(); return; }
-    const s = document.createElement('script');
-    s.src = GSI_SRC;
-    s.async = true;
-    s.onload = initGsi;
-    s.onerror = gsiFailed;
-    document.head.appendChild(s);
-    setTimeout(() => { if (!gsiReady && !el.login.hidden) gsiFailed(); }, 15000);
-  }
-  function gsiFailed() {
-    if (gsiReady) return;
-    setStatus(MSG.gsi, 'error');
-    el.gbtn.hidden = true;
-    el.reload.hidden = false;
-  }
-  function initGsi() {
-    if (gsiReady) return;
-    try {
-      google.accounts.id.initialize({
-        client_id: cfg.GOOGLE_CLIENT_ID,
-        callback: onCredential,
-        auto_select: false,
-        cancel_on_tap_outside: true,
-        context: 'signin',
-        ux_mode: 'popup',
-        itp_support: true,
-      });
-      gsiReady = true;
-      el.gbtn.hidden = false;
-      el.reload.hidden = true;
-      if (el.status.classList.contains('is-error') && el.status.textContent === MSG.gsi) setStatus('');
-      renderButton();
-    } catch (e) {
-      gsiFailed();
-    }
-  }
-  let btnW = 0; // いま出しているログインボタンの幅
-  const wantBtnW = () => Math.max(200, Math.min(300, (el.gbtn.clientWidth || 280)));
-  function renderButton() {
-    if (!gsiReady) return;
-    el.gbtn.innerHTML = '';
-    const w = (btnW = wantBtnW());
-    try {
-      google.accounts.id.renderButton(el.gbtn, {
-        type: 'standard', theme: 'filled_blue', size: 'large', text: 'signin_with',
-        shape: 'rectangular', logo_alignment: 'left', locale: 'ja', width: w,
-      });
-    } catch (e) {
-      setStatus(MSG.gsi, 'error');
-      el.reload.hidden = false;
-    }
-  }
-
-  // Google から ID トークン（credential）を受け取ったとき
-  async function onCredential(resp) {
-    const cred = resp && resp.credential;
-    if (!cred) { setStatus(MSG.invalid_token, 'error'); return; }
-    const email = emailOf(cred);
-    const my = ++tries;
-    setStatus('見る権限を確かめています…', 'busy');
-    try {
-      const d = await OB.data.loadTimeline(cred);
-      if (my !== tries) return;
-      setStatus('');
-      showBoard(d.events, email);
-      // 読み上げソフトでも、年表に切りかわったことが分かるように
-      el.board.focus({ preventScroll: true });
-      window.scrollTo({ top: 0 });
-    } catch (e) {
-      if (my !== tries) return;
-      const code = (e && e.code) || 'network';
-      let text = MSG[code] || MSG.other;
-      if (code === 'not_member') {
-        if (email) text += '\nためしたアカウント：' + email;
-        text += '\n別のアカウントでログインしなおすこともできます。';
-      }
-      if (code === 'not_member' || code === 'invalid_token') disableAuto();
-      setStatus(text, 'error');
-      renderButton();
-    }
-  }
-
-  function disableAuto() {
-    try { if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect(); } catch (e) { /* なにもしない */ }
-  }
-
-  function logout() {
-    tries++;
-    disableAuto();
-    clearBoard();
-    showLogin();
-    setStatus('ログアウトしました。', 'ok');
-    window.scrollTo({ top: 0 });
-  }
-
-  // ── はじめ ──────────────────────────────────────
-  async function startDemo() {
-    el.demo.hidden = false;
-    el.loading.hidden = false;
-    try {
-      const d = await OB.data.loadTimeline('');
-      showBoard(d.events, '');
-    } finally {
-      el.loading.hidden = true;
-    }
-  }
-
-  function start() {
-    if (!OB.data.isLive()) { startDemo(); return; }
-    if (!String(cfg.GOOGLE_CLIENT_ID || '').trim()) { el.setup.hidden = false; return; }
-    el.login.hidden = false;
-    loadGsi();
   }
 
   // ── 操作 ──────────────────────────────────────
@@ -400,19 +235,9 @@
     void sec.offsetWidth;
     sec.classList.add('is-flash');
   });
-  el.logout.addEventListener('click', logout);
-  el.reload.addEventListener('click', () => location.reload());
   el.top.addEventListener('click', (e) => {
     e.preventDefault();
     window.scrollTo({ top: 0, behavior: reduceMotion() ? 'auto' : 'smooth' });
-  });
-  // スマホを横にしたときなど、ログインボタンの入る幅が変わったら描きなおす
-  let resizeT = 0;
-  window.addEventListener('resize', () => {
-    clearTimeout(resizeT);
-    resizeT = setTimeout(() => {
-      if (gsiReady && !el.login.hidden && !el.gbtn.hidden && wantBtnW() !== btnW) renderButton();
-    }, 250);
   });
   let ticking = false;
   window.addEventListener('scroll', () => {
@@ -421,5 +246,11 @@
     requestAnimationFrame(() => { el.top.hidden = window.scrollY < 500; ticking = false; });
   }, { passive: true });
 
-  start();
+  OB.loginGate({
+    what: '年表',
+    el,
+    load: (cred) => OB.data.loadTimeline(cred),
+    show: showBoard,
+    clear: clearBoard,
+  }).start();
 })();

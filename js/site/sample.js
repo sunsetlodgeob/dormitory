@@ -38,5 +38,14 @@
     { id: 's6', year: 2008, month: 7, title: '全日本コール選手権', body: '寮生チームが優勝。トロフィーは食堂へ。', tags: ['コール'] },
     { id: 's7', year: null, month: null, title: '年度不明の事件', body: '誰も年度を覚えていない。', tags: [] },
   ];
-  OB.SAMPLE = { members, rooms, events, updated: '2026-10-24T00:00:00+09:00' };
+  // D-1選手権の歴代記録（名前は上の名簿のサンプルから）
+  const d1 = [
+    { year: 2003, winner: ['金沢 二郎'], second: ['六浦 五郎'], members: ['金沢 二郎', '六浦 五郎', '八景 一郎', '瀬戸 三郎'], host: '夕照 四郎', referee: '夕照 四郎', kuroko: '平潟 一郎', note: '第1回。ルールはその場で決めた。' },
+    { year: 2004, winner: ['野島 一郎'], second: ['金沢 二郎'], members: ['野島 一郎', '金沢 二郎', '称名 一郎', '侍従 一郎', '釜利谷 一郎'], host: '六浦 五郎', referee: '富岡 一郎', kuroko: '能見 一郎', note: '' },
+    { year: 2005, winner: ['称名 一郎', '侍従 一郎'], second: [], members: ['称名 一郎', '侍従 一郎', '夕照 二郎', '六浦 二郎'], host: '野島 一郎', referee: '野島 一郎', kuroko: '', note: '決勝が引き分けで、優勝が2人。' },
+    { year: 2006, winner: ['夕照 二郎'], second: ['八景 二郎'], members: ['夕照 二郎', '八景 二郎', '平潟 二郎', '瀬戸 二郎', '野島 二郎', '称名 二郎'], host: '称名 一郎', referee: '金沢 二郎', kuroko: '侍従 二郎', note: '黒子が目立ちすぎて、来年から全身黒に。' },
+    { year: 2007, winner: [], second: [], members: ['釜利谷 二郎', '富岡 二郎'], host: '夕照 二郎', referee: '', kuroko: '', note: '決着がつかず、優勝なし。' },
+    { year: 2008, winner: ['能見 二郎'], second: ['釜利谷 二郎'], members: ['能見 二郎', '釜利谷 二郎', '夕照 三郎', '六浦 三郎', '金沢 三郎'], host: '八景 二郎', referee: '富岡 二郎', kuroko: '平潟 三郎', note: '' },
+  ];
+  OB.SAMPLE = { members, rooms, events, d1, updated: '2026-10-24T00:00:00+09:00' };
 })();

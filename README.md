@@ -14,6 +14,7 @@
 | ホーム | `index.html` | ファミコンのゲームふうのメニュー。寮のまわりの地図でカーソルを動かして、行き先をえらぶ。下にふつうのリンクの一覧もある |
 | 男魂くんの1年 | `game/` | 新入生・男魂くんが、寮の1年の行事をミニゲーム 10 本でのりきる。行事の間には、寮を舞台にした短い寸劇が入る。練習モードで 1 本ずつも遊べる |
 | 年表 | `nenpyo/` | 寮の事件簿を年度ごとに。Google でログインした、見る権限のある人だけが読める |
+| D-1選手権 | `d1/` | D-1選手権の歴代記録（優勝・準優勝・出場メンバー・主催者・レフェリー・黒子）。年表と同じく、ログインした寮生だけが読める |
 | 部屋割り | `heya/` | 年度をえらぶと、ドット絵の寮の地図で、だれがどの部屋にいたかがわかる。一覧表にも切りかえられる |
 | 名簿 | `meibo/` | 入学した年度ごとの、寮生の名前 |
 | 寮さんぽ | `sanpo/` | ドット絵で再現した寮の中を、歩いて回れる。部屋割りのページから年度を決めて来ると、部屋の住人がわかる |
@@ -51,7 +52,7 @@ python3 -m http.server 8000
 ```sh
 sh tests/run-all.sh                    # ぜんぶ（30 分ほど）。失敗があると終了コードが 0 以外
 node tests/e2e/site.test.js            # サイト全体を 1 回ずつ回る（ページのつながり・注記・スマホの幅）
-node tests/e2e/home.test.js            # ページごと（home・game・story・heya・meibo・nenpyo・games-*）
+node tests/e2e/home.test.js            # ページごと（home・game・story・heya・meibo・nenpyo・d1・games-*）
 node tests/gas/run.js                  # Apps Script（gas/Code.gs）。Google には出ない
 PORT=8821 node tests/e2e/home.test.js  # ポートを変える
 ```
@@ -68,10 +69,10 @@ Playwright は `/opt/node22/lib/node_modules/playwright` か、ふつうの `req
 | --- | --- |
 | `index.html`・`css/home.css`・`js/home/` | ホーム |
 | `game/`・`css/otoko.css`・`js/otoko/` | ゲーム「男魂くんの1年」。ミニゲームは `js/otoko/games/<id>.js` に 1 本 1 ファイル。寸劇の台本は `js/otoko/scenes.js`（背景は寮さんぽの `js/world.js`・`js/art.js` を借りる） |
-| `nenpyo/`・`heya/`・`meibo/` と `js/nenpyo.js`・`js/heya.js`・`js/meibo.js`・`css/<名前>.css` | 年表・部屋割り・名簿 |
+| `nenpyo/`・`d1/`・`heya/`・`meibo/` と `js/nenpyo.js`・`js/d1.js`・`js/heya.js`・`js/meibo.js`・`css/<名前>.css` | 年表・D-1選手権・部屋割り・名簿（年表と D-1 のログインは `js/site/login.js`・`css/login.css`） |
 | `sanpo/`・`css/style.css`・`js/world.js`・`js/art.js`・`js/game.js` | 寮さんぽ（間取り・ドット絵・操作） |
 | `css/site.css` | コンテンツのページ共通の見た目（白い二重線のウインドウなど） |
-| `js/site/` | 設定（`config.js`）、サンプル（`sample.js`）、データの読み込み（`data.js`）、注記などの小物（`common.js`） |
+| `js/site/` | 設定（`config.js`）、サンプル（`sample.js`）、データの読み込み（`data.js`）、注記などの小物（`common.js`）、Google のログインの入り口（`login.js`） |
 | `gas/` | Google Apps Script |
 | `tools/build_artifact.py` | 寮さんぽを 1 枚の HTML にまとめる（claude.ai に公開する用）：`python3 tools/build_artifact.py <出力先>` |
 | `tests/` | 確認（`e2e/` はブラウザ、`gas/` は Apps Script、`run-all.sh` はぜんぶ） |

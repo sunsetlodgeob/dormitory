@@ -10,7 +10,7 @@
   // ── モード選択 ──────────────────────────────────
   H.MODES = [
     { id: 'game', name: 'ゲーム', desc: '寮の1年を ミニゲームで あそぶ' },
-    { id: 'contents', name: 'コンテンツ', desc: '年表・部屋割り・名簿・写真館・寮さんぽ' },
+    { id: 'contents', name: 'コンテンツ', desc: '年表・D-1・部屋割り・名簿・写真館・寮さんぽ' },
     { id: 'post', name: '投稿', desc: '事件・名簿・部屋割りの 情報を送る', href: '#post' }, // 下の投稿フォームへ
   ];
 
@@ -24,6 +24,7 @@
   // key は下の地図の文字。album は OB_CONFIG.ALBUM_URL を別のタブで開く（空のときは descSoon を出す）
   H.ITEMS = [
     { id: 'nenpyo', key: 'K', name: '年表', href: 'nenpyo/', desc: '寮の事件簿。見るには Google でログイン' },
+    { id: 'd1', key: 'G', name: 'D-1選手権', href: 'd1/', desc: '歴代の記録。見るには Google でログイン' },
     { id: 'heya', key: 'D', name: '部屋割り', href: 'heya/', desc: '年度ごとの部屋割り。寮の部屋を訪ねて回れる' },
     { id: 'meibo', key: 'M', name: '名簿', href: 'meibo/', desc: '入学した年度ごとの 寮生の名前' },
     { id: 'album', key: 'P', name: '写真館', album: true, desc: '寮の写真のアルバム。見るには Google でログイン', descSoon: '寮の写真のアルバム。じゅんびちゅう' },
@@ -34,6 +35,7 @@
   //  ~ 川   = 橋   . 草地   T 木   h 家   | 道（たて）   # 道（よこ）   : 寮の前の道
   //  , 駅前   S 駅   _ ホーム   f さく   r 線路   c コンビニ
   //  K 年表（蔵）   D 寮（部屋割り）   E 寮の門（寮さんぽ）   M 掲示板（名簿）   P 写真館
+  //  G リング（D-1選手権）
   H.MAP = [
     'hT.hT.h.T.hT|.hT',
     '~~~~~~~~~~~~=~~~',
@@ -42,7 +44,7 @@
     '..K.DDDDDDD.|...',
     '.T..DDDDDDD.|.P.',
     '....DDDDDDD.|...',
-    '.T....E.M...|.T.',
+    '.T....E.M.G.|.T.',
     '......:.....|...',
     '################',
     '################',

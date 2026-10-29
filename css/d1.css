@@ -1,0 +1,141 @@
+/*
+ * 夕照寮OB会サイト ― D-1選手権（d1/）の見た目
+ * 共通の色・ウインドウ・ボタンは css/site.css、ログインの入り口は css/login.css。
+ * 年度ごとに、試合のポスターのようなカードを並べる。
+ */
+
+/* ── D-1 とは ── */
+.d1-intro {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px 18px;
+  max-width: 720px;
+  margin: 14px auto 26px;
+}
+.d1-ring { display: block; image-rendering: pixelated; }
+.d1-intro .d1-intro-title { margin: 0 0 4px; font-size: 15px; color: var(--fc-sky); }
+.d1-motto {
+  margin: 0;
+  font: 18px/1.7 var(--font-pixel);
+  color: var(--fc-yellow-2);
+  letter-spacing: 0.04em;
+  word-break: auto-phrase;
+  text-wrap: pretty;
+}
+
+/* ── 歴代記録 ── */
+.d1-board:focus { outline: none; }
+.d1-board-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 12px;
+  margin: 0 5px 12px;
+  border-bottom: 2px dotted rgba(252, 252, 252, 0.35);
+}
+.d1-board-title { margin: 0; font: 20px/1.5 var(--font-pixel); font-weight: normal; color: var(--fc-yellow); letter-spacing: 0.08em; }
+.d1-count { margin: 0; font: 13px/1.5 var(--font-pixel); color: var(--fc-gray); letter-spacing: 0.04em; }
+
+.d1-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 5px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 400px), 1fr));
+  gap: 18px;
+}
+.d1-year { min-width: 0; scroll-margin-top: 14px; }
+.d1-card {
+  height: 100%;
+  background: var(--fc-navy);
+  border: 2px solid var(--fc-white);
+  box-shadow: 4px 4px 0 var(--fc-black);
+  padding: 0 14px 12px;
+}
+
+/* 大会の名前（リングのロープのような赤い帯） */
+.d1-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 10px;
+  margin: 0 -14px 12px;
+  padding: 6px 14px 5px;
+  background: var(--fc-blue);
+  border-bottom: 2px solid var(--fc-white);
+  box-shadow: inset 0 -5px 0 var(--fc-red), inset 0 -7px 0 var(--fc-white);
+  font-weight: normal;
+}
+.d1-name { font: 22px/1.4 var(--font-pixel); color: var(--fc-yellow); letter-spacing: 0.06em; padding-bottom: 6px; }
+.d1-era { font: 13px/1.4 var(--font-pixel); color: var(--fc-gray); }
+
+/* 優勝・準優勝 */
+.d1-podium { margin: 0 0 10px; }
+.d1-place {
+  display: grid;
+  grid-template-columns: 5.2em minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 8px;
+}
+.d1-place dt { margin: 0; }
+.d1-place dd { margin: 0; overflow-wrap: anywhere; }
+.d1-badge {
+  display: inline-block;
+  min-width: 4.6em;
+  padding: 3px 6px 2px;
+  font: 13px/1.3 var(--font-pixel);
+  text-align: center;
+  color: var(--fc-black);
+  border: 2px solid var(--fc-white);
+}
+.d1-badge.is-gold { background: var(--fc-yellow); box-shadow: 3px 3px 0 var(--fc-red); }
+.d1-badge.is-silver { background: var(--fc-gray); box-shadow: 3px 3px 0 var(--fc-gray-2); }
+.d1-winner { font: 20px/1.45 var(--font-pixel); color: var(--fc-yellow-2); letter-spacing: 0.04em; }
+.d1-second { font: 16px/1.5 var(--font-pixel); color: var(--fc-white); }
+/* 名前は 1 人ぶんをまとめて折り返す（とても長い名前だけは途中でも折る） */
+.d1-n { display: inline-block; max-width: 100%; overflow-wrap: anywhere; }
+.d1-nil { font: 14px/1.5 var(--font-pixel); color: var(--fc-gray-2); }
+
+/* 出場メンバー・主催者・レフェリー・黒子 */
+.d1-facts {
+  margin: 0;
+  padding: 8px 0 0;
+  border-top: 1px dashed rgba(252, 252, 252, 0.35);
+  font-size: 14px;
+}
+.d1-fact {
+  display: grid;
+  grid-template-columns: 6.6em minmax(0, 1fr);
+  gap: 10px;
+  padding: 3px 0;
+}
+.d1-fact dt { margin: 0; font: 13px/1.75 var(--font-pixel); color: var(--fc-yellow-2); }
+.d1-fact dt small { display: block; font-size: 11px; line-height: 1.2; color: var(--fc-gray); }
+.d1-fact dd { margin: 0; overflow-wrap: anywhere; }
+
+/* 補足 */
+.d1-note {
+  margin-top: 10px;
+  padding: 8px 10px;
+  background: var(--fc-night);
+  border: 2px solid var(--fc-gray-2);
+}
+.d1-note-label { display: block; font: 12px/1.4 var(--font-pixel); color: var(--fc-sky); }
+.d1-note-text { margin: 2px 0 0; font-size: 14px; line-height: 1.75; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.d1-none { text-align: center; color: var(--muted); padding: 20px 0; font-family: var(--font-pixel); }
+
+/* ── スマホ ── */
+@media (max-width: 560px) {
+  .d1-intro { gap: 10px 12px; padding: 12px; }
+  .d1-ring { width: 48px; height: 39px; }
+  .d1-motto { font-size: 16px; }
+  .d1-card { padding: 0 10px 10px; }
+  .d1-card-head { margin: 0 -10px 10px; padding: 5px 10px 4px; }
+  .d1-name { font-size: 20px; }
+  .d1-winner { font-size: 18px; }
+  .d1-fact { grid-template-columns: 5.8em minmax(0, 1fr); gap: 8px; }
+}
