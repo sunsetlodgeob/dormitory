@@ -61,6 +61,8 @@ const GEMINI_FAIL = 'Gemini失敗：手で整理してください';
 
 // いちばん新しい Flash モデルをさす名前（モデルが引退しても、自動で次のモデルになる）
 const DEFAULT_MODEL = 'gemini-flash-latest';
+const FALLBACK_MODEL = 'gemini-flash-lite-latest'; // 混んでいるときの予備（軽くて速い）
+const RETRY_WAIT = [2000, 6000]; // 混んでいるとき、やりなおす前に待つ時間（ミリ秒）
 const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/';
 const TOKENINFO_URL = 'https://oauth2.googleapis.com/tokeninfo?id_token=';
 
@@ -339,8 +341,9 @@ function callGemini(prompt, schema) {
   if (!key) throw new Error('APIキーが未設定');
   let model = String(props().getProperty('GEMINI_MODEL') || '').trim().replace(/^models\//, '');
   if (!/^[A-Za-z0-9][\w.\-]*$/.test(model)) model = DEFAULT_MODEL;
-  // GEMINI_MODEL のモデルが引退していたら（404）、いつものモデルでやりなおす
-  const models = model === DEFAULT_MODEL ? [model] : [model, DEFAULT_MODEL];
+  // GEMINI_MODEL のモデルが引退していたら（404）、いつものモデルでやりなおす。
+  // いつものモデルが混んでいて返事がもらえないとき（429・5xx が続く）は、軽いモデルにかえる
+  const models = (model === DEFAULT_MODEL ? [model] : [model, DEFAULT_MODEL]).concat([FALLBACK_MODEL]);
   const payload = JSON.stringify({
     systemInstruction: { parts: [{ text: GEMINI_SYSTEM }] },
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
@@ -349,7 +352,7 @@ function callGemini(prompt, schema) {
   });
   let code = 0;
   for (let m = 0; m < models.length; m++) {
-    for (let attempt = 1; attempt <= 2; attempt++) {
+    for (let attempt = 1; attempt <= RETRY_WAIT.length + 1; attempt++) {
       const res = UrlFetchApp.fetch(GEMINI_URL + models[m] + ':generateContent', {
         method: 'post',
         contentType: 'application/json',
@@ -365,10 +368,11 @@ function callGemini(prompt, schema) {
         const text = parts.filter(function (p) { return !p.thought; }).map(function (p) { return p.text || ''; }).join('');
         return parseJsonObject(text);
       }
-      if ((code === 429 || code >= 500) && attempt < 2) Utilities.sleep(2000); // 混んでいたら 1 回だけやりなおす
+      // 混んでいたら、少し待ってやりなおす（待つ時間をだんだんのばす）
+      if ((code === 429 || code >= 500) && attempt <= RETRY_WAIT.length) Utilities.sleep(RETRY_WAIT[attempt - 1]);
       else break;
     }
-    if (code !== 404) break;
+    if (code !== 404 && code !== 429 && code < 500) break; // キーがちがう（400・403）などは、モデルをかえてもだめ
   }
   throw new Error('HTTP ' + code);
 }

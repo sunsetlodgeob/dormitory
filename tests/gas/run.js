@@ -393,9 +393,12 @@ test('投稿 事件：範囲外の年度・おかしな月は空にしてメモ'
 
 test('投稿 事件：Gemini が失敗しても、原文を残す（メモ：Gemini失敗）', () => {
   let n = 0;
-  const env = geminiEnv(() => { n++; return { code: 500, body: { error: { message: 'internal' } } }; });
+  const urls = [];
+  const env = geminiEnv((url) => { n++; urls.push(url); return { code: 503, body: { error: { message: 'overloaded' } } }; });
   send(env, { event: { when: '平成17年の秋、10月ごろ', title: '=IMPORTXML("http://example.com","//a")', what: '何かがあった。\n2行目。' }, by: '一年C' });
-  assert.strictEqual(n, 2, '1 回だけやりなおす');
+  assert.strictEqual(n, 6, '混んでいたら 2 回まで待ってやりなおし、それでもだめなら軽いモデルで同じように');
+  assert.strictEqual(env.calls.sleep, 4);
+  assert.ok(urls[3].includes('/gemini-flash-lite-latest:'), '予備のモデル');
   const t = env.ss.getSheetByName('年表');
   const r = rec(t, 2);
   assert.strictEqual(r.ID, 'e1');
@@ -753,11 +756,15 @@ test('Gemini：既定のモデルは gemini-flash-latest。古いモデル名で
   const r = rec(env2.ss.getSheetByName('年表'), 2);
   assert.strictEqual(r['年度'], 2005);
   assert.ok(!r['メモ'].includes('Gemini失敗'));
-  // 既定のモデルも 404 なら、原文のまま残してメモに HTTP 404
+  // 既定のモデルも予備のモデルも 404 なら、原文のまま残してメモに HTTP 404
   const env3 = geminiEnv(() => ({ code: 404, body: {} }));
   send(env3, { event: { when: '2005', title: 'a', what: 'b' } });
   assert.ok(rec(env3.ss.getSheetByName('年表'), 2)['メモ'].includes('HTTP 404'));
-  assert.strictEqual(env3.calls.fetch.length, 1);
+  assert.strictEqual(env3.calls.fetch.length, 2);
+  // キーがちがう（400）なら、モデルをかえずにすぐあきらめる
+  const env4 = geminiEnv(() => ({ code: 400, body: {} }));
+  send(env4, { event: { when: '2005', title: 'a', what: 'b' } });
+  assert.strictEqual(env4.calls.fetch.length, 1);
 });
 
 test('Gemini の返事が式でも、シートでは式として動かない', () => {
