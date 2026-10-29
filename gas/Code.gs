@@ -34,8 +34,8 @@ const SOURCES = {
   meibo: { label: '名簿（元）', names: ['名簿（元）', '名簿(元)'], need: ['度', '氏名'] },
   d1: { label: 'D-1選手権年表', names: ['D-1選手権年表'], need: ['年度', '出場'] },
 };
-const IMPORT_SEC = 270; // 1 回の実行で取り込みに使う時間（Apps Script は 6 分で止まる）
-const IMPORT_BATCH = 20; // Gemini に 1 回で渡す事件の数
+const IMPORT_SEC = 200; // 1 回の実行で取り込みに使う時間（Apps Script は 6 分で止まる。Gemini の返事を 1 回待つ分をあけておく）
+const IMPORT_BATCH = 8; // Gemini に 1 回で渡す事件の数（多いと返事が遅くなる）
 const PUBLISH_COL = '掲載';
 // 文字のまま扱う列（"101" が数字に化けないように）
 const TEXT_COLS = ['ID', '部屋'];
@@ -905,7 +905,8 @@ function importAll() {
   Object.keys(SHEETS).forEach(function (k) { if (!ss.getSheetByName(SHEETS[k].name)) ensureSheet(ss, SHEETS[k]); });
   const t0 = Date.now();
   const lines = [];
-  [importJikenbo, importMeibo, importD1].forEach(function (fn) {
+  // 速く終わる名簿・D-1 を先に。事件簿は Gemini を待つので最後
+  [importMeibo, importD1, importJikenbo].forEach(function (fn) {
     try {
       lines.push(fn(ss, t0));
     } catch (err) {
@@ -918,6 +919,12 @@ function importAll() {
   Logger.log(text);
   try { SpreadsheetApp.getUi().alert('取り込み', text, SpreadsheetApp.getUi().ButtonSet.OK); } catch (err) { /* 画面がないとき */ }
   return text;
+}
+
+// 進み具合を、スプレッドシートの右下に出す（実行ログにも残す）
+function progress(text) {
+  Logger.log(text);
+  try { SpreadsheetApp.getActive().toast(text, '取り込み', 30); } catch (err) { /* 画面がないとき */ }
 }
 
 // 取り込みのもとのシートと、見出しの行・列を探す（見つからなければ null）
@@ -980,7 +987,8 @@ function importJikenbo(ss, t0) {
   });
   let added = 0, stopped = '';
   for (let i = 0; i < todo.length; i += IMPORT_BATCH) {
-    if ((Date.now() - t0) / 1000 > IMPORT_SEC) { stopped = '時間切れ'; break; }
+    if ((Date.now() - t0) / 1000 > IMPORT_SEC) { stopped = '1 回に動ける時間をこえそうだった'; break; }
+    progress('事件簿 → 年表：' + added + ' / ' + todo.length + ' 件（AI が整えています…）');
     const batch = todo.slice(i, i + IMPORT_BATCH);
     let byRow = {};
     let fail = '';
