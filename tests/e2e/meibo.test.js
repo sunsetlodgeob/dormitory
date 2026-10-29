@@ -205,6 +205,7 @@ withSite(PORT, async ({ browser, base }) => {
               { name: '寮生 <b>太字</b>', entryYear: '2003', gradYear: null },
               { name: '年度 不明', entryYear: null, gradYear: null },
               { name: 'カタカナ タロウ', entryYear: 1999, gradYear: 2003 },
+              { name: '昔の 寮生', entryYear: null, gradYear: null, before: true },
               { name: '', entryYear: 2000 },
               null,
             ],
@@ -220,8 +221,10 @@ withSite(PORT, async ({ browser, base }) => {
     const names = await visibleNames(page);
     assert.ok(names.includes(XSS), tag + ': HTML が文字として出ていない');
     assert.ok(names.includes('寮生 <b>太字</b>'));
-    assert.strictEqual(names.length, 4, tag + ': 空の名前を飛ばしていない');
-    assert.deepStrictEqual(await visibleYears(page), ['y1999', 'y2003', 'y-unknown'], tag + ': 年度の並び（不明は最後）がちがう');
+    assert.strictEqual(names.length, 5, tag + ': 空の名前を飛ばしていない');
+    assert.deepStrictEqual(await visibleYears(page), ['y-before', 'y1999', 'y2003', 'y-unknown'], tag + ': 年度の並び（「それ以前」は最初、不明は最後）がちがう');
+    assert.ok((await page.textContent('#y-before .mb-year-head')).includes('それ以前'));
+    assert.ok((await page.textContent('#mb-count')).includes('1999〜2003年度入学'), tag + ': 人数の行に「それ以前」が年度として入った');
     assert.ok((await page.textContent('#y-unknown .mb-year-head')).includes('入学年度不明'));
     assert.strictEqual(await page.$$eval('#y2003 .mb-grad', (els) => els.length), 1, tag + ': 卒業年度が無い人に出ている');
     assert.strictEqual(await page.textContent('#y2003 .mb-grad'), '2007年度卒', tag + ': 卒業年度の書き方がちがう');

@@ -51,6 +51,14 @@ function loadGas(opts = {}) {
       return this;
     }
     setValue(x) { this.sheet.write(this.r, this.c, x); return this; }
+    // 字の色・太さ（sheet.rich に 'r,c' → [{ text, color, bold }] で入れておく。なければ 1 つの黒い字）
+    getRichTextValue() {
+      const runs = this.sheet.rich.get(this.r + ',' + this.c) || [{ text: String(this.sheet.cell(this.r, this.c) == null ? '' : this.sheet.cell(this.r, this.c)), color: '#000000', bold: false }];
+      return {
+        getText: () => runs.map((x) => x.text).join(''),
+        getRuns: () => runs.map((x) => ({ getText: () => x.text, getTextStyle: () => ({ getForegroundColor: () => x.color || '#000000', isBold: () => !!x.bold }) })),
+      };
+    }
     each(fn) { for (let i = 0; i < this.nr; i++) for (let j = 0; j < this.nc; j++) fn(this.r + i, this.c + j); }
     setDataValidation(rule) { this.each((r, c) => this.sheet.validation.set(r + ',' + c, rule)); return this; }
     insertCheckboxes() {
@@ -70,7 +78,7 @@ function loadGas(opts = {}) {
       this.ss = ss; this.name = name; this.id = sheetSeq++;
       this.rows = []; this.maxRows = 1000; this.maxCols = 26;
       this.formulas = new Set(); this.validation = new Map(); this.formats = new Map(); this.display = new Map();
-      this.formUrl = null; this.frozen = 0; this.reads = 0;
+      this.formUrl = null; this.frozen = 0; this.reads = 0; this.rich = new Map();
     }
     // 本物のように：' で始まる文字は ' をとって文字として、= で始まる文字は式として入る。
     // 書式が「書式なしテキスト（@）」でなければ、数・TRUE/FALSE・日付に見える文字は、その形に化ける

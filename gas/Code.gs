@@ -4,9 +4,11 @@
  *   寮生 ─ トップページの投稿フォーム ─ doPost ─ Gemini で整理 ─▶ 年表・名簿・部屋割り シート（そのまま掲載）
  *   サイトは、シートの「掲載」にチェックがある行を doGet / doPost で読む
  *
- *  - setup()  ：最初に 1 回だけ実行する。シートを作る（何度実行しても増えない）
+ *  - setup()  ：最初に 1 回だけ実行する。シートを作る（何度実行しても増えない）。同じ名前で形のちがうシートは「（元）」を付けてよける
+ *  - importAll()：幹事が作った「事件簿」「名簿（元）」「D-1選手権年表」を、サイト用のシートに写す（何度実行しても重ならない）
+ *  - onOpen(e)：スプレッドシートを開くと、メニュー「OB会」が出る（準備・取り込み）
  *  - doGet(e) ：?type=public で名簿・部屋割り（誰でも見られる）
- *  - doPost(e)：type 'timeline' … 年表（Google でログインした、見る権限のある人だけ）
+ *  - doPost(e)：type 'timeline' … 年表と D-1選手権の記録（Google でログインした、見る権限のある人だけ）
  *               type 'post'     … トップページの投稿（事件・名簿の追加と訂正・部屋割り。どれも空欄でよい）
  *  - onEdit(e)：シートを手で直したら、サイト用のキャッシュを消す（すぐ反映されるように）
  *
@@ -23,7 +25,17 @@ const SHEETS = {
   rooms: { name: '部屋割り', headers: ['年度', '部屋', '名前', '掲載', '元の回答', 'メモ'] },
   access: { name: 'メンバー', headers: ['メールアドレス', 'メモ'] },
   posts: { name: '投稿', headers: ['日時', '内容', '結果'] },
+  d1: { name: 'D-1', headers: ['年度', '優勝', '準優勝', '出場メンバー', '主催者', 'レフェリー', '黒子', '補足', '掲載', '元の回答', 'メモ'] },
 };
+
+// 取り込みのもと（幹事が作ったシート。形はそれぞれ。見出しの行は 1〜5 行目のどこか）
+const SOURCES = {
+  jikenbo: { label: '事件簿', names: ['事件簿'], need: ['年月', '事件'] },
+  meibo: { label: '名簿（元）', names: ['名簿（元）', '名簿(元)'], need: ['度', '氏名'] },
+  d1: { label: 'D-1選手権年表', names: ['D-1選手権年表'], need: ['年度', '出場'] },
+};
+const IMPORT_SEC = 270; // 1 回の実行で取り込みに使う時間（Apps Script は 6 分で止まる）
+const IMPORT_BATCH = 20; // Gemini に 1 回で渡す事件の数
 const PUBLISH_COL = '掲載';
 // 文字のまま扱う列（"101" が数字に化けないように）
 const TEXT_COLS = ['ID', '部屋'];
@@ -70,6 +82,7 @@ function setup() {
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
+    Object.keys(SHEETS).forEach(function (k) { moveAside(ss, SHEETS[k]); });
     Object.keys(SHEETS).forEach(function (k) { ensureSheet(ss, SHEETS[k]); });
     removeBlankDefaultSheet(ss);
     props().setProperty('SPREADSHEET_ID', ss.getId());
@@ -91,6 +104,21 @@ function checkOwner(ss) {
   if (owner && me && normEmail(owner) !== normEmail(me)) {
     throw new Error('setup は、このスプレッドシートのオーナー（OB会のアカウント ' + owner + '）でログインして実行してください。いまは ' + me + ' で実行しています。');
   }
+}
+
+// 同じ名前のシートが、サイト用ではない形（1 行目がサイト用の見出しでない）なら、「（元）」を付けてよける。
+// 幹事が前から作っていた「名簿」などを、上書きしないため
+function moveAside(ss, def) {
+  const sh = ss.getSheetByName(def.name);
+  if (!sh || sh.getLastRow() === 0) return;
+  const width = Math.max(1, sh.getLastColumn());
+  const top = sh.getRange(1, 1, 1, width).getValues()[0].map(function (v) { return String(v).trim(); });
+  if (top[0] === def.headers[0] && top.indexOf(PUBLISH_COL) >= 0) return; // サイト用の形
+  if (def.headers.indexOf(PUBLISH_COL) < 0 && top[0] === def.headers[0]) return;
+  let name = def.name + '（元）';
+  for (let i = 2; ss.getSheetByName(name); i++) name = def.name + '（元' + i + '）';
+  sh.setName(name);
+  Logger.log('前からあったシート「' + def.name + '」は「' + name + '」に名前を変えて、そのまま残しました。');
 }
 
 // シートがなければ作り、1 行目に見出しを入れる。「掲載」列はチェックボックスにする
@@ -678,9 +706,12 @@ function doGet(e) {
 
 function publicData(ss) {
   const members = readTable(ss.getSheetByName(SHEETS.members.name)).filter(isPublic).map(function (r) {
-    return { name: cleanLine(r['名前'], 40), entryYear: toYear(r['入学年度']), gradYear: toYear(r['卒業年度'], GRAD_MAX), _row: r._row };
-  }).filter(function (m) { return m.name && m.entryYear != null; });
-  members.sort(function (x, y) { return x.entryYear - y.entryYear || x._row - y._row; });
+    const entryYear = toYear(r['入学年度']);
+    // 「それ以前」（寮の記録より前の入学）は、年度なしで、名簿の最初にまとめて出す
+    const before = entryYear == null && /以前/.test(String(r['入学年度'] == null ? '' : r['入学年度']));
+    return { name: cleanLine(r['名前'], 40), entryYear: entryYear, gradYear: toYear(r['卒業年度'], GRAD_MAX), before: before, _row: r._row };
+  }).filter(function (m) { return m.name && (m.entryYear != null || m.before); });
+  members.sort(function (x, y) { return (x.before ? 0 : x.entryYear) - (y.before ? 0 : y.entryYear) || x._row - y._row; });
 
   const rooms = readTable(ss.getSheetByName(SHEETS.rooms.name)).filter(isPublic).map(function (r) {
     return { year: toYear(r['年度']), room: toRoom(r['部屋']), name: cleanLine(r['名前'], 40), _row: r._row };
@@ -690,7 +721,11 @@ function publicData(ss) {
   return {
     ok: true,
     updated: Utilities.formatDate(new Date(), 'Asia/Tokyo', "yyyy-MM-dd'T'HH:mm:ssXXX"),
-    members: members.map(function (m) { return { name: m.name, entryYear: m.entryYear, gradYear: m.gradYear }; }),
+    members: members.map(function (m) {
+      const o = { name: m.name, entryYear: m.entryYear, gradYear: m.gradYear };
+      if (m.before) o.before = true;
+      return o;
+    }),
     rooms: rooms.map(function (r) { return { year: r.year, room: r.room, name: r.name }; }),
   };
 }
@@ -718,7 +753,7 @@ function doPost(e) {
     const email = verifyIdToken(body.idToken, clientId);
     if (!email) return jsonOut({ ok: false, error: 'invalid_token' });
     if (memberList(ss).indexOf(normEmail(email)) < 0) return jsonOut({ ok: false, error: 'not_member' });
-    return jsonOut({ ok: true, events: publishedEvents(ss) });
+    return jsonOut({ ok: true, events: publishedEvents(ss), d1: publishedD1(ss) });
   } catch (err) {
     Logger.log('doPost：' + errText(err));
     return jsonOut({ ok: false, error: 'server_error' });
@@ -805,6 +840,325 @@ function publishedEvents(ss) {
     return (x.year == null ? 9999 : x.year) - (y.year == null ? 9999 : y.year) || fy(x.month) - fy(y.month) || x._row - y._row;
   });
   return events.map(function (ev) { return { id: ev.id, year: ev.year, month: ev.month, title: ev.title, body: ev.body, tags: ev.tags }; });
+}
+
+// D-1選手権の記録（掲載にチェックした行。年度の順）
+function publishedD1(ss) {
+  const names = function (v) { return splitNames(v).slice(0, 60); };
+  const rows = readTable(ss.getSheetByName(SHEETS.d1.name)).filter(function (r) { return isChecked(r[PUBLISH_COL]); }).map(function (r) {
+    return {
+      year: toYear(r['年度']), winner: names(r['優勝']), second: names(r['準優勝']), members: names(r['出場メンバー']),
+      host: cleanLine(r['主催者'], 100), referee: cleanLine(r['レフェリー'], 100), kuroko: cleanLine(r['黒子'], 100), note: cleanBlock(r['補足'], 1000),
+      _row: r._row,
+    };
+  }).filter(function (d) { return d.year != null || d.members.length || d.winner.length; });
+  rows.sort(function (x, y) { return (x.year == null ? 9999 : x.year) - (y.year == null ? 9999 : y.year) || x._row - y._row; });
+  return rows.map(function (d) { delete d._row; return d; });
+}
+
+// 「三浦、久保・土井」のような文字を、名前の一覧にする（1 つの空白は名前の中の空白として残す）
+function splitNames(v) {
+  const out = [];
+  String(v == null ? '' : v).split(/[、,，・\/／\n]+|\s{2,}|　/).forEach(function (n) {
+    const name = cleanName(n);
+    if (name && out.indexOf(name) < 0) out.push(name);
+  });
+  return out;
+}
+
+// ---- 取り込み：幹事が作ったシート → サイト用のシート ---------------------------
+
+function onOpen() {
+  try {
+    SpreadsheetApp.getUi().createMenu('OB会')
+      .addItem('事件簿・名簿・D-1 を取り込む', 'importAll')
+      .addSeparator()
+      .addItem('準備（シートを作る）', 'setup')
+      .addToUi();
+  } catch (err) { /* メニューが出せないとき（トリガーから呼ばれたなど）は何もしない */ }
+}
+
+// 3 つとも取り込む。何度実行しても、取り込みずみの行はとばす
+function importAll() {
+  const ss = SpreadsheetApp.getActive() || book();
+  if (!ss) throw new Error('スプレッドシートから実行してください');
+  Object.keys(SHEETS).forEach(function (k) { if (!ss.getSheetByName(SHEETS[k].name)) ensureSheet(ss, SHEETS[k]); });
+  const t0 = Date.now();
+  const lines = [];
+  [importJikenbo, importMeibo, importD1].forEach(function (fn) {
+    try {
+      lines.push(fn(ss, t0));
+    } catch (err) {
+      Logger.log(fn.name + '：' + errText(err));
+      lines.push(fn.name + '：エラー（' + errText(err) + '）');
+    }
+  });
+  clearCache();
+  const text = lines.join('\n');
+  Logger.log(text);
+  try { SpreadsheetApp.getUi().alert('取り込み', text, SpreadsheetApp.getUi().ButtonSet.OK); } catch (err) { /* 画面がないとき */ }
+  return text;
+}
+
+// 取り込みのもとのシートと、見出しの行・列を探す（見つからなければ null）
+function findSource(ss, src) {
+  let sheet = null;
+  for (const n of src.names) { sheet = ss.getSheetByName(n); if (sheet) break; }
+  if (!sheet) return null;
+  const last = sheet.getLastRow();
+  const width = sheet.getLastColumn();
+  if (last < 1 || width < 1) return null;
+  const top = sheet.getRange(1, 1, Math.min(5, last), width).getValues();
+  for (let i = 0; i < top.length; i++) {
+    const head = top[i].map(function (v) { return String(v).trim(); });
+    const cols = src.need.map(function (w) { return head.findIndex(function (h) { return h.indexOf(w) >= 0; }); });
+    if (cols.every(function (c) { return c >= 0; })) {
+      const rows = last > i + 1 ? sheet.getRange(i + 2, 1, last - i - 1, width).getValues() : [];
+      return { sheet: sheet, head: head, headRow: i + 1, rows: rows, col: function (w) { return head.findIndex(function (h) { return h.indexOf(w) >= 0; }); } };
+    }
+  }
+  return null;
+}
+
+// サイト用のシートで、もう取り込んだもと（「元の回答」の文字）
+function importedRefs(sheet) {
+  const set = {};
+  readTable(sheet).forEach(function (r) { const v = String(r['元の回答'] || '').trim(); if (v) set[v] = true; });
+  return set;
+}
+
+// 「2003年11月」「2002年2月」「2004年春」「2000〜2001年」→ 年度（4月はじまり）と月
+function fiscalOf(text) {
+  const t = String(text == null ? '' : text).normalize('NFKC').trim();
+  let m = t.match(/^(19\d{2}|20\d{2})\s*年\s*(\d{1,2})\s*月$/);
+  if (m) {
+    const month = toMonth(Number(m[2]));
+    const y = Number(m[1]);
+    return { year: inRange(month != null && month <= 3 ? y - 1 : y), month: month, exact: true };
+  }
+  m = t.match(/^(19\d{2}|20\d{2})\s*年?(?:度)?\s*(春|夏|秋|冬)?$/);
+  if (m) return { year: inRange(Number(m[1])), month: null, exact: true };
+  return { year: looseYear(t), month: null, exact: false };
+}
+
+// 事件簿 → 年表。見出し・本文・タグは Gemini で整える（年度・月はコードで読む）
+function importJikenbo(ss, t0) {
+  const src = findSource(ss, SOURCES.jikenbo);
+  if (!src) return '事件簿：シート「事件簿」（見出しに「年月」「事件」のある表）が見つかりませんでした';
+  const cWhen = src.col('年月'), cWhat = src.col('事件');
+  const sheet = sheetOf(ss, SHEETS.timeline);
+  const done = importedRefs(sheet);
+  const todo = [];
+  src.rows.forEach(function (row, i) {
+    const ref = SOURCES.jikenbo.label + ' ' + (src.headRow + 1 + i) + '行目';
+    const when = cleanLine(row[cWhen] instanceof Date ? Utilities.formatDate(row[cWhen], 'Asia/Tokyo', "yyyy-MM-dd'T'HH:mm:ssXXX").slice(0, 7).replace('-', '年') + '月' : row[cWhen], 100);
+    const lines = cleanBlock(row[cWhat], 5000).split('\n');
+    const checks = lines.filter(function (l) { return /^\s*[［\[]\s*確認\s*[］\]]/.test(l); });
+    const text = lines.filter(function (l) { return checks.indexOf(l) < 0; }).join('\n').trim();
+    if (!text || done[ref]) return;
+    todo.push({ ref: ref, when: when, text: text, checks: checks });
+  });
+  let added = 0, ai = true, stopped = '';
+  for (let i = 0; i < todo.length; i += IMPORT_BATCH) {
+    if ((Date.now() - t0) / 1000 > IMPORT_SEC) { stopped = '時間切れ'; break; }
+    const batch = todo.slice(i, i + IMPORT_BATCH);
+    let byRow = {};
+    let fail = '';
+    try {
+      const g = callGemini(jikenboPrompt(batch), JIKENBO_SCHEMA);
+      (Array.isArray(g.items) ? g.items : []).forEach(function (it) { if (it && it.n != null) byRow[it.n] = it; });
+    } catch (err) {
+      fail = errText(err);
+      if (/HTTP 429/.test(fail)) { stopped = 'Gemini が混んでいる（' + fail + '）'; break; }
+      ai = false;
+      byRow = {};
+    }
+    withLock(function () {
+      batch.forEach(function (b, k) {
+        const g = byRow[k + 1] || {};
+        const f = fiscalOf(b.when);
+        const notes = [];
+        let year = f.year, month = f.month;
+        if (year == null && g.year != null) year = toYear(g.year);
+        if (month == null && g.month != null && !f.exact) month = toMonth(g.month);
+        if (!f.exact && b.when) notes.push('年月（原文）：' + b.when);
+        b.checks.forEach(function (c) { notes.push(cleanLine(c, 300)); });
+        const first = b.text.split('\n')[0];
+        let title = cut(cleanLine(g.title, 200), 30);
+        let body = cleanBlock(g.body, 5000);
+        if (!title) title = cut(cleanLine(first, 200), 30);
+        if (!body) body = b.text === title ? '' : b.text;
+        if (fail) notes.unshift(GEMINI_FAIL + '（' + fail + '）');
+        appendRecord(sheet, {
+          'ID': nextEventId(sheet), '年度': year, '月': month, '見出し': title, '本文': body, 'タグ': cleanTags(g.tags).join('、'),
+          '掲載': true, '元の回答': b.ref, 'メモ': notes.join('／'),
+        });
+        added++;
+      });
+    });
+  }
+  const rest = todo.length - added;
+  return '事件簿 → 年表：' + added + ' 件を入れました' + (ai ? '' : '（Gemini を使えなかった分は、原文のまま）') +
+    (rest > 0 ? '。のこり ' + rest + ' 件は、' + (stopped || '途中で止まった') + 'ので、もう一度「取り込む」を実行してください' : '');
+}
+
+const JIKENBO_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    items: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          n: { type: 'INTEGER', description: '入力の番号' },
+          year: { type: 'INTEGER', nullable: true, description: '年度（西暦）。分からなければ null' },
+          month: { type: 'INTEGER', nullable: true, description: '月（1〜12）。分からなければ null' },
+          title: { type: 'STRING', description: '見出し（30字以内）' },
+          body: { type: 'STRING', description: '本文' },
+          tags: { type: 'ARRAY', items: { type: 'STRING' }, description: '短いタグ（3つまで）' },
+        },
+        required: ['n', 'year', 'month', 'title', 'body', 'tags'],
+      },
+    },
+  },
+  required: ['items'],
+};
+
+function jikenboPrompt(batch) {
+  return '寮の事件簿の行を、年表の項目に整理してください。入力 1 つにつき、同じ番号 n の項目を 1 つ返す。\n' +
+    '- title：見出し。30 字以内。もとの文の言い方をできるだけ生かす（短ければ、そのままでよい）。\n' +
+    '- body：本文。もとの文の事実・名前・言い回しを変えない。見出しと同じだけの短い文なら空にする。書かれていないことを足さない。\n' +
+    '- year・month：年月から。年度は 4 月はじまり（1〜3 月は前の年の年度）。分からなければ null。\n' +
+    '- tags：内容を表す短い言葉を 3 つまで（例：新歓、学祭、節分、追いコン、屋上、食堂、車、警察）。\n\n' +
+    '入力（JSON）：\n' + JSON.stringify(batch.map(function (b, i) { return { n: i + 1, 年月: b.when, 文: b.text }; }));
+}
+
+// 名簿（元）→ 名簿。1 行に「度（入学年度）」と、「、」で区切った名前。年度が空の行は、上の行の年度
+function importMeibo(ss) {
+  const src = findSource(ss, SOURCES.meibo);
+  if (!src) return '名簿：シート「名簿（元）」（見出しに「度」「氏名」のある表）が見つかりませんでした';
+  const cYear = src.col('度'), cName = src.col('氏名');
+  const sheet = sheetOf(ss, SHEETS.members);
+  const have = {};
+  readTable(sheet).forEach(function (r) { have[normName(r['名前']) + '|' + String(r['入学年度'] == null ? '' : r['入学年度']).trim()] = true; });
+  let added = 0, same = 0;
+  let curYear = '';
+  withLock(function () {
+    src.rows.forEach(function (row, i) {
+      const raw = cleanLine(row[cYear], 40);
+      if (raw) curYear = raw;
+      const names = splitNames(row[cName]);
+      if (!names.length) return;
+      const y = toYear(curYear);
+      const yearCell = y != null ? y : /以前/.test(curYear) ? 'それ以前' : '';
+      const note = y == null && yearCell === '' && curYear ? '入学年度（原文）：' + curYear : '';
+      names.forEach(function (name) {
+        const key = normName(name) + '|' + yearCell;
+        if (have[key]) { same++; return; }
+        have[key] = true;
+        appendRecord(sheet, {
+          '名前': name, '入学年度': yearCell, '卒業年度': '', '掲載': true,
+          '元の回答': SOURCES.meibo.label + ' ' + (src.headRow + 1 + i) + '行目', 'メモ': note,
+        });
+        added++;
+      });
+    });
+  });
+  return '名簿（元）→ 名簿：' + added + ' 人を入れました' + (same ? '（' + same + ' 人は、もう入っていたのでとばしました）' : '');
+}
+
+// D-1選手権年表 → D-1。出場メンバーの赤い字の人を優勝、太字の人を準優勝とする
+function importD1(ss) {
+  const src = findSource(ss, SOURCES.d1);
+  if (!src) return 'D-1：シート「D-1選手権年表」（見出しに「年度」「出場」のある表）が見つかりませんでした';
+  const cYear = src.col('年度'), cMem = src.col('出場');
+  const cInfo = src.head.findIndex(function (h) { return /主催|補足/.test(h); });
+  const sheet = sheetOf(ss, SHEETS.d1);
+  const done = importedRefs(sheet);
+  let added = 0;
+  withLock(function () {
+    src.rows.forEach(function (row, i) {
+      const r = src.headRow + 1 + i;
+      const ref = SOURCES.d1.label + ' ' + r + '行目';
+      if (done[ref]) return;
+      const yearText = cleanLine(row[cYear], 40);
+      const mem = memberStyles(src.sheet.getRange(r, cMem + 1));
+      if (!yearText && !mem.members.length) return;
+      const info = cInfo >= 0 ? splitInfo(row[cInfo]) : { host: '', referee: '', kuroko: '', note: '' };
+      const y = toYear(yearText);
+      appendRecord(sheet, {
+        '年度': y, '優勝': mem.winner.join('、'), '準優勝': mem.second.join('、'), '出場メンバー': mem.members.join('、'),
+        '主催者': info.host, 'レフェリー': info.referee, '黒子': info.kuroko, '補足': info.note,
+        '掲載': true, '元の回答': ref, 'メモ': y == null && yearText ? '年度（原文）：' + yearText : '',
+      });
+      added++;
+    });
+  });
+  return 'D-1選手権年表 → D-1：' + added + ' 年分を入れました';
+}
+
+// 出場メンバーのマスの、名前ごとの字の色・太さ
+function memberStyles(range) {
+  const out = { members: [], winner: [], second: [] };
+  let rich = null;
+  try { rich = range.getRichTextValue(); } catch (err) { rich = null; }
+  const runs = rich ? rich.getRuns() : [];
+  // 文字ごとの印（r：赤、b：太字）
+  let text = '';
+  const marks = [];
+  if (runs.length) {
+    runs.forEach(function (run) {
+      const t = run.getText();
+      const st = run.getTextStyle();
+      const red = isRed(st && st.getForegroundColor ? st.getForegroundColor() : '');
+      const bold = !!(st && st.isBold && st.isBold());
+      for (let k = 0; k < t.length; k++) marks.push(red ? 'r' : bold ? 'b' : '');
+      text += t;
+    });
+  } else {
+    text = String(range.getValue() == null ? '' : range.getValue());
+    for (let k = 0; k < text.length; k++) marks.push('');
+  }
+  const re = /[^、,，・\/／\n　]+/g;
+  let m;
+  while ((m = re.exec(text))) {
+    const name = cleanName(m[0]);
+    if (!name || out.members.indexOf(name) >= 0) continue;
+    const lead = m.index + (m[0].length - m[0].replace(/^\s+/, '').length);
+    out.members.push(name);
+    if (marks[lead] === 'r') out.winner.push(name);
+    else if (marks[lead] === 'b') out.second.push(name);
+  }
+  return out;
+}
+
+function isRed(color) {
+  const m = String(color || '').match(/^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+  if (!m) return false;
+  const r = parseInt(m[1], 16), g = parseInt(m[2], 16), b = parseInt(m[3], 16);
+  return r >= 160 && g <= 110 && b <= 110;
+}
+
+// 「久保田／レフェリー：久保田、黒子：山口」→ 主催者・レフェリー・黒子・補足
+function splitInfo(v) {
+  const out = { host: [], referee: [], kuroko: [], note: [] };
+  let cur = 'host';
+  String(v == null ? '' : v).normalize('NFKC').split(/[／\/、,\n]+/).forEach(function (part) {
+    const t = part.trim();
+    if (!t) return;
+    const m = t.match(/^([^:：]{1,12})\s*[:：]\s*(.*)$/);
+    if (m) {
+      const label = m[1].trim();
+      cur = /レフェリー|レフリー|審判/.test(label) ? 'referee' : /黒子/.test(label) ? 'kuroko' : /主催/.test(label) ? 'host' : '';
+      if (!cur) { out.note.push(label + '：' + m[2].trim()); cur = 'note'; return; }
+      if (m[2].trim()) out[cur].push(m[2].trim());
+      return;
+    }
+    // ラベルのない最初の文：名前に見える（漢字・カタカナ・英字だけで短い）なら主催者、ちがえば補足
+    if (cur === 'host' && !out.host.length && !/^[\u4e00-\u9fff々〆ヵヶァ-ヴーA-Za-z\s]{1,10}$/.test(t)) { out.note.push(t); return; }
+    (out[cur] || out.note).push(t);
+  });
+  return { host: out.host.join('、'), referee: out.referee.join('、'), kuroko: out.kuroko.join('、'), note: out.note.join('、') };
 }
 
 // ---- onEdit：手で直したら、すぐサイトに出るようにキャッシュを消す ------------

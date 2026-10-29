@@ -229,7 +229,7 @@ test('doPost：閲覧者として共有された人には、掲載した事件�
   const text = o.getContent();
   const d = out(o);
   assert.strictEqual(d.ok, true);
-  assert.deepStrictEqual(Object.keys(d).sort(), ['events', 'ok']);
+  assert.deepStrictEqual(Object.keys(d).sort(), ['d1', 'events', 'ok']);
   assert.deepStrictEqual(d.events, [
     { id: 'e4', year: 2004, month: 11, title: '学祭', body: '焼きそば。', tags: ['学祭', '模擬店'] },
     { id: 'e5', year: 2004, month: 3, title: '追いコン', body: '泣いた。', tags: [] },
@@ -786,6 +786,172 @@ test('メンバー：「名前 <アドレス>」・mailto:・全角の＠・「�
   const e4 = tokenEnv({ info: goodInfo('senpaia@example.com') }); // Gmail 以外は . を無視しない
   e4.ss.getSheetByName('メンバー').appendRow(['senpai.a@example.com', '']);
   assert.strictEqual(post(e4, { type: 'timeline', idToken: TOKEN }).error, 'not_member');
+});
+
+// ---- 取り込み（幹事が作った「事件簿」「名簿」「D-1選手権年表」） ----
+// 幹事のシートは 1 行目が空で、2 行目が見出し、A 列は空（持ち主の画面のとおり）
+function ownerSheets(ss) {
+  // 本物と同じ行・列に入れる（空の 1 行目も、行として数える）
+  const put = (sh, rows) => rows.forEach((row, i) => row.forEach((v, j) => { if (v !== '') sh.write(i + 1, j + 1, v); }));
+  const jk = ss.insertSheet('事件簿');
+  put(jk, [
+    ['', '', ''],
+    ['', '年月', '事件・出来事／補足'],
+    ['', '1971年3月', '男子寮完成'],
+    ['', '1999年', '先輩A、けつけられ事件\n［確認］「けつけられ」は音声のまま（要確認）'],
+    ['', '2000〜2001年', '同期B、車をかついで帰る事件'],
+    ['', '2002年2月', 'ゴールデンエイジ入寮面接'],
+    ['', '2004年春', 'さくらんぼ事件'],
+    ['', '', ''],
+  ]);
+  const mb = ss.insertSheet('名簿');
+  put(mb, [
+    ['', '', ''],
+    ['', '度', '氏名（印刷・口頭追記）'],
+    ['', 'それ以前', '田浦'],
+    ['', 1987, '六浦 一郎、金沢 二郎・八景三郎'],
+    ['', '', '瀬戸 四郎'],
+    ['', '1988年度', ''],
+  ]);
+  const d1 = ss.insertSheet('D-1選手権年表');
+  put(d1, [
+    ['', '', '', ''],
+    ['', '年度', '出場メンバー', '主催者・補足'],
+    ['', 'D-1-2004', '三浦、久保、土井、千坂', '先輩A／レフェリー：先輩A、黒子：先輩B'],
+    ['', 'D-1-2005', '土井、千坂', '雨で中止になりかけた'],
+  ]);
+  d1.rich.set('3,3', [{ text: '三浦', color: '#ff0000', bold: true }, { text: '、', color: '#000000' }, { text: '久保', bold: true }, { text: '、土井、千坂', color: '#000000' }]);
+  return { jk, mb, d1 };
+}
+
+test('setup：前からある「名簿」（形がちがう）は「名簿（元）」によけて、サイト用の「名簿」を作る', () => {
+  const env = loadGas();
+  ownerSheets(env.ss);
+  env.ctx.setup();
+  const old = env.ss.getSheetByName('名簿（元）');
+  assert.ok(old, 'よけたシート');
+  assert.strictEqual(old.cell(4, 3), '六浦 一郎、金沢 二郎・八景三郎', '中身はそのまま');
+  assert.deepStrictEqual(env.ss.getSheetByName('名簿').header(), ['名前', '入学年度', '卒業年度', '掲載', '元の回答', 'メモ']);
+  assert.ok(env.ss.getSheetByName('事件簿') && env.ss.getSheetByName('D-1選手権年表'), 'ほかの元のシートはそのまま');
+  assert.deepStrictEqual(env.ss.getSheetByName('D-1').header(), ['年度', '優勝', '準優勝', '出場メンバー', '主催者', 'レフェリー', '黒子', '補足', '掲載', '元の回答', 'メモ']);
+  assert.ok(env.logs.join('\n').includes('名簿（元）'));
+  // 2 回目：サイト用の「名簿」はよけない
+  env.ss.getSheetByName('名簿').appendRow(['夕照 一郎', 2003, '', true, '', '']);
+  env.ctx.setup();
+  assert.ok(!env.ss.getSheetByName('名簿（元2）'));
+  assert.strictEqual(env.ss.getSheetByName('名簿').getLastRow(), 2);
+});
+
+test('取り込み：事件簿 → 年表（年度・月はコードで、見出し・本文・タグは Gemini。［確認］はメモ）。2 回目は重ならない', () => {
+  const seen = [];
+  const env = loadGas({ props: { GEMINI_API_KEY: 'k' }, fetch: (url, p) => {
+    const body = JSON.parse(p.payload);
+    seen.push(body);
+    const items = JSON.parse(body.contents[0].parts[0].text.split('入力（JSON）：\n')[1]);
+    return geminiOk({ items: items.map((it) => ({ n: it.n, year: 1990, month: 7, title: '見出し' + it.n, body: it.文 + '。', tags: ['寮'] })) });
+  } });
+  ownerSheets(env.ss);
+  env.ctx.setup();
+  const msg = env.ctx.importAll();
+  assert.ok(msg.includes('事件簿 → 年表：5 件'), msg);
+  const t = env.ss.getSheetByName('年表');
+  const rows = t.table().map((r, i) => rec(t, i + 2));
+  assert.strictEqual(rows.length, 5);
+  assert.deepStrictEqual(rows.map((r) => [r['年度'], r['月']]), [[1970, 3], [1999, ''], [2000, 7], [2001, 2], [2004, '']], '年度は 4 月はじまり（1971年3月 → 1970、2002年2月 → 2001）。決まった形の年月はコードで読み、Gemini の月は使わない。決まった形でないときだけ Gemini の読みを足す');
+  assert.strictEqual(rows[1]['本文'], '先輩A、けつけられ事件。');
+  assert.ok(!rows[1]['本文'].includes('確認'), '［確認］は本文に入れない');
+  assert.ok(rows[1]['メモ'].includes('［確認］「けつけられ」は音声のまま'));
+  assert.ok(rows[2]['メモ'].includes('年月（原文）：2000〜2001年'));
+  assert.ok(rows.every((r) => r['掲載'] === true && r['見出し'].startsWith('見出し') && r['タグ'] === '寮'));
+  assert.strictEqual(rows[0]['元の回答'], '事件簿 3行目');
+  assert.strictEqual(rows[0].ID, 'e1');
+  assert.ok(!JSON.stringify(seen).includes('音声のまま'), '［確認］の行は Gemini に送らない');
+  // もう一度：重ならない。事件簿に足した行だけ入る
+  env.ss.getSheetByName('事件簿').write(10, 2, '2005年4月');
+  env.ss.getSheetByName('事件簿').write(10, 3, '新しい事件');
+  const msg2 = env.ctx.importAll();
+  assert.ok(msg2.includes('事件簿 → 年表：1 件'), msg2);
+  assert.strictEqual(t.getLastRow(), 7);
+  assert.strictEqual(rec(t, 7)['年度'], 2005);
+});
+
+test('取り込み：事件簿で Gemini が使えないとき・混んでいるとき', () => {
+  const env = loadGas({ props: {} }); // キーなし
+  ownerSheets(env.ss);
+  env.ctx.setup();
+  env.ctx.importAll();
+  const t = env.ss.getSheetByName('年表');
+  assert.strictEqual(t.getLastRow(), 6);
+  const r = rec(t, 3);
+  assert.strictEqual(r['見出し'], '先輩A、けつけられ事件');
+  assert.strictEqual(r['本文'], '', '1 行だけなら本文は空（見出しと同じ）');
+  assert.ok(r['メモ'].startsWith('Gemini失敗'));
+  // 429：入れずに止まる。あとでもう一度やれば続きから
+  const env2 = loadGas({ props: { GEMINI_API_KEY: 'k' }, fetch: () => ({ code: 429, body: {} }) });
+  ownerSheets(env2.ss);
+  env2.ctx.setup();
+  const msg = env2.ctx.importAll();
+  assert.ok(msg.includes('0 件') && msg.includes('のこり 5 件') && msg.includes('もう一度'), msg);
+  assert.strictEqual(env2.ss.getSheetByName('年表').getLastRow(), 1);
+});
+
+test('取り込み：名簿（元）→ 名簿（「、」「・」で分ける。年度が空なら上の年度。「それ以前」は名簿の最初に）', () => {
+  const env = loadGas({ props: {} });
+  ownerSheets(env.ss);
+  env.ctx.setup();
+  const msg = env.ctx.importAll();
+  assert.ok(msg.includes('5 人'), msg);
+  const m = env.ss.getSheetByName('名簿');
+  assert.deepStrictEqual(m.table().map((r) => r.slice(0, 4)), [
+    ['田浦', 'それ以前', '', true], ['六浦 一郎', 1987, '', true], ['金沢 二郎', 1987, '', true], ['八景三郎', 1987, '', true], ['瀬戸 四郎', 1987, '', true],
+  ]);
+  assert.strictEqual(rec(m, 2)['元の回答'], '名簿（元） 3行目');
+  const d = out(env.ctx.doGet({ parameter: { type: 'public' } }));
+  assert.deepStrictEqual(d.members[0], { name: '田浦', entryYear: null, gradYear: null, before: true }, '「それ以前」は最初に、before 付きで');
+  assert.deepStrictEqual(d.members[1], { name: '六浦 一郎', entryYear: 1987, gradYear: null });
+  assert.strictEqual(d.members.length, 5);
+  // 2 回目は増えない
+  env.ctx.importAll();
+  assert.strictEqual(m.getLastRow(), 6);
+});
+
+test('取り込み：D-1選手権年表 → D-1（赤い字は優勝、太字は準優勝）。年表と同じログインで読める', () => {
+  const env = loadGas({ props: { CLIENT_ID: CID }, viewers: ['viewer@example.com'], fetch: (url) => {
+    if (url.startsWith('https://oauth2.googleapis.com/tokeninfo')) return { code: 200, body: goodInfo() };
+    return { code: 500, body: {} };
+  } });
+  ownerSheets(env.ss);
+  env.ctx.setup();
+  const msg = env.ctx.importAll();
+  assert.ok(msg.includes('D-1：2 年分') || msg.includes('→ D-1：2 年分'), msg);
+  const sh = env.ss.getSheetByName('D-1');
+  const r = rec(sh, 2);
+  assert.strictEqual(r['年度'], 2004);
+  assert.strictEqual(r['優勝'], '三浦');
+  assert.strictEqual(r['準優勝'], '久保');
+  assert.strictEqual(r['出場メンバー'], '三浦、久保、土井、千坂');
+  assert.strictEqual(r['主催者'], '先輩A');
+  assert.strictEqual(r['レフェリー'], '先輩A');
+  assert.strictEqual(r['黒子'], '先輩B');
+  assert.strictEqual(r['掲載'], true);
+  assert.strictEqual(rec(sh, 3)['補足'], '雨で中止になりかけた', 'ラベルのない文で、名前に見えない（ひらがながある）ものは補足');
+  assert.strictEqual(rec(sh, 3)['主催者'], '');
+  const res = post(env, { type: 'timeline', idToken: TOKEN });
+  assert.strictEqual(res.ok, true);
+  assert.deepStrictEqual(res.d1[0], { year: 2004, winner: ['三浦'], second: ['久保'], members: ['三浦', '久保', '土井', '千坂'], host: '先輩A', referee: '先輩A', kuroko: '先輩B', note: '' });
+  assert.strictEqual(res.d1.length, 2);
+  // 掲載を外すと出ない。2 回目の取り込みでは増えない
+  sh.write(3, col(sh, '掲載') + 1, false);
+  env.ctx.importAll();
+  assert.strictEqual(sh.getLastRow(), 3);
+  assert.strictEqual(post(env, { type: 'timeline', idToken: TOKEN }).d1.length, 1);
+});
+
+test('取り込み：もとのシートがないときは、そう言うだけ', () => {
+  const env = freshSetup();
+  const msg = env.ctx.importAll();
+  assert.ok(msg.includes('「事件簿」') && msg.includes('「名簿（元）」') && msg.includes('「D-1選手権年表」'), msg);
+  assert.strictEqual(env.ss.getSheetByName('年表').getLastRow(), 1);
 });
 
 // ---- 実行 ----

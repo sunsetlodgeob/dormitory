@@ -67,22 +67,26 @@
       if (!m || m.name == null) continue;
       const name = String(m.name).trim();
       if (!name) continue;
-      const y = cleanYear(m.entryYear);
+      // 「それ以前」（記録より前の入学）は BEFORE のまとまりへ
+      const y = m.before === true ? BEFORE : cleanYear(m.entryYear);
       if (!map.has(y)) map.set(y, []);
       map.get(y).push({ name, grad: cleanYear(m.gradYear) });
     }
-    // 年度の古い順。年度のわからない人は最後
-    const years = [...map.keys()].sort((a, b) => (a == null) - (b == null) || a - b);
+    // 「それ以前」が最初、あとは年度の古い順。年度のわからない人は最後
+    const rank = (y) => (y === BEFORE ? -1 : y == null ? 1e9 : y);
+    const years = [...map.keys()].sort((a, b) => rank(a) - rank(b));
     return years.map((y) => ({ year: y, people: map.get(y) }));
   }
+  const BEFORE = 'before';
+  const idOf = (y) => (y === BEFORE ? 'y-before' : y == null ? 'y-unknown' : 'y' + y);
 
   function render(members) {
     const gs = group(members);
     total = 0;
     const html = gs.map((g) => {
-      const id = g.year == null ? 'y-unknown' : 'y' + g.year;
-      const label = g.year == null ? '入学年度不明' : g.year + '年度入学';
-      const era = g.year == null ? '' : wareki(g.year);
+      const id = idOf(g.year);
+      const label = g.year === BEFORE ? 'それ以前' : g.year == null ? '入学年度不明' : g.year + '年度入学';
+      const era = g.year === BEFORE || g.year == null ? '' : wareki(g.year);
       total += g.people.length;
       const lis = g.people.map((p) =>
         '<li class="mb-person"><span class="mb-name">' + OB.esc(p.name) + '</span>' +
@@ -97,12 +101,12 @@
 
     // さがすときに使う形を、あらかじめ作っておく
     groups = gs.map((g) => {
-      const id = g.year == null ? 'y-unknown' : 'y' + g.year;
+      const id = idOf(g.year);
       const section = document.getElementById(id);
       const lis = section.querySelectorAll('.mb-person');
       return {
         year: g.year, id,
-        label: g.year == null ? '年度不明' : g.year + '年度',
+        label: g.year === BEFORE ? 'それ以前' : g.year == null ? '年度不明' : g.year + '年度',
         section, countEl: section.querySelector('.mb-year-count'),
         items: g.people.map((p, i) => ({ key: norm(p.name), li: lis[i] })),
         size: g.people.length,
@@ -136,7 +140,7 @@
     }
     el.clear.hidden = !raw;
     if (!q) {
-      const ys = groups.filter((g) => g.year != null).map((g) => g.year);
+      const ys = groups.filter((g) => typeof g.year === 'number').map((g) => g.year);
       el.count.textContent = '全 ' + total + '人' +
         (ys.length ? '（' + ys[0] + (ys.length > 1 ? '〜' + ys[ys.length - 1] : '') + '年度入学）' : '');
     } else {
