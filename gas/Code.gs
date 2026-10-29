@@ -871,11 +871,31 @@ function splitNames(v) {
 function onOpen() {
   try {
     SpreadsheetApp.getUi().createMenu('OB会')
+      .addItem('Gemini のキーを確かめる', 'checkGemini')
       .addItem('事件簿・名簿・D-1 を取り込む', 'importAll')
       .addSeparator()
       .addItem('準備（シートを作る）', 'setup')
       .addToUi();
   } catch (err) { /* メニューが出せないとき（トリガーから呼ばれたなど）は何もしない */ }
+}
+
+// Gemini のキーで、AI に返事をもらえるか確かめる（取り込みの前に）
+function checkGemini() {
+  let text;
+  try {
+    const g = callGemini('「OK」とだけ返してください。JSON の answer に入れる。', { type: 'OBJECT', properties: { answer: { type: 'STRING' } }, required: ['answer'] });
+    text = 'Gemini のキーは使えます（返事：' + cleanLine(g.answer, 20) + '）。取り込みに進めます。';
+  } catch (err) {
+    const why = errText(err);
+    text = 'Gemini のキーが使えません（' + why + '）。' + (
+      /未設定/.test(why) ? 'スクリプト プロパティ GEMINI_API_KEY を入れてください。'
+        : /HTTP 4(00|01|03)/.test(why) ? 'GEMINI_API_KEY の値が、AI Studio の「キーをコピー」でとった文字と同じか確かめてください。'
+          : /HTTP 429/.test(why) ? '混んでいるか、無料枠の回数の上限です。少しおいて、もう一度ためしてください。'
+            : '少しおいて、もう一度ためしてください。');
+  }
+  Logger.log(text);
+  try { SpreadsheetApp.getUi().alert('Gemini のキー', text, SpreadsheetApp.getUi().ButtonSet.OK); } catch (err) { /* 画面がないとき */ }
+  return text;
 }
 
 // 3 つとも取り込む。何度実行しても、取り込みずみの行はとばす
@@ -958,7 +978,7 @@ function importJikenbo(ss, t0) {
     if (!text || done[ref]) return;
     todo.push({ ref: ref, when: when, text: text, checks: checks });
   });
-  let added = 0, ai = true, stopped = '';
+  let added = 0, stopped = '';
   for (let i = 0; i < todo.length; i += IMPORT_BATCH) {
     if ((Date.now() - t0) / 1000 > IMPORT_SEC) { stopped = '時間切れ'; break; }
     const batch = todo.slice(i, i + IMPORT_BATCH);
@@ -968,10 +988,10 @@ function importJikenbo(ss, t0) {
       const g = callGemini(jikenboPrompt(batch), JIKENBO_SCHEMA);
       (Array.isArray(g.items) ? g.items : []).forEach(function (it) { if (it && it.n != null) byRow[it.n] = it; });
     } catch (err) {
+      // 原文のまま入れると、あとで AI で整えなおせないので、入れずに止める（キーを直して、もう一度）
       fail = errText(err);
-      if (/HTTP 429/.test(fail)) { stopped = 'Gemini が混んでいる（' + fail + '）'; break; }
-      ai = false;
-      byRow = {};
+      stopped = /HTTP 429/.test(fail) ? 'Gemini が混んでいる（' + fail + '）' : 'Gemini が使えなかった（' + fail + '。メニュー「Gemini のキーを確かめる」で確かめてください）';
+      break;
     }
     withLock(function () {
       batch.forEach(function (b, k) {
@@ -988,7 +1008,6 @@ function importJikenbo(ss, t0) {
         let body = cleanBlock(g.body, 5000);
         if (!title) title = cut(cleanLine(first, 200), 30);
         if (!body) body = b.text === title ? '' : b.text;
-        if (fail) notes.unshift(GEMINI_FAIL + '（' + fail + '）');
         appendRecord(sheet, {
           'ID': nextEventId(sheet), '年度': year, '月': month, '見出し': title, '本文': body, 'タグ': cleanTags(g.tags).join('、'),
           '掲載': true, '元の回答': b.ref, 'メモ': notes.join('／'),
@@ -998,7 +1017,7 @@ function importJikenbo(ss, t0) {
     });
   }
   const rest = todo.length - added;
-  return '事件簿 → 年表：' + added + ' 件を入れました' + (ai ? '' : '（Gemini を使えなかった分は、原文のまま）') +
+  return '事件簿 → 年表：' + added + ' 件を入れました' +
     (rest > 0 ? '。のこり ' + rest + ' 件は、' + (stopped || '途中で止まった') + 'ので、もう一度「取り込む」を実行してください' : '');
 }
 

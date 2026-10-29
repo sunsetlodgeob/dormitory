@@ -875,24 +875,36 @@ test('取り込み：事件簿 → 年表（年度・月はコードで、見出
   assert.strictEqual(rec(t, 7)['年度'], 2005);
 });
 
-test('取り込み：事件簿で Gemini が使えないとき・混んでいるとき', () => {
+test('取り込み：事件簿で Gemini が使えないとき・混んでいるときは、入れずに止まる（あとで続きから）', () => {
   const env = loadGas({ props: {} }); // キーなし
   ownerSheets(env.ss);
   env.ctx.setup();
-  env.ctx.importAll();
-  const t = env.ss.getSheetByName('年表');
-  assert.strictEqual(t.getLastRow(), 6);
-  const r = rec(t, 3);
-  assert.strictEqual(r['見出し'], '先輩A、けつけられ事件');
-  assert.strictEqual(r['本文'], '', '1 行だけなら本文は空（見出しと同じ）');
-  assert.ok(r['メモ'].startsWith('Gemini失敗'));
-  // 429：入れずに止まる。あとでもう一度やれば続きから
+  const msg = env.ctx.importAll();
+  assert.ok(msg.includes('事件簿 → 年表：0 件') && msg.includes('のこり 5 件') && msg.includes('Gemini のキーを確かめる'), msg);
+  assert.strictEqual(env.ss.getSheetByName('年表').getLastRow(), 1, '原文のままは入れない');
+  assert.strictEqual(env.ss.getSheetByName('名簿').getLastRow(), 6, '名簿と D-1 は AI を使わないので入る');
+  // 429
   const env2 = loadGas({ props: { GEMINI_API_KEY: 'k' }, fetch: () => ({ code: 429, body: {} }) });
   ownerSheets(env2.ss);
   env2.ctx.setup();
-  const msg = env2.ctx.importAll();
-  assert.ok(msg.includes('0 件') && msg.includes('のこり 5 件') && msg.includes('もう一度'), msg);
-  assert.strictEqual(env2.ss.getSheetByName('年表').getLastRow(), 1);
+  const msg2 = env2.ctx.importAll();
+  assert.ok(msg2.includes('0 件') && msg2.includes('混んでいる') && msg2.includes('もう一度'), msg2);
+  // キーを直したら、続きから全部入る
+  env2.setFetch((url, p) => {
+    const items = JSON.parse(JSON.parse(p.payload).contents[0].parts[0].text.split('入力（JSON）：\n')[1]);
+    return geminiOk({ items: items.map((it) => ({ n: it.n, year: null, month: null, title: it.文.split('\n')[0], body: '', tags: [] })) });
+  });
+  assert.ok(env2.ctx.importAll().includes('事件簿 → 年表：5 件'));
+});
+
+test('Gemini のキーを確かめる', () => {
+  const ok = loadGas({ props: { GEMINI_API_KEY: 'k' }, fetch: () => geminiOk({ answer: 'OK' }) });
+  assert.ok(ok.ctx.checkGemini().includes('使えます'));
+  const none = loadGas({ props: {} });
+  assert.ok(none.ctx.checkGemini().includes('GEMINI_API_KEY を入れて'));
+  const bad = loadGas({ props: { GEMINI_API_KEY: 'x' }, fetch: () => ({ code: 400, body: { error: { message: 'API key not valid' } } }) });
+  const t = bad.ctx.checkGemini();
+  assert.ok(t.includes('HTTP 400') && t.includes('キーをコピー'), t);
 });
 
 test('取り込み：名簿（元）→ 名簿（「、」「・」で分ける。年度が空なら上の年度。「それ以前」は名簿の最初に）', () => {
