@@ -121,6 +121,7 @@ function loadGas(opts = {}) {
       return m;
     }
     getMaxRows() { return this.maxRows; }
+    insertRowsAfter(after, n) { this.maxRows += n; return this; }
     getMaxColumns() { return this.maxCols; }
     getRange(r, c, nr = 1, nc = 1) {
       if (r < 1 || c < 1 || nr < 1 || nc < 1 || r + nr - 1 > this.maxRows) throw new Error('getRange: シートの外です ' + [r, c, nr, nc]);

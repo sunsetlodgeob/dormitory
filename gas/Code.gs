@@ -191,11 +191,30 @@ function appendRecord(sheet, rec) {
     // ID・部屋はコードが作る決まった形（e12・305）。書式なしテキストの列なので ' は付けない
     return TEXT_COLS.indexOf(h) >= 0 && /^\w+$/.test(String(rec[h])) ? String(rec[h]) : toCell(rec[h]);
   });
-  sheet.appendRow(row);
-  const at = sheet.getLastRow();
+  // appendRow は使わない：「掲載」のチェックボックス（チェックなし＝FALSE）が 1000 行目まであると、
+  // シートの最後の行が 1000 行目とみなされて、1001 行目に足されてしまうため
   const pub = heads.indexOf(PUBLISH_COL);
+  const at = lastContentRow(sheet, pub) + 1;
+  if (at > sheet.getMaxRows()) sheet.insertRowsAfter(sheet.getMaxRows(), 100);
+  sheet.getRange(at, 1, 1, row.length).setValues([row]);
   if (pub >= 0) sheet.getRange(at, pub + 1).insertCheckboxes().setValue(rec[PUBLISH_COL] === true);
   return at;
+}
+
+// 中身のある最後の行（「掲載」の列のチェックボックスだけの行は、中身なしとみなす）
+function lastContentRow(sheet, pubCol) {
+  const last = sheet.getLastRow();
+  if (last < 2) return Math.max(1, last);
+  const width = Math.max(1, sheet.getLastColumn());
+  const values = sheet.getRange(1, 1, last, width).getValues();
+  for (let r = values.length - 1; r >= 1; r--) {
+    const row = values[r];
+    for (let c = 0; c < row.length; c++) {
+      if (c === pubCol) continue;
+      if (row[c] !== '' && row[c] != null && row[c] !== false) return r + 1;
+    }
+  }
+  return 1;
 }
 
 // 見出しの名前で、1 つのマスを書きかえる

@@ -966,6 +966,32 @@ test('取り込み：もとのシートがないときは、そう言うだけ',
   assert.strictEqual(env.ss.getSheetByName('年表').getLastRow(), 1);
 });
 
+test('シートに足す行：「掲載」のチェックボックス（FALSE）が下まであっても、中身のある最後の行のすぐ下に足す', () => {
+  const env = loadGas({ props: {} });
+  ownerSheets(env.ss);
+  env.ctx.setup();
+  // 本物のシートのように、チェックボックスの列は 1000 行目まで FALSE が入っている
+  for (const n of ['名簿', '年表', 'D-1']) {
+    const sh = env.ss.getSheetByName(n);
+    const c = col(sh, '掲載') + 1;
+    for (let r = 2; r <= 1000; r++) sh.write(r, c, false);
+    assert.strictEqual(sh.getLastRow(), 1000);
+  }
+  env.ctx.importAll();
+  const m = env.ss.getSheetByName('名簿');
+  assert.strictEqual(m.cell(2, 1), '田浦', '2 行目から入る');
+  assert.strictEqual(m.cell(6, 1), '瀬戸 四郎');
+  assert.strictEqual(m.cell(1001, 1), undefined === m.cell(1001, 1) ? undefined : m.cell(1001, 1));
+  assert.ok(!m.cell(1001, 1), '1001 行目には入らない');
+  assert.strictEqual(env.ss.getSheetByName('D-1').cell(2, 1), 2004);
+  // 1000 行目まで中身でうまっていたら、行を足してから書く
+  const t = env.ss.getSheetByName('年表');
+  for (let r = 2; r <= 1000; r++) t.write(r, 4, 'x' + r);
+  const at = env.ctx.appendRecord(t, { '見出し': '最後', '掲載': true });
+  assert.strictEqual(at, 1001);
+  assert.strictEqual(t.cell(1001, 4), '最後');
+});
+
 // ---- 実行 ----
 (async () => {
   let fail = 0;
