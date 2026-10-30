@@ -29,6 +29,7 @@ const PAGES = [
   { rel: 'd1/', title: 'D-1選手権 ― 夕照寮OB会', head: '.ob-title' },
   { rel: 'heya/', title: '部屋割り ― 夕照寮OB会', head: '.ob-title' },
   { rel: 'meibo/', title: '名簿 ― 夕照寮OB会', head: '.ob-title' },
+  { rel: 'shashin/', title: '写真館 ― 夕照寮OB会', head: '.ob-title' },
   { rel: 'sanpo/', title: '寮さんぽ ― 夕照寮OB会', head: '.logo-name' },
   { rel: 'status/', title: /夕照寮OB会/, head: '.ob-title' }, // 進捗（作る人と幹事向け。ホームからはリンクしない）
 ];
@@ -152,7 +153,7 @@ async function fromHome(browser, base) {
   const { page, ctx, errors, outside, top } = await openSub(browser, base, '');
   // 下のリンクの一覧
   const all = await page.$$eval('.home-nav a', (as) => as.map((a) => a.getAttribute('href')));
-  assert.deepStrictEqual(all, ['game/', 'nenpyo/', 'd1/', 'heya/', 'meibo/', 'sanpo/', '#post']);
+  assert.deepStrictEqual(all, ['game/', 'nenpyo/', 'd1/', 'heya/', 'meibo/', 'shashin/', 'sanpo/', '#post']);
   const links = all.filter((h) => h !== '#post'); // #post は同じページの下の投稿フォーム（home.test.js で確かめる）
   for (const href of links) {
     await page.locator('.home-nav a[href="' + href + '"]').click();

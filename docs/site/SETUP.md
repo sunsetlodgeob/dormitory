@@ -134,7 +134,6 @@ OB会サイトの「年表」「名簿」「部屋割り」と、投稿フォー
 | --- | --- |
 | `GAS_URL` | 7 のウェブアプリの URL（`…/exec`） |
 | `GOOGLE_CLIENT_ID` | 8 のクライアント ID |
-| `ALBUM_URL` | 写真館（Google フォトの共有アルバム）の URL |
 | `CONTACT_EMAIL` | OB会の連絡先（個人のアドレスではなく、OB会のアドレス） |
 
 3. 「Commit changes…」→「Commit changes」で保存します。

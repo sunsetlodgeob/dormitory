@@ -47,5 +47,53 @@
     { year: 2007, winner: [], second: [], members: ['釜利谷 二郎', '富岡 二郎'], host: '夕照 二郎', referee: '', kuroko: '', note: '決着がつかず、優勝なし。' },
     { year: 2008, winner: ['能見 二郎'], second: ['釜利谷 二郎'], members: ['能見 二郎', '釜利谷 二郎', '夕照 三郎', '六浦 三郎', '金沢 三郎'], host: '八景 二郎', referee: '富岡 二郎', kuroko: '平潟 三郎', note: '' },
   ];
-  OB.SAMPLE = { members, rooms, events, d1, updated: '2026-10-24T00:00:00+09:00' };
+  // 写真館のサンプル（写真はなく、色の四角に年度を書いた絵を OB.SAMPLE.photoImage で作る）
+  const photos = [];
+  const SHOTS = { 2003: 6, 2004: 7, 2005: 8, 2006: 5, 2007: 4 };
+  let pn = 0;
+  for (const y of Object.keys(SHOTS).map(Number)) {
+    for (let i = 0; i < SHOTS[y]; i++) {
+      pn++;
+      const m = [4, 5, 7, 10, 11, 2, 3, 6][i % 8];
+      const cy = m >= 4 ? y : y + 1; // 1〜3月は次の年
+      const tall = pn % 5 === 0;
+      photos.push({
+        id: 'sample-' + pn,
+        year: y,
+        date: i === SHOTS[y] - 1 && y === 2006 ? '' : cy + '-' + String(m).padStart(2, '0') + '-' + String(3 + ((pn * 7) % 25)).padStart(2, '0'),
+        w: tall ? 1200 : 1600,
+        h: tall ? 1600 : 1200,
+      });
+    }
+  }
+  for (let i = 0; i < 3; i++) photos.push({ id: 'sample-' + (++pn), year: null, date: '', w: 1600, h: 1200 });
+  // 年度ごとの空の色（夕方・昼・夜…）。どれもファミコンふうの色
+  const SKY = { 2003: '#f83800', 2004: '#3cbcfc', 2005: '#f878f8', 2006: '#00a800', 2007: '#f8b800' };
+  // サンプルの絵（SVG の data URL）。size は長いほうの辺の大きさ
+  function photoImage(id, size) {
+    const p = photos.find((x) => x.id === id);
+    if (!p) return '';
+    const n = Number(id.replace(/\D/g, '')) || 0;
+    const k = Math.min(1, (size || 400) / Math.max(p.w, p.h));
+    const W = Math.round(p.w * k), H = Math.round(p.h * k);
+    const sky = p.year == null ? '#7c7c7c' : SKY[p.year] || '#0058f8';
+    const vw = p.w > p.h ? 64 : 48, vh = p.w > p.h ? 48 : 64;
+    const bx = 8 + (n * 5) % (vw - 36), by = vh - 30;
+    const label = p.year == null ? '????' : String(p.year);
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + H + '" viewBox="0 0 ' + vw + ' ' + vh +
+      '" preserveAspectRatio="none" shape-rendering="crispEdges">' +
+      '<rect width="' + vw + '" height="' + vh + '" fill="' + sky + '"/>' +
+      '<rect y="' + (vh - 10) + '" width="' + vw + '" height="10" fill="#0d0b26"/>' +
+      '<rect x="' + bx + '" y="' + by + '" width="28" height="20" fill="#fcfcfc"/>' +
+      '<rect x="' + bx + '" y="' + (by - 2) + '" width="28" height="2" fill="#7c7c7c"/>' +
+      [0, 1, 2, 3].map((c) => '<rect x="' + (bx + 2 + c * 7) + '" y="' + (by + 3) + '" width="4" height="4" fill="#0000bc"/>' +
+        '<rect x="' + (bx + 2 + c * 7) + '" y="' + (by + 10) + '" width="4" height="4" fill="#0000bc"/>').join('') +
+      '<rect x="' + (vw - 14) + '" y="4" width="8" height="8" fill="#fce0a8"/>' +
+      // 文字はまんなかに（一覧では四角く切りぬくので、はしは見えない）
+      '<text x="' + vw / 2 + '" y="' + (vh > vw ? 20 : 13) + '" text-anchor="middle" font-family="monospace" font-size="8" fill="#000">' + label + '</text>' +
+      '<text x="' + vw / 2 + '" y="' + (vh - 3) + '" text-anchor="middle" font-family="monospace" font-size="5" fill="#fcfcfc">SAMPLE ' + n + '</text></svg>';
+    return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  }
+
+  OB.SAMPLE = { members, rooms, events, d1, photos, photoImage, updated: '2026-10-24T00:00:00+09:00' };
 })();

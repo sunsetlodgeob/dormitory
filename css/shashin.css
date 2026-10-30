@@ -1,0 +1,246 @@
+/*
+ * 夕照寮OB会サイト ― 写真館（shashin/）の見た目
+ * 共通の色・ウインドウ・ボタンは css/site.css、ログインの入り口は css/login.css。
+ * 年度の看板の下に、写真の小さい四角を並べる。押すと画面いっぱいに大きく見られる。
+ */
+
+/* ── はじめの説明 ── */
+.ps-intro { max-width: 720px; margin: 6px auto 14px; padding: 0 5px; text-align: center; }
+.ps-intro p { margin: 0 0 4px; word-break: auto-phrase; text-wrap: pretty; }
+.ps-intro .ob-small { margin-top: 4px; }
+
+/* ログイン・準備中のウインドウと、ログイン中の帯は css/login.css */
+.ps-board:focus { outline: none; }
+
+/* ── 年度へとぶ ── */
+.ps-bar { padding: 10px 14px 12px; }
+.ps-bar-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; margin-bottom: 6px; }
+.ps-label { font: 12px/1.4 var(--font-pixel); color: var(--fc-yellow-2); letter-spacing: 0.06em; }
+.ps-count { margin: 0; font: 13px/1.5 var(--font-pixel); letter-spacing: 0.04em; }
+.ps-jump { display: flex; flex-wrap: wrap; gap: 6px; }
+.ps-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  min-height: 34px;
+  padding: 5px 10px 3px;
+  font: 14px/1.2 var(--font-pixel);
+  color: var(--fc-white);
+  background: var(--fc-night);
+  border: 2px solid var(--fc-white);
+  cursor: pointer;
+}
+.ps-chip small { font-size: 11px; color: var(--fc-gray); }
+.ps-chip:hover { color: var(--fc-yellow); border-color: var(--fc-yellow); }
+
+/* ── 年度ごとのまとまり ── */
+.ps-years { padding: 0 5px; }
+.ps-year { margin: 26px 0 8px; scroll-margin-top: 14px; }
+.ps-year:first-child { margin-top: 10px; }
+.ps-year-head {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  margin: 0 0 12px;
+  padding: 5px 14px 5px 12px;
+  background: var(--fc-blue);
+  border: 3px solid var(--fc-white);
+  box-shadow: 4px 4px 0 var(--fc-black);
+  font: 21px/1.3 var(--font-pixel);
+  font-weight: normal;
+  color: var(--fc-yellow);
+  letter-spacing: 0.06em;
+}
+.ps-year-head:focus { outline: none; }
+.ps-year-head:focus-visible { outline: 2px solid var(--fc-yellow); outline-offset: 3px; }
+.ps-year.is-flash .ps-year-head { animation: ps-flash 0.9s steps(2) 2; }
+@keyframes ps-flash { 50% { background: var(--fc-red); } }
+.ps-year-era { font-size: 13px; color: var(--fc-gray); letter-spacing: 0.02em; }
+.ps-year-count { font-size: 13px; color: var(--fc-white); }
+.ps-none { text-align: center; color: var(--muted); padding: 20px 0; font-family: var(--font-pixel); }
+
+/* ── 写真の四角 ── */
+.ps-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+.ps-grid li { min-width: 0; }
+.ps-thumb {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  padding: 0;
+  overflow: hidden;
+  cursor: zoom-in;
+  border: 2px solid var(--fc-white);
+  box-shadow: 3px 3px 0 var(--fc-black);
+  /* 読み込み中：ドット絵ふうの市松もよう */
+  background-color: var(--fc-navy);
+  background-image:
+    linear-gradient(45deg, var(--fc-blue) 25%, transparent 25%, transparent 75%, var(--fc-blue) 75%),
+    linear-gradient(45deg, var(--fc-blue) 25%, transparent 25%, transparent 75%, var(--fc-blue) 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 8px 8px;
+}
+.ps-thumb::after {
+  content: "▮";
+  content: "▮" / "";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font: 18px/1 var(--font-pixel);
+  color: var(--fc-yellow);
+  animation: ob-blink 0.8s steps(1) infinite;
+}
+.ps-thumb.is-loaded { background: var(--fc-black); }
+.ps-thumb.is-loaded::after { content: none; }
+.ps-thumb.is-fail { background: var(--fc-navy); }
+.ps-thumb.is-fail::after { content: "？"; content: "？" / ""; color: var(--fc-gray); animation: none; }
+.ps-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.ps-thumb:hover, .ps-thumb:focus-visible { border-color: var(--fc-yellow); }
+.ps-thumb:focus-visible { outline: 3px solid var(--fc-yellow); outline-offset: 1px; }
+
+/* ダウンロードを止めているときの、保存しにくくする工夫（完全には止められない） */
+.is-nosave img {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.ps-retry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin: 8px 5px 14px;
+  padding: 8px 12px;
+  border: 2px dashed var(--fc-red);
+  color: #ffd0c4;
+  font-size: 14px;
+}
+.ps-retry p { margin: 0; }
+.ps-retry .fc-btn { font-size: 14px; padding: 7px 10px; }
+
+/* ── 大きく見る ── */
+html.ps-lock, html.ps-lock body { overflow: hidden; }
+.ps-lb {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  background: var(--fc-night);
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+.ps-lb-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 10px 8px 14px;
+  background: var(--fc-blue);
+  border-bottom: 3px solid var(--fc-white);
+}
+.ps-lb-title { flex: 1; min-width: 0; margin: 0; font: 17px/1.3 var(--font-pixel); font-weight: normal; color: var(--fc-yellow); letter-spacing: 0.04em; }
+.ps-lb-count { flex: none; font: 14px/1 var(--font-pixel); color: var(--fc-white); }
+.ps-lb-close { flex: none; padding: 7px 11px; }
+.ps-lb-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 64px;
+}
+.ps-lb-img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.ps-lb-img.is-preview { opacity: 0.75; }
+.ps-lb-wait, .ps-lb-err {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 6px 12px;
+  max-width: calc(100% - 32px);
+  background: var(--fc-night);
+  border: 2px solid var(--fc-white);
+  font: 14px/1.5 var(--font-pixel);
+  text-align: center;
+}
+.ps-lb-err { border-color: var(--fc-red); color: #ffd0c4; }
+.ps-lb-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 48px;
+  height: 72px;
+  font: 22px/1 var(--font-pixel);
+  color: var(--fc-white);
+  background: var(--fc-blue);
+  border: 2px solid var(--fc-white);
+  box-shadow: 3px 3px 0 var(--fc-black);
+  cursor: pointer;
+}
+.ps-lb-nav.is-prev { left: 8px; }
+.ps-lb-nav.is-next { right: 8px; }
+.ps-lb-nav:hover { color: var(--fc-yellow); }
+.ps-lb-nav:disabled { opacity: 0.25; cursor: default; }
+.ps-lb-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  padding: 8px 14px 10px;
+  border-top: 2px dotted rgba(252, 252, 252, 0.35);
+}
+.ps-lb-info { margin: 0; font: 14px/1.5 var(--font-pixel); color: var(--fc-yellow-2); }
+.ps-dl { font-size: 14px; padding: 7px 12px; background: var(--fc-green); }
+.ps-dl-status { margin: 0; font-size: 13px; color: var(--fc-yellow-2); overflow-wrap: anywhere; }
+.ps-dl-status:empty { display: none; }
+.ps-dl-status.is-error { color: #ffb0a0; }
+.ps-dl-status.is-done { color: var(--fc-lime); }
+.ps-dl-status.is-busy::after { content: "▮"; margin-left: 4px; animation: ob-blink 0.8s steps(1) infinite; }
+.ps-lb-keys { margin: 0 0 0 auto; }
+@media (hover: none) { .ps-lb-keys { display: none; } }
+
+/* ── 上へもどる ── */
+.ps-top {
+  position: fixed;
+  right: max(12px, env(safe-area-inset-right));
+  bottom: max(14px, env(safe-area-inset-bottom));
+  z-index: 20;
+  font-size: 13px;
+  padding: 8px 10px;
+  box-shadow: 3px 3px 0 var(--fc-black);
+}
+
+/* ── スマホ ── */
+@media (max-width: 560px) {
+  .ps-intro { text-align: left; font-size: 14px; }
+  .ps-bar { padding: 10px 10px 10px; }
+  .ps-chip { min-height: 32px; font-size: 13px; padding: 4px 8px 2px; }
+  .ps-years { padding: 0 2px; }
+  .ps-year-head { font-size: 18px; padding: 4px 10px; }
+  .ps-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .ps-thumb { border-width: 2px; box-shadow: 2px 2px 0 var(--fc-black); }
+  .ps-lb-title { font-size: 15px; }
+  .ps-lb-stage { padding: 6px 0; }
+  .ps-lb-nav { width: 40px; height: 60px; font-size: 18px; opacity: 0.85; }
+  .ps-lb-nav.is-prev { left: 4px; }
+  .ps-lb-nav.is-next { right: 4px; }
+  .ps-lb-nav:disabled { opacity: 0; pointer-events: none; }
+}
+
+/* 動きをへらす設定：点滅を止める（css/site.css の * では、::after まで止まらない） */
+@media (prefers-reduced-motion: reduce) {
+  .ps-thumb::after, .ps-dl-status.is-busy::after { animation: none; }
+}

@@ -21,13 +21,13 @@
   ];
 
   // ── コンテンツ（地図の上の旗） ─────────────────────────
-  // key は下の地図の文字。album は OB_CONFIG.ALBUM_URL を別のタブで開く（空のときは descSoon を出す）
+  // key は下の地図の文字
   H.ITEMS = [
     { id: 'nenpyo', key: 'K', name: '年表', href: 'nenpyo/', desc: '寮の事件簿。見るには Google でログイン' },
     { id: 'd1', key: 'G', name: 'D-1選手権', href: 'd1/', desc: '歴代の記録。優勝・準優勝・出場メンバー' },
     { id: 'heya', key: 'D', name: '部屋割り', href: 'heya/', desc: '年度ごとの部屋割り。寮の部屋を訪ねて回れる' },
     { id: 'meibo', key: 'M', name: '名簿', href: 'meibo/', desc: '入学した年度ごとの 寮生の名前' },
-    { id: 'album', key: 'P', name: '写真館', album: true, desc: '寮の写真のアルバム。見るには Google でログイン', descSoon: '寮の写真のアルバム。じゅんびちゅう' },
+    { id: 'album', key: 'P', name: '写真館', href: 'shashin/', desc: '寮の写真を年度ごとに。見るには Google でログイン' },
     { id: 'sanpo', key: 'E', name: '寮さんぽ', href: 'sanpo/', desc: 'ドット絵の寮の中を 歩いて回れる' },
   ];
 

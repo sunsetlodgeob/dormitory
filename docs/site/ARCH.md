@@ -23,16 +23,17 @@ nenpyo/index.html        年表（Google ログイン）   js/nenpyo.js  css/nen
 d1/index.html            D-1選手権の歴代記録（だれでも見られる。データは名簿・部屋割りといっしょに来る）  js/d1.js  css/d1.css
 heya/index.html          部屋割り                  js/heya.js    css/heya.css
 meibo/index.html         名簿                      js/meibo.js   css/meibo.css
+shashin/index.html       写真館（Google ログイン）  js/shashin.js css/shashin.css
 sanpo/index.html         寮さんぽ（建物を歩ける再現）  js/world.js js/art.js js/game.js css/style.css
                          （?year= の部屋割りと注記のために js/site/ の 4 つも読む）
 status/index.html        進捗（作る人と幹事向け。ホームからはリンクしない）  status/status.js に中身
 css/site.css             コンテンツのページ共通の見た目
-css/login.css            Google でログインして見るページ（年表）の入り口の見た目。読み込み中などの見た目は D-1 でも使う
+css/login.css            Google でログインして見るページ（年表・写真館）の入り口の見た目。読み込み中などの見た目は D-1 でも使う
 js/site/config.js        設定（URL など。空ならサンプルで動く）
 js/site/sample.js        サンプルデータ（すべて架空）
 js/site/data.js          データの読み込み（OB.data）、部屋割りのそろえ方（OB.data.roomsByYear）
 js/site/common.js        注記の表示（OB.DISCLAIMER）、OB.esc・OB.safeUrl・OB.wareki・OB.normSearch
-js/site/login.js         Google のログインの入り口（OB.loginGate）。年表で使う
+js/site/login.js         Google のログインの入り口（OB.loginGate）。年表と写真館で使う
 gas/                     Google Apps Script（トップページの投稿 → Gemini → スプレッドシート → サイト）
 tools/build_artifact.py  寮さんぽを 1 枚の HTML にまとめる（claude.ai に公開する用）
 tests/e2e/               ブラウザでの確認（Playwright）
@@ -44,7 +45,8 @@ docs/site/SETUP.md       Google 側の設定手順（幹事向け）
 
 どのページも、ほかのページへのリンクは相対パス（`../`、`../heya/` など）で書く。サイトは `/dormitory/` の下に出るので、`/` から始まるパスは使わない。
 
-写真館はサイトに置かない。`OB_CONFIG.ALBUM_URL`（Google のアルバム）へのリンクだけ。
+写真館（`shashin/`）は、年表と同じ Google ログインで見る。写真そのものは Google 側にあり、Apps Script が小さくして渡す（リポジトリには入れない）。
+`OB_CONFIG.ALBUM_URL` は、いまは使っていない（前の、外のアルバムへのリンクの名残）。
 
 ## 2. 守ること
 
@@ -107,7 +109,43 @@ docs/site/SETUP.md       Google 側の設定手順（幹事向け）
 - 「見る権限」＝ シート「メンバー」にメールアドレスがある人か、そのスプレッドシートを共有されている人（閲覧者・編集者・オーナー）。
   スプレッドシートを共有すると、掲載していない投稿やメモまで見えるので、寮生は「メンバー」に書く（`docs/site/SETUP.md`）。
 
-### 年表を見る権限の申請（ログインして not_member だった人）
+### 写真館（年表と同じ、見る権限のある人だけ）
+
+どれも `POST {GAS_URL}`（`Content-Type: text/plain`）。失敗したときの `error` と、`OB.data` が投げる Error の `code` は年表と同じ
+（`not_member`・`invalid_token`・`not_configured`・`bad_request`・`server_error`、通信できなかったときは `'network'`）。
+
+`OB.data.loadPhotos(idToken)` → 本文 `{"type":"photos","idToken":"…"}`
+
+```json
+{ "ok": true, "download": false,
+  "photos": [ { "id": "1AbC…", "year": 2005, "date": "2005-04-12", "w": 3072, "h": 2304 } ] }
+```
+
+- `year` は年度（4月はじまり）。分からなければ null（「年度不明」）。`date` は撮影日（`YYYY-MM-DD`）で、空のこともある。年度の順（不明は最後）→ 撮影日の順。
+- `download` が true のときだけ、大きく見る画面に「ダウンロード」を出す。
+- ページは `id` が `/^[\w-]{1,200}$/` に合うものだけ使う（合わないものと、2 つ目からの同じ id は捨てる）。
+
+`OB.data.loadThumbs(idToken, ids, size)` → 本文 `{"type":"thumbs","idToken":"…","ids":["…"],"size":400}`
+
+```json
+{ "ok": true, "images": { "1AbC…": "data:image/jpeg;base64,…" } }
+```
+
+- `ids` は 1 回に 24 まで。`size` は一覧なら 400、大きく見るときは 1600。読めなかった id は `images` に入っていない（一覧では「？」、「もう一度読み込む」で頼みなおす）。
+- ページは `data:image/…` で始まるものだけ使う。一覧は、画面の近くに来た写真だけを頼み（IntersectionObserver）、同時に送るのは 3 つまで。読んだ写真はメモリだけに置く。
+
+`OB.data.loadPhotoFile(idToken, id)` → 本文 `{"type":"photo","idToken":"…","id":"…"}`
+
+```json
+{ "ok": true, "name": "IMG_0001.JPG", "mime": "image/jpeg", "data": "（もとのファイルの base64）" }
+{ "ok": false, "error": "not_allowed" }     // ダウンロードを止めてある
+```
+
+- ページは Blob にして、`<a download>` で保存する。
+- ID トークンは 1 時間ほどで切れる。一覧や大きい写真で `invalid_token` が返ったら、ログインの画面にもどして「もう一度ログイン」と出す。
+- 設定が空のとき（デモ）は `js/site/sample.js` の `photos`（色の四角の絵。`OB.SAMPLE.photoImage` で作る）を返す。ダウンロードもできる。
+
+### 見る権限の申請（ログインして not_member だった人。年表・写真館）
 
 `OB.data.requestAccess(idToken, { name, entry, note })` → `POST {GAS_URL}`、本文 `{"type":"request","idToken":"…","name":"…","entry":"2005","note":"…"}`
 
@@ -228,7 +266,7 @@ OTK.register({
 | 寮さんぽ | localStorage | `sekisho-dorm-save-v1` | 進み具合 |
 | 寮さんぽ | localStorage | `sekisho-sound` | 音のオン・オフ |
 
-年表のログインで受け取る ID トークンは、どこにも保存しない（メモリだけ）。
+年表・写真館のログインで受け取る ID トークンと、写真館で読んだ写真は、どこにも保存しない（メモリだけ）。
 
 ## 6. 確認のしかた
 
@@ -236,7 +274,7 @@ OTK.register({
 - ぜんぶまとめて動かすときは `sh tests/run-all.sh`（1 つでも失敗すると、終了コードが 0 以外になる）。30 分ほどかかる。
 - `gas/Code.gs` の確認は `node tests/gas/run.js`（Google には出ない。Apps Script のまねをして動かす）。
 - 同時に動かしても重ならないように、ポートを分ける：
-  ゲームのエンジン 8801、ホーム 8802、部屋割り 8803、名簿・年表 8804、ミニゲーム 8811〜8815、サイト全体 8805、ゲームの寸劇 8806、D-1選手権 8807、確認役 8821〜。
+  ゲームのエンジン 8801、ホーム 8802、部屋割り 8803、名簿・年表 8804、ミニゲーム 8811〜8815、サイト全体 8805、ゲームの寸劇 8806、D-1選手権 8807、写真館 8808、確認役 8821〜。
 - どの確認も、環境変数 `PORT` でポートを変えられる（例：`PORT=8821 node tests/e2e/home.test.js`）。古い名前の `HOME_PORT`・`HEYA_PORT`・`MEIBO_PORT`・`NENPYO_PORT` も使える。
 - このリポジトリの外（Google Fonts など）には出られないことがある。フォントが読めないことによるエラーは無視してよい（`realErrors()`）。
 - 確認のための入り口：

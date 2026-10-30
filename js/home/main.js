@@ -7,7 +7,6 @@
 (function () {
   'use strict';
   const H = window.HOME;
-  const OB = window.OB || {};
   const A = H.art;
   const SW = A.SW, SH = A.SH, TS = A.TS;
   const FONT = '"DotGothic16", "IPAGothic", "Hiragino Sans", "Noto Sans JP", "Yu Gothic", monospace';
@@ -35,9 +34,6 @@
   const itemAt = (x, y) => ITEM_BY_KEY[(H.MAP[y] || '')[x]] || null;
   const terrainAt = (x, y) => H.TERRAIN[(H.MAP[y] || '')[x]] || '草地';
   const GAME_LIST = H.GAMES.concat([{ id: 'back', name: 'もどる', back: true, desc: 'モードえらびに もどる' }]);
-  // 写真館の URL（http(s) のものだけ。空なら「じゅんびちゅう」）
-  const ALBUM = OB.safeUrl ? OB.safeUrl((window.OB_CONFIG || {}).ALBUM_URL) : '';
-  const descOf = (it) => (it.album && !ALBUM ? it.descSoon : it.desc);
 
   // ── 状態 ──────────────────────────────────────
   const S = {
@@ -195,7 +191,7 @@
       else if (S.scene === 'games') s = 'ゲーム：' + GAME_LIST[S.game].name;
       else {
         const it = itemAt(S.cur.x, S.cur.y);
-        s = it ? it.name + '。' + descOf(it) : terrainAt(S.cur.x, S.cur.y);
+        s = it ? it.name + '。' + it.desc : terrainAt(S.cur.x, S.cur.y);
       }
     }
     if (s !== lastSaid) { live.textContent = s; lastSaid = s; }
@@ -213,17 +209,6 @@
     if (!it) {
       H.audio.sfx('buzz');
       S.nudge = 0.6;
-      return;
-    }
-    if (it.album) {
-      if (ALBUM) {
-        H.audio.sfx('ok');
-        window.open(ALBUM, '_blank', 'noopener');
-        message(['写真館（アルバム）を', '新しいタブで ひらきました。']);
-      } else {
-        H.audio.sfx('buzz');
-        message(['写真館は じゅんびちゅう。', 'アルバムができたら ここから見られます。']);
-      }
       return;
     }
     leave(it.href);
@@ -467,22 +452,6 @@
   // 最初の操作で音を出せるようにする
   for (const ev of ['pointerup', 'touchend']) window.addEventListener(ev, () => H.audio.unlock(), { capture: true, passive: true });
 
-  // ── 写真館のリンク（下の一覧） ──────────────────────────
-  (function albumLink() {
-    const el = $('home-album');
-    if (!el || !ALBUM) return;
-    const a = document.createElement('a');
-    a.href = ALBUM;
-    a.target = '_blank';
-    a.rel = 'noopener';
-    a.textContent = '写真館';
-    a.id = 'home-album';
-    if (el.parentNode) el.parentNode.classList.remove('is-off');
-    el.replaceWith(a);
-    const note = $('home-album-note');
-    if (note) note.textContent = '寮の写真のアルバム（新しいタブ）。見るには Google でログイン';
-  })();
-
   // ── うごき ───────────────────────────────────────
   function update(dt) {
     S.t += dt;
@@ -662,8 +631,8 @@
     if (it) {
       T(it.name, x + 10, y + 5, 10, 'Y');
       const nw = measure(it.name, 10);
-      if (blinkOn(1.6)) T(it.album && ALBUM ? 'Ａ：ひらく' : 'Ａ：みる', x + 16 + nw, y + 6, 8, 'S');
-      T(descOf(it), x + 10, y + 18, 8.5, 'W');
+      if (blinkOn(1.6)) T('Ａ：みる', x + 16 + nw, y + 6, 8, 'S');
+      T(it.desc, x + 10, y + 18, 8.5, 'W');
     } else {
       T(terrainAt(S.cur.x, S.cur.y), x + 10, y + 5, 10, 'W');
       T(H.TERRAIN_HINT, x + 10, y + 18, 8.5, S.nudge > 0 && Math.floor(S.nudge * 10) % 2 ? 'Y' : 'S');

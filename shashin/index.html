@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>写真館 ― 夕照寮OB会</title>
+<meta name="description" content="夕照寮の写真を、年度ごとに見られます。見るには Google でのログインが必要です。">
+<meta name="theme-color" content="#0d0b26">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Crect width='16' height='16' fill='%230d0b26'/%3E%3Crect x='1' y='4' width='14' height='10' fill='%23fcfcfc'/%3E%3Crect x='5' y='2' width='6' height='2' fill='%23fcfcfc'/%3E%3Crect x='2' y='5' width='12' height='8' fill='%237c7c7c'/%3E%3Crect x='5' y='6' width='6' height='6' fill='%23000'/%3E%3Crect x='6' y='7' width='4' height='4' fill='%233cbcfc'/%3E%3Crect x='12' y='5' width='2' height='1' fill='%23f8b800'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=DotGothic16&display=swap">
+<link rel="stylesheet" href="../css/site.css">
+<link rel="stylesheet" href="../css/login.css">
+<link rel="stylesheet" href="../css/shashin.css">
+</head>
+<body class="shashin">
+<header class="ob-top">
+  <a class="ob-back" href="../">◀ ホーム</a>
+  <h1 class="ob-title">写真館<small>寮の写真を、年度ごとに</small></h1>
+</header>
+
+<main class="ob-main">
+  <div class="ps-intro">
+    <p>寮の写真を、年度ごとに見られます。写真は承認された寮生だけが見られます。</p>
+    <p class="ob-small">年度は写真の撮影日から自動で分けています。まちがいがあれば幹事に知らせてください。</p>
+  </div>
+
+  <p class="ob-notice" id="ps-demo" hidden>デモ表示です（写真のかわりに、色の四角を出しています）。本番では Google でログインした寮生だけが見られます。</p>
+
+  <!-- 設定がまだのとき -->
+  <section class="fc-window ob-gate ob-setup" id="ps-setup" aria-labelledby="ps-setup-title" hidden>
+    <h2 id="ps-setup-title">写真館は準備中です</h2>
+    <p>ログインのしくみを、いま用意しています。もうしばらくお待ちください。</p>
+    <p class="ob-small">幹事の方へ：<code>js/site/config.js</code> の <code>GOOGLE_CLIENT_ID</code> が空です。<code>docs/site/SETUP.md</code> を見て設定してください。</p>
+  </section>
+
+  <!-- ログイン -->
+  <section class="fc-window ob-gate" id="ps-login" aria-labelledby="ps-login-title" hidden>
+    <svg class="ob-lock" viewBox="0 0 12 13" width="48" height="52" shape-rendering="crispEdges" aria-hidden="true">
+      <rect x="3" y="0" width="6" height="1" fill="#fcfcfc"/>
+      <rect x="2" y="1" width="1" height="4" fill="#bcbcbc"/><rect x="9" y="1" width="1" height="4" fill="#7c7c7c"/>
+      <rect x="0" y="5" width="12" height="8" fill="#ac7c00"/>
+      <rect x="1" y="5" width="10" height="7" fill="#f8b800"/>
+      <rect x="1" y="5" width="10" height="1" fill="#fce0a8"/>
+      <rect x="5" y="7" width="2" height="2" fill="#000"/><rect x="5.5" y="9" width="1" height="2" fill="#000"/>
+    </svg>
+    <h2 id="ps-login-title">ログインが必要です</h2>
+    <p>写真館は、見る権限のある寮生だけが見られます。</p>
+    <p>見る権限をもらった Google アカウントで、ログインしてください。</p>
+    <div class="ob-gbtn" id="ps-gbtn"></div>
+    <div class="ob-status" id="ps-status" role="status" aria-live="polite" hidden></div>
+    <button type="button" class="fc-btn ob-reload" id="ps-reload" hidden>ページを読み込みなおす</button>
+    <!-- 見る権限がないとき：申請 -->
+    <form class="ob-request" id="ps-req" novalidate hidden>
+      <h3>見る権限を申請する</h3>
+      <p class="ob-small">申請するアカウント：<span id="ps-req-email"></span>（このアドレスは幹事だけが見ます）</p>
+      <label>お名前<small>必須。名簿に載っている名前で</small><input name="name" maxlength="40" autocomplete="name"></label>
+      <label>入学年度<small>任意。例：2003、平成15年度</small><input name="entry" maxlength="30" autocomplete="off"></label>
+      <label>ひとこと<small>任意。例：305号室にいました</small><textarea name="note" rows="2" maxlength="500"></textarea></label>
+      <button type="submit" class="fc-btn">申請する ▶</button>
+      <div class="ob-req-status" id="ps-req-status" role="status" aria-live="polite"></div>
+    </form>
+    <p class="ob-small">ログインの情報は、このページを開いている間だけ使います。保存はしません。</p>
+  </section>
+
+  <div class="ob-loading" id="ps-loading" role="status" hidden>
+    <span class="ob-blink" aria-hidden="true">▶</span> 読み込んでいます…
+  </div>
+
+  <!-- 写真の一覧 -->
+  <section class="ps-board" id="ps-board" aria-label="写真の一覧" tabindex="-1" hidden>
+    <div class="ob-user" id="ps-user" hidden>
+      <span class="ob-user-text"><span class="ob-user-dot" aria-hidden="true"></span><span id="ps-user-text">ログイン中</span></span>
+      <button type="button" class="fc-btn ob-logout" id="ps-logout">ログアウト</button>
+    </div>
+
+    <nav class="fc-window ps-bar" aria-labelledby="ps-jump-label">
+      <div class="ps-bar-head">
+        <span class="ps-label" id="ps-jump-label">年度へとぶ</span>
+        <p class="ps-count" id="ps-count" aria-live="polite"></p>
+      </div>
+      <div class="ps-jump" id="ps-jump"></div>
+    </nav>
+
+    <div class="ps-retry" id="ps-retry" role="status" hidden>
+      <p>読み込めなかった写真があります（<span class="ps-retry-mark" aria-hidden="true">？</span>の所）。</p>
+      <button type="button" class="fc-btn" id="ps-retry-btn">もう一度読み込む</button>
+    </div>
+
+    <div class="ps-years" id="ps-years"></div>
+  </section>
+</main>
+
+<!-- 大きく見る -->
+<div class="ps-lb" id="ps-lb" role="dialog" aria-modal="true" aria-labelledby="ps-lb-title" hidden>
+  <div class="ps-lb-bar">
+    <h2 class="ps-lb-title" id="ps-lb-title"></h2>
+    <span class="ps-lb-count" id="ps-lb-count" aria-live="polite"></span>
+    <button type="button" class="fc-btn ps-lb-close" id="ps-lb-close" aria-label="閉じる">✕</button>
+  </div>
+  <div class="ps-lb-stage" id="ps-lb-stage">
+    <img class="ps-lb-img" id="ps-lb-img" alt="" draggable="false" hidden>
+    <p class="ps-lb-wait" id="ps-lb-wait" hidden><span class="ob-blink" aria-hidden="true">▶</span> 読み込んでいます…</p>
+    <p class="ps-lb-err" id="ps-lb-err" hidden></p>
+    <button type="button" class="ps-lb-nav is-prev" id="ps-lb-prev" aria-label="前の写真">◀</button>
+    <button type="button" class="ps-lb-nav is-next" id="ps-lb-next" aria-label="次の写真">▶</button>
+  </div>
+  <div class="ps-lb-foot">
+    <p class="ps-lb-info" id="ps-lb-info"></p>
+    <button type="button" class="fc-btn ps-dl" id="ps-dl" hidden>ダウンロード</button>
+    <p class="ps-dl-status" id="ps-dl-status" role="status" aria-live="polite"></p>
+    <p class="ps-lb-keys ob-small" id="ps-lb-keys">←→：前・次　Esc：閉じる</p>
+  </div>
+</div>
+
+<a class="fc-btn ps-top" id="ps-top" href="#" hidden aria-label="ページの上へもどる">▲ 上へ</a>
+
+<footer data-ob-footer></footer>
+
+<script src="../js/site/config.js"></script>
+<script src="../js/site/sample.js"></script>
+<script src="../js/site/data.js"></script>
+<script src="../js/site/common.js"></script>
+<script src="../js/site/login.js"></script>
+<script src="../js/shashin.js"></script>
+</body>
+</html>

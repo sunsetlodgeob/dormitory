@@ -11,7 +11,7 @@ const { withSite, realErrors } = require('./lib');
 
 const PORT = Number(process.env.HOME_PORT || process.env.PORT) || 8802; // 確認役が別のポートで動かすときは HOME_PORT
 const SHOTS = process.env.HOME_SHOTS || '';
-const TARGETS = /\/(game|nenpyo|d1|heya|meibo|sanpo)\/$/;
+const TARGETS = /\/(game|nenpyo|d1|heya|meibo|shashin|sanpo)\/$/;
 const STUB = '<!doctype html><html lang="ja"><meta charset="utf-8"><title>stub</title><p>stub</p></html>';
 
 async function shot(page, name) {
@@ -33,7 +33,7 @@ async function items(page) {
   return page.evaluate(() => window.HOME.ITEMS.map((it) => {
     for (let y = 0; y < window.HOME.MAP.length; y++) {
       const x = window.HOME.MAP[y].indexOf(it.key);
-      if (x >= 0) return { id: it.id, name: it.name, href: it.href || null, album: !!it.album, x, y };
+      if (x >= 0) return { id: it.id, name: it.name, href: it.href || null, x, y };
     }
     return null;
   }));
@@ -71,10 +71,8 @@ async function desktop(open, base) {
   const footer = await page.locator('footer.ob-footer').innerText();
   assert.ok(footer.includes('すべてフィクションです'), '注記がない: ' + footer);
   const hrefs = await page.$$eval('.home-nav a', (as) => as.map((a) => a.getAttribute('href')));
-  assert.deepStrictEqual(hrefs, ['game/', 'nenpyo/', 'd1/', 'heya/', 'meibo/', 'sanpo/', '#post']);
+  assert.deepStrictEqual(hrefs, ['game/', 'nenpyo/', 'd1/', 'heya/', 'meibo/', 'shashin/', 'sanpo/', '#post']);
   assert.ok(await page.locator('#post-form').isVisible(), 'JS がなくても投稿フォームは見える');
-  assert.ok((await page.locator('#home-album').innerText()).includes('写真館'));
-  assert.ok((await page.locator('#home-album-note').innerText()).includes('じゅんびちゅう'));
   assert.strictEqual(await page.locator('.home-keys').isVisible(), true, 'パソコンではキーの説明を出す');
   assert.strictEqual(await page.locator('.home-pad').isVisible(), false, 'パソコンでは画面下のボタンを出さない');
   const size = await page.evaluate(() => { const c = document.getElementById('home-screen'); return { w: c.width, h: c.height, cw: c.getBoundingClientRect().width }; });
@@ -132,19 +130,7 @@ async function desktop(open, base) {
     });
     assert.strictEqual(info, it.name);
     await shot(page, 'd5-map-' + it.id);
-    if (it.album) {
-      const said = await page.locator('#home-live').textContent();
-      assert.ok(said.includes('じゅんびちゅう'), '写真館の説明も準備中: ' + said);
-    }
     await page.keyboard.press('Enter');
-    if (it.album) {
-      await page.waitForTimeout(250);
-      s = await state(page);
-      assert.ok(s.msg && s.msg.includes('じゅんびちゅう'), '写真館は URL がないとき準備中: ' + s.msg);
-      await page.keyboard.press('x');
-      assert.strictEqual((await state(page)).msg, null);
-      continue;
-    }
     await page.waitForURL(base + it.href, { timeout: 5000 });
     await backHome(page);
     s = await state(page);
@@ -253,14 +239,6 @@ async function phone(open, base) {
     assert.deepStrictEqual(s.cur, { x: it.x, y: it.y }, 'タップでカーソルが動く: ' + it.id);
     assert.strictEqual(s.leaving, false, '1 回目のタップでは入らない: ' + it.id);
     await tapAt(page, it.x * 16 + 8, it.y * 16 + 8);
-    if (it.album) {
-      await page.waitForTimeout(250);
-      s = await state(page);
-      assert.ok(s.msg && s.msg.includes('じゅんびちゅう'));
-      await page.locator('#home-btn-a').tap();
-      assert.strictEqual((await state(page)).msg, null, 'A ボタンで知らせを閉じる');
-      continue;
-    }
     await page.waitForURL(base + it.href, { timeout: 5000 });
     await backHome(page);
     await shot(page, 'p3-back-' + it.id);
@@ -304,43 +282,35 @@ async function phone(open, base) {
   await ctx.close();
 }
 
-// 写真館の URL が設定されているとき：新しいタブで開く。下のリンクも写真館に
-async function album(open) {
-  const { page, errors, ctx } = await open('', { wait: 100 });
-  await ctx.route('**/js/site/config.js', (r) => r.fulfill({
-    status: 200,
-    contentType: 'application/javascript',
-    body: "window.OB_CONFIG = { GAS_URL: '', GOOGLE_CLIENT_ID: '', ALBUM_URL: 'https://example.com/album', CONTACT_EMAIL: '' };",
-  }));
-  await ctx.route('https://example.com/**', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: STUB }));
-  await page.reload();
-  await page.waitForTimeout(500);
-  const link = page.locator('a#home-album');
-  assert.strictEqual(await link.getAttribute('href'), 'https://example.com/album');
-  assert.strictEqual(await link.getAttribute('target'), '_blank');
+// 写真館はサイトの中のページ（shashin/）。地図の旗からも、下の一覧からも行ける
+async function album(open, base) {
+  const { page, errors, ctx } = await open('', { wait: 500 });
+  await stubTargets(ctx);
+  const li = page.locator('.home-nav li', { has: page.locator('a[href="shashin/"]') });
+  assert.strictEqual(await li.count(), 1, '下の一覧に写真館のリンクがない');
+  assert.strictEqual((await li.locator('a').innerText()).trim(), '写真館');
+  assert.ok((await li.innerText()).includes('寮の写真を年度ごとに。見るには Google でログイン。'), '写真館の説明がちがう');
+  assert.strictEqual(await li.locator('a').getAttribute('target'), null, '同じタブで開く');
+  assert.strictEqual(await page.locator('.home-nav .is-off').count(), 1, '準備中は野球大会だけ');
+  assert.strictEqual(await page.locator('#home-album, #home-album-note').count(), 0, '古い写真館（外のアルバム）の印が残っている');
+  const it = await page.evaluate(() => window.HOME.ITEMS.find((i) => i.id === 'album'));
+  assert.deepStrictEqual([it.name, it.href, it.album, it.descSoon], ['写真館', 'shashin/', undefined, undefined]);
+
   await page.keyboard.press('Enter');
   await waitScene(page, 'mode');
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('Enter');
   await waitScene(page, 'map');
-  const it = (await items(page)).find((i) => i.album);
-  await moveCursorTo(page, it.x, it.y);
-  assert.ok((await page.locator('#home-live').textContent()).includes('ログイン'), 'URL があるときは、ふつうの説明');
-  const [popup] = await Promise.all([ctx.waitForEvent('page'), page.keyboard.press('Enter')]);
-  await popup.waitForLoadState().catch(() => {});
-  assert.strictEqual(popup.url(), 'https://example.com/album');
+  const pos = (await items(page)).find((i) => i.id === 'album');
+  await moveCursorTo(page, pos.x, pos.y);
+  const said = await page.locator('#home-live').textContent();
+  assert.ok(said.includes('写真館') && said.includes('ログイン') && !said.includes('じゅんびちゅう'), '写真館の説明: ' + said);
+  await page.keyboard.press('Enter');
+  await page.waitForURL(base + 'shashin/', { timeout: 5000 });
+  await backHome(page);
   const s = await state(page);
-  assert.ok(s.msg && s.msg.includes('新しいタブ'), s.msg);
-  assert.strictEqual(page.url().endsWith(':' + PORT + '/'), true, 'ホームはそのまま');
-
-  // javascript: などは通さない
-  await ctx.unroute('**/js/site/config.js');
-  await ctx.route('**/js/site/config.js', (r) => r.fulfill({
-    status: 200, contentType: 'application/javascript', body: "window.OB_CONFIG = { ALBUM_URL: 'javascript:alert(1)' };",
-  }));
-  await page.reload();
-  await page.waitForTimeout(400);
-  assert.strictEqual(await page.locator('a#home-album').count(), 0, 'あやしい URL はリンクにしない');
+  assert.strictEqual(s.scene, 'map', 'もどってきたら地図から');
+  assert.deepStrictEqual(s.cur, { x: pos.x, y: pos.y }, 'カーソルも写真館の場所');
   const errs = realErrors(errors);
   assert.deepStrictEqual(errs, [], '写真館：エラー ' + errs.join('\n'));
   await ctx.close();
@@ -480,7 +450,7 @@ async function noJs(browser, base) {
   await page.goto(base);
   assert.strictEqual(await page.locator('.home-console').isVisible(), false);
   const hrefs = await page.$$eval('.home-nav a', (as) => as.map((a) => a.getAttribute('href')));
-  assert.deepStrictEqual(hrefs, ['game/', 'nenpyo/', 'd1/', 'heya/', 'meibo/', 'sanpo/', '#post']);
+  assert.deepStrictEqual(hrefs, ['game/', 'nenpyo/', 'd1/', 'heya/', 'meibo/', 'shashin/', 'sanpo/', '#post']);
   assert.ok(await page.locator('#post-form').isVisible(), 'JS がなくても投稿フォームは見える');
   await ctx.close();
 }
@@ -512,7 +482,7 @@ withSite(PORT, async ({ open, base, browser }) => {
   console.log('ok パソコン');
   await phone(open, base);
   console.log('ok スマホ');
-  await album(open);
+  await album(open, base);
   console.log('ok 写真館');
   await reduced(open);
   console.log('ok 動きをへらす');
