@@ -333,17 +333,19 @@ function loadGas(opts = {}) {
     },
   };
 
+  const mails = [];
+  const MailApp = { sendEmail: (o) => { if (opts.mailFails) throw new Error('メールの上限'); mails.push(o); } };
   const Logger = { log: (...a) => { logs.push(a.map(String).join(' ')); } };
   const quiet = { log: Logger.log, info: Logger.log, warn: Logger.log, error: Logger.log };
 
   const ctx = vm.createContext({
-    SpreadsheetApp, FormApp, UrlFetchApp, PropertiesService, CacheService, ContentService,
+    SpreadsheetApp, FormApp, UrlFetchApp, PropertiesService, CacheService, ContentService, MailApp,
     LockService, ScriptApp, Session, Utilities, Logger, console: quiet,
   });
   vm.runInContext(fs.readFileSync(CODE_PATH, 'utf8'), ctx, { filename: 'Code.gs' });
 
   return {
-    ctx, ss, forms, triggers, store, cacheStore, logs, calls, access,
+    ctx, ss, forms, triggers, store, cacheStore, logs, calls, access, mails,
     // Code.gs の中の値（const）を読む
     get: (expr) => vm.runInContext(expr, ctx),
     setFetch: (fn) => { opts.fetch = fn; },

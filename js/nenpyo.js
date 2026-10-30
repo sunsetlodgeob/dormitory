@@ -16,6 +16,7 @@
     year: $('np-year'), tags: $('np-tags'), count: $('np-count'), post: $('np-post'), post2: $('np-post2'),
     timeline: $('np-timeline'), empty: $('np-empty'), emptyText: $('np-empty-text'), reset: $('np-reset'),
     tail: $('np-tail'), top: $('np-top'),
+    req: $('np-req'), reqEmail: $('np-req-email'), reqStatus: $('np-req-status'),
   };
 
   let events = [];        // 整えた事件の一覧

@@ -74,6 +74,8 @@ async function openPage(browser, base, o = {}) {
     posts.push({ method: req.method(), type: req.headers()['content-type'] || '', body: d });
     const k = d.idToken ? JSON.parse(Buffer.from(String(d.idToken).split('.')[1], 'base64url').toString()).k : '';
     const json = (obj) => r.fulfill({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(obj) });
+    // 見る権限の申請：1 回目は受けつけ、2 回目は「前にも」
+    if (d.type === 'request') return json(posts.filter((p) => p.body.type === 'request').length > 1 ? { ok: true, again: true } : { ok: true });
     if (k === 'ok') return json({ ok: true, events: o.events || LIVE_EVENTS });
     if (k === 'http500') return r.fulfill({ status: 500, body: 'error', headers: { 'Access-Control-Allow-Origin': '*' } });
     if (k === 'abort') return r.abort();
@@ -252,7 +254,7 @@ withSite(PORT, async ({ browser, base }) => {
     // 権限なし
     await signIn(page, 'not_member', 'kouhai@example.com');
     let st = await statusText(page);
-    assert.ok(st.includes('このアカウントには見る権限がありません。幹事に連絡して、見る権限をもらってください。'), tag + ': 権限なしの文がちがう: ' + st);
+    assert.ok(st.includes('このアカウントには、まだ見る権限がありません。下の欄から申請できます。'), tag + ': 権限なしの文がちがう: ' + st);
     assert.ok(st.includes('kouhai@example.com'), tag + ': ためしたアカウントが出ていない');
     assert.ok(!(await page.isVisible('#np-board')), tag + ': 権限がないのに年表が出た');
     assert.strictEqual(await page.evaluate(() => window.__gsi.disabled), 1, tag + ': 自動ログインを止めていない');
@@ -263,8 +265,36 @@ withSite(PORT, async ({ browser, base }) => {
     assert.strictEqual(posts[0].body.type, 'timeline');
     await shot(page, tag + '-not-member');
 
+    // 見る権限の申請
+    assert.ok(await page.isVisible('#np-req'), tag + ': 申請の欄が出ていない');
+    assert.strictEqual(await page.textContent('#np-req-email'), 'kouhai@example.com');
+    await press(page, '#np-req button[type=submit]', phone);
+    assert.ok((await page.textContent('#np-req-status')).includes('お名前を入れてください'), tag + ': 名前なしで送れてしまう');
+    assert.strictEqual(posts.length, 1, tag + ': 名前なしで送った');
+    await page.fill('#np-req [name=name]', '後輩 一郎');
+    await page.fill('#np-req [name=entry]', '2005');
+    await page.fill('#np-req [name=note]', '305号室');
+    await press(page, '#np-req button[type=submit]', phone);
+    await page.waitForSelector('#np-req-status.is-done', { timeout: 5000 });
+    assert.ok((await page.textContent('#np-req-status')).includes('申請を受けつけました'), tag + ': 受けつけの文がない');
+    const rq = posts[posts.length - 1];
+    assert.strictEqual(rq.body.type, 'request');
+    assert.deepStrictEqual([rq.body.name, rq.body.entry, rq.body.note], ['後輩 一郎', '2005', '305号室']);
+    assert.ok(rq.body.idToken && JSON.parse(Buffer.from(rq.body.idToken.split('.')[1], 'base64url').toString()).k === 'not_member', tag + ': ログインしたトークンで申請していない');
+    assert.ok(!(await page.isVisible('#np-req [name=name]')), tag + ': 送ったあとも入力欄が出ている');
+    assert.ok(!(await page.isVisible('#np-board')), tag + ': 申請しただけで年表が出た');
+    await shot(page, tag + '-requested');
+    // もう一度ログインして、もう一度申請 →「前にも」
+    await signIn(page, 'not_member', 'kouhai@example.com');
+    assert.ok(await page.isVisible('#np-req [name=name]'), tag + ': ログインしなおすと、入力欄がもどる');
+    await press(page, '#np-req button[type=submit]', phone);
+    await page.waitForSelector('#np-req-status.is-done', { timeout: 5000 });
+    assert.ok((await page.textContent('#np-req-status')).includes('前にも申請を受けつけています'));
+    posts.length = 1;
+
     // ログインの期限切れ
     await signIn(page, 'invalid_token', 'senpai@example.com');
+    assert.ok(!(await page.isVisible('#np-req')), tag + ': 権限なし以外で申請の欄が出ている');
     st = await statusText(page);
     assert.ok(st.includes('もう一度ログインしてください'), tag + ': 期限切れの文がない: ' + st);
     // Apps Script の設定がまだ

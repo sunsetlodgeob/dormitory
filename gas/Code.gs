@@ -25,6 +25,7 @@ const SHEETS = {
   rooms: { name: '部屋割り', headers: ['年度', '部屋', '名前', '掲載', '元の回答', 'メモ'] },
   access: { name: 'メンバー', headers: ['メールアドレス', 'メモ'] },
   posts: { name: '投稿', headers: ['日時', '内容', '結果'] },
+  requests: { name: '申請', headers: ['日時', 'メールアドレス', 'お名前', '入学年度', 'ひとこと', '承認', 'メモ'] },
   d1: { name: 'D-1', headers: ['年度', '優勝', '準優勝', '出場メンバー', '主催者', 'レフェリー', '黒子', '補足', '掲載', '元の回答', 'メモ'] },
 };
 
@@ -37,6 +38,12 @@ const SOURCES = {
 const IMPORT_SEC = 200; // 1 回の実行で取り込みに使う時間（Apps Script は 6 分で止まる。Gemini の返事を 1 回待つ分をあけておく）
 const IMPORT_BATCH = 5; // Gemini に 1 回で渡す事件の数（多いと返事が遅くなる）
 const PUBLISH_COL = '掲載';
+const APPROVE_COL = '承認'; // 申請：幹事がチェックすると、年表を見られるようになる
+// チェックボックスの列（掲載か承認）
+function checkCol(heads) {
+  const p = heads.indexOf(PUBLISH_COL);
+  return p >= 0 ? p : heads.indexOf(APPROVE_COL);
+}
 // 文字のまま扱う列（"101" が数字に化けないように）
 const TEXT_COLS = ['ID', '部屋'];
 // 幹事が読みやすいように広げる列
@@ -74,6 +81,7 @@ const CACHE_MEMBERS_SEC = 120; // 見る権限のある人の一覧：2 分
 // 投稿のいたずらよけ
 const POST_PER_HOUR = 30; // 1 時間に受けつける投稿の数（全員で）
 const POST_DUP_SEC = 600; // 同じ内容は 10 分のあいだ 2 回入れない
+const REQUEST_PER_HOUR = 20; // 年表の閲覧申請を 1 時間に受けつける数（全員で。幹事へのメールが増えすぎないように）
 
 // ---- setup：最初の準備 -------------------------------------------------------
 
@@ -139,7 +147,7 @@ function ensureSheet(ss, def) {
   const heads = headerRow(sh, def.headers);
   const rows = sh.getMaxRows() - 1;
   if (rows > 0) {
-    const pub = heads.indexOf(PUBLISH_COL);
+    const pub = checkCol(heads);
     // 値は変えずに、チェックボックスの形だけ付ける（空のセルは「チェックなし」に見える）
     if (pub >= 0) sh.getRange(2, pub + 1, rows, 1).setDataValidation(checkboxRule());
     TEXT_COLS.forEach(function (h) {
@@ -203,14 +211,15 @@ function appendRecords(sheet, recs) {
   });
   // appendRow は使わない：「掲載」のチェックボックス（チェックなし＝FALSE）が 1000 行目まであると、
   // シートの最後の行が 1000 行目とみなされて、1001 行目に足されてしまうため
-  const pub = heads.indexOf(PUBLISH_COL);
+  const pub = checkCol(heads);
+  const box = heads[pub];
   const at = lastContentRow(sheet, pub) + 1;
   const need = at + rows.length - 1 - sheet.getMaxRows();
   if (need > 0) sheet.insertRowsAfter(sheet.getMaxRows(), need + 100);
   sheet.getRange(at, 1, rows.length, heads.length).setValues(rows);
   if (pub >= 0) {
     sheet.getRange(at, pub + 1, rows.length, 1).insertCheckboxes()
-      .setValues(recs.map(function (rec) { return [rec[PUBLISH_COL] === true]; }));
+      .setValues(recs.map(function (rec) { return [rec[box] === true]; }));
   }
   return at;
 }
@@ -784,6 +793,7 @@ function doPost(e) {
     let body = null;
     try { body = JSON.parse((e && e.postData && e.postData.contents) || ''); } catch (err) { body = null; }
     if (body && typeof body === 'object' && body.type === 'post') return jsonOut(handlePost(body));
+    if (body && typeof body === 'object' && body.type === 'request') return jsonOut(handleRequest(body));
     if (!body || typeof body !== 'object' || body.type !== 'timeline') return jsonOut({ ok: false, error: 'bad_request' });
     const clientId = String(props().getProperty('CLIENT_ID') || '').trim();
     const ss = book();
@@ -795,6 +805,66 @@ function doPost(e) {
   } catch (err) {
     Logger.log('doPost：' + errText(err));
     return jsonOut({ ok: false, error: 'server_error' });
+  }
+}
+
+// ---- 年表の閲覧申請（ログインした人が、年表のページから送る） ----------------
+// 本文 { type: 'request', idToken, name, entry, note } → シート「申請」に 1 人 1 行。新しい申請なら、幹事にメールで知らせる
+function handleRequest(body) {
+  const clientId = String(props().getProperty('CLIENT_ID') || '').trim();
+  const ss = book();
+  if (!clientId || !ss) return { ok: false, error: 'not_configured' };
+  const email = verifyIdToken(body.idToken, clientId);
+  if (!email) return { ok: false, error: 'invalid_token' };
+  const name = cleanName(body.name);
+  if (!name) return { ok: false, error: 'bad_request' };
+  if (memberList(ss).indexOf(normEmail(email)) >= 0) return { ok: true, already: true };
+  const entry = cleanLine(body.entry, 30);
+  const note = cleanBlock(body.note, 500);
+  const sheet = sheetOf(ss, SHEETS.requests);
+  const mine = readTable(sheet).filter(function (r) { return normEmail(r['メールアドレス']) === normEmail(email); });
+  if (mine.length) {
+    // 同じ人の 2 回目：行は増やさず、名前などを新しくするだけ（「承認」はさわらない。メールも送らない）
+    const r = mine[0];
+    setCell(sheet, r._row, '日時', nowText());
+    setCell(sheet, r._row, 'お名前', name);
+    setCell(sheet, r._row, '入学年度', entry);
+    setCell(sheet, r._row, 'ひとこと', note);
+    return { ok: true, again: true };
+  }
+  const cache = CacheService.getScriptCache();
+  const hourKey = 'req_n_' + Math.floor(Date.now() / 3600000);
+  const n = Number(cache.get(hourKey)) || 0;
+  if (n >= REQUEST_PER_HOUR) return { ok: false, error: 'too_many' };
+  cache.put(hourKey, String(n + 1), 3600);
+  withLock(function () {
+    appendRecord(sheet, { '日時': nowText(), 'メールアドレス': email, 'お名前': name, '入学年度': entry, 'ひとこと': note, '承認': false, 'メモ': '' });
+  });
+  notifyRequest(ss, { email: email, name: name, entry: entry, note: note });
+  return { ok: true };
+}
+
+// 幹事（スプレッドシートの持ち主。スクリプト プロパティ NOTIFY_EMAIL があれば、そちら）にメールで知らせる
+function notifyRequest(ss, r) {
+  let to = String(props().getProperty('NOTIFY_EMAIL') || '').trim();
+  if (!to) { try { to = ss.getOwner() ? ss.getOwner().getEmail() : ''; } catch (err) { to = ''; } }
+  if (!to) { try { to = Session.getEffectiveUser().getEmail(); } catch (err) { to = ''; } }
+  if (!to) return;
+  const body = [
+    '夕照寮OB会サイトの年表を見る権限の申請が来ました。',
+    '',
+    'お名前：' + r.name,
+    '入学年度：' + (r.entry || '（書いていない）'),
+    'ひとこと：' + (r.note || '（なし）'),
+    'Google アカウント：' + r.email,
+    '',
+    '見せてよければ、スプレッドシートのシート「申請」で、この人の行の「承認」にチェックを入れてください。数分で見られるようになります。',
+    ss.getUrl(),
+  ].join('\n');
+  try {
+    MailApp.sendEmail({ to: to, subject: '【夕照寮OB会】年表の閲覧申請：' + r.name, body: body, name: '夕照寮OB会サイト' });
+  } catch (err) {
+    Logger.log('申請のメールを送れませんでした：' + errText(err));
   }
 }
 
@@ -838,6 +908,10 @@ function memberList(ss) {
     (text.match(/[^\s<>()[\]"'`,;:、。「」『』【】]+@[^\s<>()[\]"'`,;:、。「」『』【】]+/g) || []).forEach(function (m) {
       add(m.replace(/\.+$/, ''));
     });
+  });
+  // 「申請」で、幹事が「承認」にチェックした人
+  readTable(ss.getSheetByName(SHEETS.requests.name)).forEach(function (r) {
+    if (isChecked(r[APPROVE_COL])) add(String(r['メールアドレス'] || '').trim());
   });
   const list = Object.keys(set);
   cachePut(CACHE_MEMBERS, JSON.stringify(list), CACHE_MEMBERS_SEC);

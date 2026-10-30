@@ -73,3 +73,34 @@
   .ob-gate p { font-size: 14px; text-align: left; }
   .ob-gate .ob-small { font-size: 12px; }
 }
+
+/* ── 見る権限の申請（ログインしたが権限がないとき） ── */
+.ob-request {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0 0;
+  padding: 14px 14px 12px;
+  border: 2px dashed var(--fc-yellow);
+  text-align: left;
+}
+.ob-request h3 { margin: 0; font: 16px/1.4 var(--font-pixel); font-weight: normal; color: var(--fc-yellow); }
+.ob-request label { display: grid; gap: 4px; font: 14px/1.4 var(--font-pixel); color: var(--fc-white); }
+.ob-request label small { font: 12px/1.5 var(--font-body); color: var(--fc-yellow-2); }
+.ob-request input, .ob-request textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  font: 16px/1.5 var(--font-body); /* 16px 未満だと、iPhone が入力のときに拡大してしまう */
+  color: var(--fc-black);
+  background: var(--fc-white);
+  border: 2px solid var(--fc-black);
+  border-radius: 0;
+}
+.ob-request textarea { resize: vertical; }
+.ob-request input:focus, .ob-request textarea:focus { outline: 3px solid var(--fc-yellow); outline-offset: 0; }
+.ob-request .fc-btn { justify-self: start; }
+.ob-request.is-sent label, .ob-request.is-sent .fc-btn { display: none; }
+.ob-req-status:empty { display: none; }
+.ob-req-status { font-size: 14px; line-height: 1.7; color: var(--fc-yellow-2); }
+.ob-req-status.is-error { color: #ffb0a0; }
+.ob-req-status.is-done { color: var(--fc-lime); }

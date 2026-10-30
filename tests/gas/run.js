@@ -62,7 +62,8 @@ test('Code.gs は V8 で読める・appsscript.json の中身', () => {
     assert.ok(m.oauthScopes.some((x) => x.includes('/auth/' + s)), 'スコープ ' + s);
   }
   assert.ok(!m.oauthScopes.some((x) => /\/auth\/(forms|script\.scriptapp)/.test(x)), 'フォームとトリガーはもう使わない');
-  assert.ok(!m.oauthScopes.some((x) => /\/auth\/(drive|gmail|script\.send_mail|documents)/.test(x)), '要らない権限はない');
+  assert.ok(!m.oauthScopes.some((x) => /\/auth\/(drive|gmail|documents)/.test(x)), '要らない権限はない');
+  assert.ok(m.oauthScopes.includes('https://www.googleapis.com/auth/script.send_mail'), '申請を幹事にメールで知らせる');
 });
 
 test('部屋番号の一覧が js/site/data.js と同じ', () => {
@@ -1000,6 +1001,64 @@ test('シートに足す行：「掲載」のチェックボックス（FALSE）
   const at = env.ctx.appendRecord(t, { '見出し': '最後', '掲載': true });
   assert.strictEqual(at, 1001);
   assert.strictEqual(t.cell(1001, 4), '最後');
+});
+
+// ---- 年表の閲覧申請 ----
+test('申請：ログインした人がシート「申請」に 1 行。幹事にメール。承認にチェックすると年表を見られる', () => {
+  const env = tokenEnv({ info: goodInfo('newbie@example.com'), props: { CLIENT_ID: CID } });
+  assert.strictEqual(post(env, { type: 'timeline', idToken: TOKEN }).error, 'not_member');
+  const r = post(env, { type: 'request', idToken: TOKEN, name: '新入 太郎', entry: '2005', note: '305にいました' });
+  assert.deepStrictEqual(r, { ok: true });
+  const sh = env.ss.getSheetByName('申請');
+  assert.deepStrictEqual(sh.header(), ['日時', 'メールアドレス', 'お名前', '入学年度', 'ひとこと', '承認', 'メモ']);
+  const row = rec(sh, 2);
+  assert.strictEqual(row['メールアドレス'], 'newbie@example.com', 'アドレスは Google が確かめたもの（入力させない）');
+  assert.strictEqual(row['お名前'], '新入 太郎');
+  assert.strictEqual(String(row['入学年度']), '2005');
+  assert.strictEqual(row['承認'], false);
+  assert.deepStrictEqual(sh.validation.get('2,' + (col(sh, '承認') + 1)), { kind: 'checkbox' });
+  // メール
+  assert.strictEqual(env.mails.length, 1);
+  assert.strictEqual(env.mails[0].to, 'ob-kai@example.com', 'スプレッドシートの持ち主（OB会のアカウント）へ');
+  assert.ok(env.mails[0].subject.includes('年表の閲覧申請') && env.mails[0].subject.includes('新入 太郎'));
+  assert.ok(env.mails[0].body.includes('newbie@example.com') && env.mails[0].body.includes('「承認」にチェック') && env.mails[0].body.includes(env.ss.getUrl()));
+  // 2 回目：行もメールも増えない
+  assert.deepStrictEqual(post(env, { type: 'request', idToken: TOKEN, name: '新入 太郎（改）', entry: '', note: '' }), { ok: true, again: true });
+  assert.strictEqual(sh.getLastRow(), 2);
+  assert.strictEqual(rec(sh, 2)['お名前'], '新入 太郎(改)', '名前は全角・半角をそろえる');
+  assert.strictEqual(env.mails.length, 1);
+  // 承認 → 見られる（onEdit でキャッシュが消える）
+  sh.write(2, col(sh, '承認') + 1, true);
+  env.ctx.onEdit({});
+  assert.strictEqual(post(env, { type: 'timeline', idToken: TOKEN }).ok, true);
+  // もう見られる人の申請は already
+  assert.deepStrictEqual(post(env, { type: 'request', idToken: TOKEN, name: 'x' }), { ok: true, already: true });
+  // 承認を外すと、また見られない
+  sh.write(2, col(sh, '承認') + 1, false);
+  env.ctx.onEdit({});
+  assert.strictEqual(post(env, { type: 'timeline', idToken: TOKEN }).error, 'not_member');
+});
+
+test('申請：名前なし・トークンがおかしい・設定がまだ・メールが送れない・数が多すぎる', () => {
+  const env = tokenEnv({ info: goodInfo('a@example.com'), props: { CLIENT_ID: CID } });
+  assert.strictEqual(post(env, { type: 'request', idToken: TOKEN, name: '  ' }).error, 'bad_request');
+  assert.strictEqual(post(env, { type: 'request', idToken: 'xx', name: 'a' }).error, 'invalid_token');
+  const env2 = tokenEnv({ info: goodInfo('a@example.com'), props: {} });
+  assert.strictEqual(post(env2, { type: 'request', idToken: TOKEN, name: 'a' }).error, 'not_configured');
+  // メールが送れなくても、申請は入る
+  const env3 = freshSetup({ props: { CLIENT_ID: CID }, mailFails: true, fetch: () => ({ code: 200, body: goodInfo('b@example.com') }) });
+  assert.deepStrictEqual(post(env3, { type: 'request', idToken: TOKEN, name: 'b' }), { ok: true });
+  assert.strictEqual(env3.ss.getSheetByName('申請').getLastRow(), 2);
+  // NOTIFY_EMAIL があれば、そちらへ
+  const env4 = freshSetup({ props: { CLIENT_ID: CID, NOTIFY_EMAIL: 'kanji@example.com' }, fetch: () => ({ code: 200, body: goodInfo('c@example.com') }) });
+  post(env4, { type: 'request', idToken: TOKEN, name: 'c' });
+  assert.strictEqual(env4.mails[0].to, 'kanji@example.com');
+  // 1 時間の上限
+  let k = 0;
+  const env5 = freshSetup({ props: { CLIENT_ID: CID }, fetch: () => ({ code: 200, body: goodInfo('p' + (k++) + '@example.com') }) });
+  for (let i = 0; i < env5.get('REQUEST_PER_HOUR'); i++) assert.strictEqual(post(env5, { type: 'request', idToken: TOKEN, name: 'p' }).ok, true);
+  assert.strictEqual(post(env5, { type: 'request', idToken: TOKEN, name: 'p' }).error, 'too_many');
+  assert.strictEqual(env5.mails.length, env5.get('REQUEST_PER_HOUR'));
 });
 
 // ---- 実行 ----

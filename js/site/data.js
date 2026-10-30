@@ -48,6 +48,27 @@
     return { events: d.events || [], sample: false };
   }
 
+  // 年表を見る権限の申請（ログインして not_member だった人）。info：{ name, entry, note }
+  // 返事：{ ok: true }（受けつけた）・{ ok: true, again: true }（前にも申請した）・{ ok: true, already: true }（もう見られる）
+  // 失敗したときは Error に code（'invalid_token' | 'bad_request' | 'too_many' | 'not_configured' | 'network'）
+  async function requestAccess(idToken, info) {
+    let res;
+    try {
+      res = await fetch(cfg().GAS_URL, {
+        method: 'POST',
+        redirect: 'follow',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(Object.assign({ type: 'request', idToken }, info || {})),
+      });
+    } catch (e) {
+      throw Object.assign(new Error('通信に失敗しました'), { code: 'network' });
+    }
+    if (!res.ok) throw Object.assign(new Error('通信に失敗しました（' + res.status + '）'), { code: 'network' });
+    const d = await res.json();
+    if (!d.ok) throw Object.assign(new Error(d.error || '送れませんでした'), { code: d.error || 'unknown' });
+    return d;
+  }
+
   // 部屋番号の一覧（1階の 101、2・3階の 01〜17）
   const ROOM_NUMBERS = ['101'];
   for (const f of [2, 3]) for (let n = 1; n <= 17; n++) ROOM_NUMBERS.push(String(f * 100 + n));
@@ -70,5 +91,5 @@
     return by;
   }
 
-  OB.data = { isLive, loadPublic, loadTimeline, roomsByYear, ROOM_NUMBERS };
+  OB.data = { isLive, loadPublic, loadTimeline, requestAccess, roomsByYear, ROOM_NUMBERS };
 })();

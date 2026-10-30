@@ -3,7 +3,8 @@
  *
  *   const gate = OB.loginGate({
  *     what: '年表',                       // 文の中で使う名前（「年表の準備がまだ…」）
- *     el: { demo, setup, login, gbtn, status, reload, loading, board, user, userText, logout },
+ *     el: { demo, setup, login, gbtn, status, reload, loading, board, user, userText, logout,
+ *           req, reqEmail, reqStatus },        // req…：見る権限の申請の欄（なくてもよい。あれば not_member のときに出す）
  *     load: (cred) => OB.data.loadTimeline(cred), // cred が '' のときはデモ（サンプル）
  *     show: (data, email) => { ... },     // 中身を描く（board などの出し入れは、ここでする）
  *     clear: () => { ... },               // ログアウトのとき、中身を消す
@@ -13,7 +14,8 @@
  *  - GAS_URL が空 → デモ（el.demo を出し、サンプルで show）
  *  - GAS_URL はあるが GOOGLE_CLIENT_ID が空 → 準備中（el.setup）
  *  - どちらもある → Google のログイン（el.login）。ID トークンで load して、通れば show
- *  - ID トークンは、読み込みに使うだけで保存しない（メモリだけ）
+ *  - ID トークンは、読み込みと申請に使うだけで保存しない（メモリだけ）
+ *  - 見る権限がない（not_member）とき、el.req があれば申請の欄を出す（OB.data.requestAccess）。幹事が承認すると見られる
  * 見た目は css/login.css（ob-gate・ob-status など）。
  */
 (function () {
@@ -48,8 +50,10 @@
       gsi: 'Google のログインを読み込めませんでした。電波のよい所で、ページを読み込みなおしてください。',
       other: 'うまく読み込めませんでした。時間をおいて、もう一度ためしてください。',
     };
+    if (el.req) MSG.not_member = 'このアカウントには、まだ見る権限がありません。下の欄から申請できます。幹事が承認すると見られるようになります。';
     let gsiReady = false;
     let tries = 0; // ログインの回数（古い返事を捨てるため）
+    let pending = null; // 申請に使う ID トークン（not_member だったログイン。メモリだけ）
 
     // ── 知らせ（1 行目が本文、2 行目からは小さく） ──
     function setStatus(text, kind) {
@@ -66,6 +70,7 @@
     }
 
     function showBoard(data, email) {
+      hideRequest();
       o.show(data, email);
       el.board.hidden = false;
       el.login.hidden = true;
@@ -160,7 +165,73 @@
         if (code === 'not_member' || code === 'invalid_token') disableAuto();
         setStatus(text, 'error');
         renderButton();
+        if (code === 'not_member') showRequest(cred, email);
+        else hideRequest();
       }
+    }
+
+    // ── 見る権限の申請 ──
+    const REQ_MSG = {
+      invalid_token: 'ログインが切れました。もう一度ログインしてから、申請してください。',
+      bad_request: 'お名前を入れてください。',
+      too_many: 'いま申請がこみあっています。1 時間ほどしてから、もう一度送ってください。',
+      not_configured: '申請の準備がまだ終わっていません。しばらくしてから、もう一度ためしてください。',
+      network: '通信に失敗しました。電波のよい所で、もう一度送ってください。',
+      other: 'うまく送れませんでした。時間をおいて、もう一度送ってください。',
+    };
+    function reqSay(text, kind) {
+      el.reqStatus.className = 'ob-req-status' + (kind ? ' is-' + kind : '');
+      el.reqStatus.textContent = text || '';
+    }
+    function showRequest(cred, email) {
+      if (!el.req) return;
+      pending = cred;
+      el.req.hidden = false;
+      el.req.classList.remove('is-sent');
+      if (el.reqEmail) el.reqEmail.textContent = email || '（いまログインしたアカウント）';
+      reqSay('');
+    }
+    function hideRequest() {
+      pending = null;
+      if (el.req) el.req.hidden = true;
+    }
+    let sending = false;
+    if (el.req) {
+      el.req.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (sending || !pending) return;
+        const f = el.req.elements;
+        const info = { name: String(f.name.value || '').trim(), entry: String(f.entry.value || '').trim(), note: String(f.note.value || '').trim() };
+        if (!info.name) { reqSay(REQ_MSG.bad_request, 'error'); f.name.focus(); return; }
+        sending = true;
+        const btn = el.req.querySelector('button[type=submit]');
+        if (btn) btn.disabled = true;
+        reqSay('送っています…', 'busy');
+        const cred = pending;
+        try {
+          const d = await OB.data.requestAccess(cred, info);
+          if (d.already) {
+            // もう見られる（承認ずみ）：そのまま開く
+            reqSay('');
+            setStatus('見る権限があります。開いています…', 'busy');
+            const data = await o.load(cred);
+            setStatus('');
+            showBoard(data, emailOf(cred));
+            return;
+          }
+          el.req.classList.add('is-sent');
+          reqSay(d.again
+            ? '前にも申請を受けつけています（お名前などは新しくしました）。幹事が承認すると、このページでログインすれば見られます。'
+            : '申請を受けつけました。幹事が承認すると、このページでログインすれば見られるようになります。', 'done');
+        } catch (err) {
+          const code = (err && err.code) || 'network';
+          reqSay(REQ_MSG[code] || REQ_MSG.other, 'error');
+          if (code === 'invalid_token') { hideRequest(); renderButton(); }
+        } finally {
+          sending = false;
+          if (btn) btn.disabled = false;
+        }
+      });
     }
 
     function disableAuto() {
@@ -169,6 +240,7 @@
 
     function logout() {
       tries++;
+      hideRequest();
       disableAuto();
       o.clear();
       el.board.hidden = true;

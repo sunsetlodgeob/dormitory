@@ -107,6 +107,20 @@ docs/site/SETUP.md       Google 側の設定手順（幹事向け）
 - 「見る権限」＝ シート「メンバー」にメールアドレスがある人か、そのスプレッドシートを共有されている人（閲覧者・編集者・オーナー）。
   スプレッドシートを共有すると、掲載していない投稿やメモまで見えるので、寮生は「メンバー」に書く（`docs/site/SETUP.md`）。
 
+### 年表を見る権限の申請（ログインして not_member だった人）
+
+`OB.data.requestAccess(idToken, { name, entry, note })` → `POST {GAS_URL}`、本文 `{"type":"request","idToken":"…","name":"…","entry":"2005","note":"…"}`
+
+```json
+{ "ok": true }                    // 受けつけた（シート「申請」に 1 行。幹事にメール）
+{ "ok": true, "again": true }     // 前にも申請していた（行は増やさず、名前などを新しくする。メールは送らない）
+{ "ok": true, "already": true }   // もう見られる（承認ずみ）。ページはそのまま年表を読みこむ
+{ "ok": false, "error": "invalid_token" | "bad_request" | "too_many" | "not_configured" }
+```
+
+- メールアドレスは ID トークンから Apps Script が取る（入力させない）。名前は必須。
+- 「見る権限」には、シート「申請」で「承認」にチェックがある人も入る。申請の欄は `js/site/login.js`（`el.req`）が not_member のときに出す。
+
 ### 投稿（トップページのフォーム。だれでも送れる）
 
 `js/home/post.js` → `POST {GAS_URL}`（`Content-Type: text/plain`）。どの欄も空でよいが、事件の見出しか本文・名簿の名前か訂正・部屋割りのどれか 1 つは要る。
