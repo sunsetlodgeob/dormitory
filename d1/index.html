@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>D-1選手権 ― 夕照寮OB会</title>
-<meta name="description" content="夕照寮のD-1選手権の歴代記録。見るには Google でのログインが必要です。">
+<meta name="description" content="夕照寮のD-1選手権の歴代記録。">
 <meta name="theme-color" content="#0d0b26">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Crect width='16' height='16' fill='%230d0b26'/%3E%3Crect x='2' y='2' width='1' height='1' fill='%23fcfcfc'/%3E%3Crect x='13' y='2' width='1' height='1' fill='%23fcfcfc'/%3E%3Crect x='2' y='3' width='1' height='1' fill='%23bcbcbc'/%3E%3Crect x='3' y='3' width='10' height='1' fill='%23f83800'/%3E%3Crect x='13' y='3' width='1' height='1' fill='%23bcbcbc'/%3E%3Crect x='2' y='4' width='1' height='1' fill='%23bcbcbc'/%3E%3Crect x='13' y='4' width='1' height='1' fill='%23bcbcbc'/%3E%3Crect x='1' y='5' width='1' height='1' fill='%23fcfcfc'/%3E%3Crect x='2' y='5' width='1' height='1' fill='%23bcbcbc'/%3E%3Crect x='3' y='5' width='10' height='1' fill='%23f83800'/%3E%3Crect x='13' y='5' width='1' height='1' fill='%23bcbcbc'/%3E%3Crect x='14' y='5' width='1' height='1' fill='%23fcfcfc'/%3E%3Crect x='1' y='6' width='2' height='1' fill='%23bcbcbc'/%3E%3Crect x='3' y='6' width='10' height='1' fill='%230078f8'/%3E%3Crect x='13' y='6' width='2' height='1' fill='%23bcbcbc'/%3E%3Crect x='1' y='7' width='1' height='1' fill='%23bcbcbc'/%3E%3Crect x='2' y='7' width='12' height='1' fill='%23f83800'/%3E%3Crect x='14' y='7' width='1' height='1' fill='%23bcbcbc'/%3E%3Crect x='1' y='8' width='1' height='1' fill='%23bcbcbc'/%3E%3Crect x='2' y='8' width='12' height='1' fill='%230078f8'/%3E%3Crect x='14' y='8' width='1' height='1' fill='%23bcbcbc'/%3E%3Crect x='1' y='9' width='1' height='1' fill='%23bcbcbc'/%3E%3Crect x='2' y='9' width='12' height='1' fill='%23f83800'/%3E%3Crect x='14' y='9' width='1' height='1' fill='%23bcbcbc'/%3E%3Crect x='1' y='10' width='1' height='1' fill='%23bcbcbc'/%3E%3Crect x='2' y='10' width='12' height='1' fill='%230078f8'/%3E%3Crect x='14' y='10' width='1' height='1' fill='%23bcbcbc'/%3E%3Crect x='1' y='11' width='14' height='1' fill='%23fcfcfc'/%3E%3Crect x='1' y='12' width='14' height='1' fill='%230000bc'/%3E%3Crect x='1' y='13' width='2' height='1' fill='%230000bc'/%3E%3Crect x='3' y='13' width='2' height='1' fill='%23f8b800'/%3E%3Crect x='5' y='13' width='6' height='1' fill='%230000bc'/%3E%3Crect x='11' y='13' width='2' height='1' fill='%23f8b800'/%3E%3Crect x='13' y='13' width='2' height='1' fill='%230000bc'/%3E%3Crect x='1' y='14' width='14' height='1' fill='%237c7c7c'/%3E%3C/svg%3E">
@@ -22,7 +22,7 @@
 </header>
 
 <main class="ob-main">
-  <p class="ob-notice" id="d1-demo" hidden>デモ表示です（サンプルの記録）。本番では Google でログインした寮生だけが見られます。</p>
+  <p class="ob-notice" id="d1-demo" hidden>デモ表示です（サンプルの記録）。</p>
 
   <!-- D-1 とは（持ち主の言葉そのまま） -->
   <section class="fc-window d1-intro" aria-labelledby="d1-intro-title">
@@ -69,43 +69,17 @@
     </div>
   </section>
 
-  <!-- 設定がまだのとき -->
-  <section class="fc-window ob-gate ob-setup" id="d1-setup" aria-labelledby="d1-setup-title" hidden>
-    <h2 id="d1-setup-title">D-1選手権の記録は準備中です</h2>
-    <p>ログインのしくみを、いま用意しています。もうしばらくお待ちください。</p>
-    <p class="ob-small">幹事の方へ：<code>js/site/config.js</code> の <code>GOOGLE_CLIENT_ID</code> が空です。<code>docs/site/SETUP.md</code> を見て設定してください。</p>
-  </section>
-
-  <!-- ログイン -->
-  <section class="fc-window ob-gate" id="d1-login" aria-labelledby="d1-login-title" hidden>
-    <svg class="ob-lock" viewBox="0 0 12 13" width="48" height="52" shape-rendering="crispEdges" aria-hidden="true">
-      <rect x="3" y="0" width="6" height="1" fill="#fcfcfc"/>
-      <rect x="2" y="1" width="1" height="4" fill="#bcbcbc"/><rect x="9" y="1" width="1" height="4" fill="#7c7c7c"/>
-      <rect x="0" y="5" width="12" height="8" fill="#ac7c00"/>
-      <rect x="1" y="5" width="10" height="7" fill="#f8b800"/>
-      <rect x="1" y="5" width="10" height="1" fill="#fce0a8"/>
-      <rect x="5" y="7" width="2" height="2" fill="#000"/><rect x="5.5" y="9" width="1" height="2" fill="#000"/>
-    </svg>
-    <h2 id="d1-login-title">ログインが必要です</h2>
-    <p>D-1選手権の記録は、見る権限のある寮生だけが見られます。</p>
-    <p>見る権限をもらった Google アカウントで、ログインしてください。</p>
-    <div class="ob-gbtn" id="d1-gbtn"></div>
-    <div class="ob-status" id="d1-status" role="status" aria-live="polite" hidden></div>
-    <button type="button" class="fc-btn ob-reload" id="d1-reload" hidden>ページを読み込みなおす</button>
-    <p class="ob-small">ログインの情報は、このページを開いている間だけ使います。保存はしません。</p>
-  </section>
-
   <div class="ob-loading" id="d1-loading" role="status" hidden>
     <span class="ob-blink" aria-hidden="true">▶</span> 読み込んでいます…
   </div>
 
+  <div class="ob-notice ob-error d1-error" id="d1-error" role="alert" hidden>
+    <p>記録を読み込めませんでした。電波のよい所で、もう一度ためしてください。</p>
+    <p><button type="button" class="fc-btn" id="d1-retry">もう一度読み込む</button></p>
+  </div>
+
   <!-- 歴代記録 -->
   <section class="d1-board" id="d1-board" aria-labelledby="d1-board-title" tabindex="-1" hidden>
-    <div class="ob-user" id="d1-user" hidden>
-      <span class="ob-user-text"><span class="ob-user-dot" aria-hidden="true"></span><span id="d1-user-text">ログイン中</span></span>
-      <button type="button" class="fc-btn ob-logout" id="d1-logout">ログアウト</button>
-    </div>
-
     <div class="d1-board-head">
       <h2 class="d1-board-title" id="d1-board-title">歴代記録</h2>
       <p class="d1-count" id="d1-count"></p>
@@ -121,7 +95,6 @@
 <script src="../js/site/sample.js"></script>
 <script src="../js/site/data.js"></script>
 <script src="../js/site/common.js"></script>
-<script src="../js/site/login.js"></script>
 <script src="../js/d1.js"></script>
 </body>
 </html>

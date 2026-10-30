@@ -89,6 +89,8 @@ async function openSub(browser, base, rel, o = {}) {
   const outside = [];
   await ctx.route((url) => url.origin === origin, async (route) => {
     const u = new URL(route.request().url());
+    // 設定は、tests/e2e/lib.js がはじめに用意した空の設定（デモ表示）にまかせる
+    if (u.pathname === SUB + 'js/site/config.js') return route.fallback();
     if (!u.pathname.startsWith(SUB)) {
       outside.push(u.pathname);
       return route.fulfill({ status: 404, contentType: 'text/plain', body: 'not under ' + SUB });

@@ -12,24 +12,24 @@
     return !!cfg().GAS_URL;
   }
 
-  // 名簿・部屋割り（誰でも見られる）
+  // 名簿・部屋割り・D-1選手権の記録（誰でも見られる）
   async function loadPublic() {
     if (!isLive()) {
       const s = OB.SAMPLE;
-      return { members: s.members.slice(), rooms: s.rooms.slice(), updated: s.updated, sample: true };
+      return { members: s.members.slice(), rooms: s.rooms.slice(), d1: (s.d1 || []).slice(), updated: s.updated, sample: true };
     }
     const res = await fetch(cfg().GAS_URL + '?type=public', { redirect: 'follow' });
     if (!res.ok) throw new Error('通信に失敗しました（' + res.status + '）');
     const d = await res.json();
     if (!d.ok) throw new Error(d.error || 'データを読み込めませんでした');
-    return { members: d.members || [], rooms: d.rooms || [], updated: d.updated || '', sample: false };
+    return { members: d.members || [], rooms: d.rooms || [], d1: d.d1 || [], updated: d.updated || '', sample: false };
   }
 
-  // 年表と D-1選手権の記録（Google でログインした、見る権限のある人だけ）
+  // 年表（Google でログインした、見る権限のある人だけ）
   // idToken は Google Identity Services のログインで受け取った credential。
   // 失敗したときは Error に code（'not_member' | 'invalid_token' | 'not_configured' | 'network'）を付ける
   async function loadTimeline(idToken) {
-    if (!isLive()) return { events: OB.SAMPLE.events.slice(), d1: OB.SAMPLE.d1.slice(), sample: true };
+    if (!isLive()) return { events: OB.SAMPLE.events.slice(), sample: true };
     let res;
     try {
       res = await fetch(cfg().GAS_URL, {
@@ -45,7 +45,7 @@
     if (!res.ok) throw Object.assign(new Error('通信に失敗しました（' + res.status + '）'), { code: 'network' });
     const d = await res.json();
     if (!d.ok) throw Object.assign(new Error(d.error || '読み込めませんでした'), { code: d.error || 'unknown' });
-    return { events: d.events || [], d1: d.d1 || [], sample: false };
+    return { events: d.events || [], sample: false };
   }
 
   // 部屋番号の一覧（1階の 101、2・3階の 01〜17）

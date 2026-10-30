@@ -1,9 +1,8 @@
 /*
  * 夕照寮OB会サイト ― D-1選手権（d1/）
  * 歴代の記録（年度・優勝・準優勝・出場メンバー・主催者・レフェリー・黒子・補足）を、古い年度から並べる。
- * 本番（GAS_URL あり）では、年表と同じく Google でログインして、見る権限があると確かめられた人にだけ出す。
- *  - データは年表といっしょに来る（OB.data.loadTimeline() の d1）
- *  - ログインまわりは js/site/login.js（OB.loginGate）
+ * 誰でも見られる（持ち主の決めたこと。ログインが要るのは年表と写真館だけ）。
+ *  - データは名簿・部屋割りといっしょに来る（OB.data.loadPublic() の d1）。GAS_URL が空ならサンプル
  *  - スプレッドシートから来た文字は、すべて OB.esc() を通してから HTML に入れる
  */
 (function () {
@@ -11,9 +10,7 @@
   const OB = window.OB;
   const $ = (id) => document.getElementById(id);
   const el = {
-    demo: $('d1-demo'), setup: $('d1-setup'), login: $('d1-login'), gbtn: $('d1-gbtn'), status: $('d1-status'),
-    reload: $('d1-reload'), loading: $('d1-loading'), board: $('d1-board'),
-    user: $('d1-user'), userText: $('d1-user-text'), logout: $('d1-logout'),
+    demo: $('d1-demo'), loading: $('d1-loading'), board: $('d1-board'), error: $('d1-error'), retry: $('d1-retry'),
     count: $('d1-count'), list: $('d1-list'), none: $('d1-none'),
   };
 
@@ -87,7 +84,7 @@
       (facts.length ? '<dl class="d1-facts">' + facts.join('') + '</dl>' : '') + note + '</article></li>';
   }
 
-  // ログインが通ったら（デモではすぐに）描く
+  // 読みこんだら描く
   function showBoard(d) {
     const list = tidy(d && d.d1);
     const seen = {};
@@ -102,19 +99,28 @@
     el.count.textContent = list.length
       ? '全 ' + list.length + '回' + (years.length ? '（' + Math.min(...years) + '〜' + Math.max(...years) + '年度）' : '')
       : '';
+    el.board.hidden = false;
   }
 
-  function clearBoard() {
-    el.list.innerHTML = '';
-    el.count.textContent = '';
-    el.none.hidden = true;
+  let busy = false;
+  async function load() {
+    if (busy) return;
+    busy = true;
+    el.error.hidden = true;
+    el.loading.hidden = false;
+    try {
+      const d = await OB.data.loadPublic();
+      el.demo.hidden = !d.sample;
+      showBoard(d);
+    } catch (e) {
+      el.board.hidden = true;
+      el.error.hidden = false;
+    } finally {
+      el.loading.hidden = true;
+      busy = false;
+    }
   }
 
-  OB.loginGate({
-    what: 'D-1選手権',
-    el,
-    load: (cred) => OB.data.loadTimeline(cred),
-    show: showBoard,
-    clear: clearBoard,
-  }).start();
+  el.retry.addEventListener('click', load);
+  load();
 })();

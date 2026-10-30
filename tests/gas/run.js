@@ -144,7 +144,7 @@ test('doGet public：掲載にチェックした行の、決まった項目だ�
   const o = env.ctx.doGet({ parameter: { type: 'public' } });
   const text = o.getContent();
   const d = out(o);
-  assert.deepStrictEqual(Object.keys(d).sort(), ['members', 'ok', 'rooms', 'updated']);
+  assert.deepStrictEqual(Object.keys(d).sort(), ['d1', 'members', 'ok', 'rooms', 'updated']);
   assert.strictEqual(d.ok, true);
   assert.match(d.updated, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\+09:00$/);
   assert.deepStrictEqual(d.members, [
@@ -229,7 +229,7 @@ test('doPost：閲覧者として共有された人には、掲載した事件�
   const text = o.getContent();
   const d = out(o);
   assert.strictEqual(d.ok, true);
-  assert.deepStrictEqual(Object.keys(d).sort(), ['d1', 'events', 'ok']);
+  assert.deepStrictEqual(Object.keys(d).sort(), ['events', 'ok']);
   assert.deepStrictEqual(d.events, [
     { id: 'e4', year: 2004, month: 11, title: '学祭', body: '焼きそば。', tags: ['学祭', '模擬店'] },
     { id: 'e5', year: 2004, month: 3, title: '追いコン', body: '泣いた。', tags: [] },
@@ -934,7 +934,7 @@ test('取り込み：名簿（元）→ 名簿（「、」「・」で分ける�
   assert.strictEqual(m.getLastRow(), 6);
 });
 
-test('取り込み：D-1選手権年表 → D-1（赤い字は優勝、太字は準優勝）。年表と同じログインで読める', () => {
+test('取り込み：D-1選手権年表 → D-1（赤い字は優勝、太字は準優勝）。だれでも読める（名簿と同じ doGet）', () => {
   const env = loadGas({ props: { CLIENT_ID: CID }, viewers: ['viewer@example.com'], fetch: (url) => {
     if (url.startsWith('https://oauth2.googleapis.com/tokeninfo')) return { code: 200, body: goodInfo() };
     return { code: 500, body: {} };
@@ -955,15 +955,18 @@ test('取り込み：D-1選手権年表 → D-1（赤い字は優勝、太字は
   assert.strictEqual(r['掲載'], true);
   assert.strictEqual(rec(sh, 3)['補足'], '雨で中止になりかけた', 'ラベルのない文で、名前に見えない（ひらがながある）ものは補足');
   assert.strictEqual(rec(sh, 3)['主催者'], '');
-  const res = post(env, { type: 'timeline', idToken: TOKEN });
+  const pub = () => out(env.ctx.doGet({ parameter: { type: 'public' } }));
+  const res = pub();
   assert.strictEqual(res.ok, true);
+  assert.ok(!('d1' in post(env, { type: 'timeline', idToken: TOKEN })), '年表の返事には入れない');
   assert.deepStrictEqual(res.d1[0], { year: 2004, winner: ['三浦'], second: ['久保'], members: ['三浦', '久保', '土井', '千坂'], host: '先輩A', referee: '先輩A', kuroko: '先輩B', note: '' });
   assert.strictEqual(res.d1.length, 2);
   // 掲載を外すと出ない。2 回目の取り込みでは増えない
   sh.write(3, col(sh, '掲載') + 1, false);
   env.ctx.importAll();
   assert.strictEqual(sh.getLastRow(), 3);
-  assert.strictEqual(post(env, { type: 'timeline', idToken: TOKEN }).d1.length, 1);
+  env.ctx.onEdit({});
+  assert.strictEqual(pub().d1.length, 1);
 });
 
 test('取り込み：もとのシートがないときは、そう言うだけ', () => {

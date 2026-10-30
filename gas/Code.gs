@@ -7,8 +7,8 @@
  *  - setup()  ：最初に 1 回だけ実行する。シートを作る（何度実行しても増えない）。同じ名前で形のちがうシートは「（元）」を付けてよける
  *  - importAll()：幹事が作った「事件簿」「名簿（元）」「D-1選手権年表」を、サイト用のシートに写す（何度実行しても重ならない）
  *  - onOpen(e)：スプレッドシートを開くと、メニュー「OB会」が出る（準備・取り込み）
- *  - doGet(e) ：?type=public で名簿・部屋割り（誰でも見られる）
- *  - doPost(e)：type 'timeline' … 年表と D-1選手権の記録（Google でログインした、見る権限のある人だけ）
+ *  - doGet(e) ：?type=public で名簿・部屋割り・D-1選手権の記録（誰でも見られる）
+ *  - doPost(e)：type 'timeline' … 年表（Google でログインした、見る権限のある人だけ）
  *               type 'post'     … トップページの投稿（事件・名簿の追加と訂正・部屋割り。どれも空欄でよい）
  *  - onEdit(e)：シートを手で直したら、サイト用のキャッシュを消す（すぐ反映されるように）
  *
@@ -764,6 +764,7 @@ function publicData(ss) {
       return o;
     }),
     rooms: rooms.map(function (r) { return { year: r.year, room: r.room, name: r.name }; }),
+    d1: publishedD1(ss),
   };
 }
 
@@ -790,7 +791,7 @@ function doPost(e) {
     const email = verifyIdToken(body.idToken, clientId);
     if (!email) return jsonOut({ ok: false, error: 'invalid_token' });
     if (memberList(ss).indexOf(normEmail(email)) < 0) return jsonOut({ ok: false, error: 'not_member' });
-    return jsonOut({ ok: true, events: publishedEvents(ss), d1: publishedD1(ss) });
+    return jsonOut({ ok: true, events: publishedEvents(ss) });
   } catch (err) {
     Logger.log('doPost：' + errText(err));
     return jsonOut({ ok: false, error: 'server_error' });
