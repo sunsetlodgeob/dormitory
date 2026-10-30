@@ -26,6 +26,8 @@ const SHEETS = {
   access: { name: 'メンバー', headers: ['メールアドレス', 'メモ'] },
   posts: { name: '投稿', headers: ['日時', '内容', '結果'] },
   requests: { name: '申請', headers: ['日時', 'メールアドレス', 'お名前', '入学年度', 'ひとこと', '承認', 'メモ'] },
+  photos: { name: '写真', headers: ['ファイルID', 'ファイル名', 'フォルダ', '撮影日', '年度', '年度の出どころ', '幅', '高さ', 'md5', '掲載', 'メモ'] },
+  settings: { name: '設定', headers: ['項目', '値', '説明'] },
   d1: { name: 'D-1', headers: ['年度', '優勝', '準優勝', '出場メンバー', '主催者', 'レフェリー', '黒子', '補足', '掲載', '元の回答', 'メモ'] },
 };
 
@@ -45,7 +47,7 @@ function checkCol(heads) {
   return p >= 0 ? p : heads.indexOf(APPROVE_COL);
 }
 // 文字のまま扱う列（"101" が数字に化けないように）
-const TEXT_COLS = ['ID', '部屋'];
+const TEXT_COLS = ['ID', '部屋', 'ファイルID', 'md5'];
 // 幹事が読みやすいように広げる列
 const WIDE_COLS = { '本文': 420, 'メモ': 320, '元の回答': 160, '見出し': 220, 'メールアドレス': 260, '内容': 420, '結果': 360, '日時': 140 };
 
@@ -75,6 +77,10 @@ const TOKENINFO_URL = 'https://oauth2.googleapis.com/tokeninfo?id_token=';
 
 const CACHE_PUBLIC = 'public_v1';
 const CACHE_MEMBERS = 'members_v1';
+const CACHE_PHOTOS = 'photos_v1';
+const PHOTO_THUMB_MAX = 24; // 1 回でわたす写真の小さい絵の数
+const PHOTO_FILE_MAX = 25 * 1024 * 1024; // ダウンロードできるファイルの大きさの上限（Apps Script の返事の上限より小さく）
+const DRIVE_API = 'https://www.googleapis.com/drive/v3/files';
 const CACHE_PUBLIC_SEC = 300; // 名簿・部屋割り：5 分
 const CACHE_MEMBERS_SEC = 120; // 見る権限のある人の一覧：2 分
 
@@ -94,6 +100,7 @@ function setup() {
   try {
     Object.keys(SHEETS).forEach(function (k) { moveAside(ss, SHEETS[k]); });
     Object.keys(SHEETS).forEach(function (k) { ensureSheet(ss, SHEETS[k]); });
+    ensureSettings(ss);
     removeBlankDefaultSheet(ss);
     props().setProperty('SPREADSHEET_ID', ss.getId());
     clearCache();
@@ -804,6 +811,7 @@ function doPost(e) {
     try { body = JSON.parse((e && e.postData && e.postData.contents) || ''); } catch (err) { body = null; }
     if (body && typeof body === 'object' && body.type === 'post') return jsonOut(handlePost(body));
     if (body && typeof body === 'object' && body.type === 'request') return jsonOut(handleRequest(body));
+    if (body && typeof body === 'object' && /^(photos|thumbs|photo)$/.test(body.type)) return jsonOut(handlePhotos(body));
     if (!body || typeof body !== 'object' || body.type !== 'timeline') return jsonOut({ ok: false, error: 'bad_request' });
     const clientId = String(props().getProperty('CLIENT_ID') || '').trim();
     const ss = book();
@@ -876,6 +884,18 @@ function notifyRequest(ss, r) {
   } catch (err) {
     Logger.log('申請のメールを送れませんでした：' + errText(err));
   }
+}
+
+// 確かめたトークンは、しばらく覚えておく（写真館は 1 回のログインで何十回も呼ぶので、そのたびに Google に聞かない）
+function verifiedEmail(token, clientId) {
+  if (typeof token !== 'string' || token.length > 4096) return '';
+  const key = 'tok_' + hashText(token);
+  const cache = CacheService.getScriptCache();
+  const hit = cache.get(key);
+  if (hit) return hit;
+  const email = verifyIdToken(token, clientId);
+  if (email) cache.put(key, email, 600);
+  return email;
 }
 
 // Google の ID トークンを確かめて、メールアドレスを返す（だめなら ''）
@@ -995,6 +1015,8 @@ function onOpen() {
     SpreadsheetApp.getUi().createMenu('OB会')
       .addItem('Gemini のキーを確かめる', 'checkGemini')
       .addItem('事件簿・名簿・D-1 を取り込む', 'importAll')
+      .addItem('写真を取り込む（重複と年度の仕分け）', 'importPhotos')
+      .addItem('写真のフォルダを変える', 'choosePhotoFolder')
       .addSeparator()
       .addItem('準備（シートを作る）', 'setup')
       .addToUi();
@@ -1316,6 +1338,247 @@ function splitInfo(v) {
   return { host: out.host.join('、'), referee: out.referee.join('、'), kuroko: out.kuroko.join('、'), note: out.note.join('、') };
 }
 
+// ---- 写真館：ドライブのフォルダの写真を一覧にして、年度ごとに見せる -------------
+// シート「写真」に 1 枚 1 行。年度は撮影日（写真の中の日時）から。なければフォルダ名の年。どちらもなければ年度不明。
+// 幹事が「年度」を書きかえると、その年度に移る。重複はサイトに出さない（「掲載」なし＋メモ）
+
+const SETTINGS = [
+  { key: '写真のダウンロード', check: true, value: false, note: 'チェックすると、写真館で写真をダウンロードできる' },
+];
+
+// シート「設定」に、決まった項目がなければ足す
+function ensureSettings(ss) {
+  const sheet = sheetOf(ss, SHEETS.settings);
+  const have = {};
+  readTable(sheet).forEach(function (r) { have[String(r['項目']).trim()] = r._row; });
+  SETTINGS.forEach(function (it) {
+    if (have[it.key]) return;
+    const at = appendRecord(sheet, { '項目': it.key, '値': it.check ? '' : it.value, '説明': it.note });
+    if (it.check) sheet.getRange(at, 2).insertCheckboxes().setValue(it.value === true);
+  });
+}
+
+function setting(ss, key) {
+  const row = readTable(ss.getSheetByName(SHEETS.settings.name)).filter(function (r) { return String(r['項目']).trim() === key; })[0];
+  return row ? row['値'] : null;
+}
+
+// 写真のフォルダ（URL か ID）をきいて、覚える
+function choosePhotoFolder() {
+  const ui = SpreadsheetApp.getUi();
+  const res = ui.prompt('写真のフォルダ', '写真が入っている Google ドライブのフォルダの URL を貼ってください（フォルダを開いたときの、ブラウザの上の URL）。', ui.ButtonSet.OK_CANCEL);
+  if (res.getSelectedButton() !== ui.Button.OK) return '';
+  const id = folderIdOf(res.getResponseText());
+  if (!id) { ui.alert('フォルダの URL ではないようです。もう一度ためしてください。'); return ''; }
+  props().setProperty('PHOTO_FOLDER_ID', id);
+  return id;
+}
+
+function folderIdOf(text) {
+  const t = String(text || '').trim();
+  const m = t.match(/\/folders\/([\w-]{10,})/) || t.match(/[?&]id=([\w-]{10,})/) || t.match(/^([\w-]{10,})$/);
+  return m ? m[1] : '';
+}
+
+// ドライブ（REST）を呼ぶ。スクリプトのオーナー（OB会のアカウント）として
+function driveGet(url) {
+  const res = UrlFetchApp.fetch(url, { headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true });
+  if (res.getResponseCode() !== 200) throw new Error('Drive HTTP ' + res.getResponseCode());
+  return JSON.parse(res.getContentText());
+}
+
+// フォルダの中を、下のフォルダまでたどって、写真（image/*）を集める
+function listPhotos(rootId, t0) {
+  const out = [];
+  const queue = [{ id: rootId, path: '' }];
+  const fields = 'nextPageToken,files(id,name,mimeType,md5Checksum,size,imageMediaMetadata(time,width,height),createdTime)';
+  while (queue.length) {
+    if ((Date.now() - t0) / 1000 > IMPORT_SEC) throw new Error('時間切れ（フォルダが多すぎる）');
+    const f = queue.shift();
+    let page = '';
+    do {
+      const q = "'" + f.id + "' in parents and trashed = false";
+      const d = driveGet(DRIVE_API + '?q=' + encodeURIComponent(q) + '&fields=' + encodeURIComponent(fields) +
+        '&pageSize=1000&supportsAllDrives=true&includeItemsFromAllDrives=true' + (page ? '&pageToken=' + encodeURIComponent(page) : ''));
+      (d.files || []).forEach(function (x) {
+        if (x.mimeType === 'application/vnd.google-apps.folder') queue.push({ id: x.id, path: f.path ? f.path + '/' + x.name : x.name });
+        else if (/^image\//.test(x.mimeType || '')) out.push(Object.assign({ path: f.path }, x));
+      });
+      page = d.nextPageToken || '';
+    } while (page);
+  }
+  return out;
+}
+
+// 「2005:04:12 13:45:00」→ { date: '2005-04-12', stamp: '2005-04-12 13:45:00', year: 2005（年度） }
+function shotDate(meta) {
+  const m = String((meta && meta.time) || '').match(/^(\d{4})[:\-](\d{2})[:\-](\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
+  if (!m || m[1] === '0000') return null;
+  const y = Number(m[1]), mo = Number(m[2]);
+  return { date: m[1] + '-' + m[2] + '-' + m[3], stamp: m[1] + '-' + m[2] + '-' + m[3] + ' ' + m[4] + ':' + m[5] + ':' + m[6], year: inRange(mo <= 3 ? y - 1 : y, 2100) };
+}
+
+// フォルダ名・ファイル名の年（「2005新歓」「H17」など）
+function yearOfPath(path, name) {
+  const parts = String(path || '').split('/').reverse().concat([String(name || '').replace(/\.[^.]+$/, '')]);
+  for (const p of parts) {
+    const y = looseYear(p, 2100);
+    if (y != null) return y;
+  }
+  return null;
+}
+
+// 写真を取り込む：新しい写真をシート「写真」に足し、重複を見つけ、年度を決める。何度実行しても重ならない
+function importPhotos() {
+  const ss = SpreadsheetApp.getActive() || book();
+  if (!ss) throw new Error('スプレッドシートから実行してください');
+  let folder = props().getProperty('PHOTO_FOLDER_ID') || '';
+  if (!folder) folder = choosePhotoFolder();
+  if (!folder) return '写真のフォルダが決まっていません';
+  const t0 = Date.now();
+  progress('写真のフォルダを読んでいます…');
+  const files = listPhotos(folder, t0);
+  const sheet = sheetOf(ss, SHEETS.photos);
+  const rows = readTable(sheet);
+  const known = {};
+  rows.forEach(function (r) { known[String(r['ファイルID'])] = r; });
+  // 重複を見分ける印：同じ中身（md5）／同じ撮影時刻（秒まで）で縦横の比が同じ
+  const keyMd5 = {}, keyShot = {};
+  const ratio = function (w, h) { return w && h ? Math.round((Math.max(w, h) / Math.min(w, h)) * 100) : 0; };
+  rows.forEach(function (r) {
+    if (!isChecked(r[PUBLISH_COL])) return;
+    if (r['md5']) keyMd5[r['md5']] = r;
+    const st = String(r['メモ'] || '').match(/撮影時刻：([\d\- :]+)/);
+    if (st && ratio(r['幅'], r['高さ'])) keyShot[st[1] + '|' + ratio(r['幅'], r['高さ'])] = r;
+  });
+  // 新しい写真。大きいものから見ていく（重複のときに、大きいほうを残すため）
+  const fresh = files.filter(function (f) { return !known[f.id]; });
+  fresh.sort(function (a, b) {
+    const pa = ((a.imageMediaMetadata || {}).width || 0) * ((a.imageMediaMetadata || {}).height || 0);
+    const pb = ((b.imageMediaMetadata || {}).width || 0) * ((b.imageMediaMetadata || {}).height || 0);
+    return pb - pa || Number(b.size || 0) - Number(a.size || 0);
+  });
+  const recs = [];
+  let dup = 0, unknown = 0;
+  fresh.forEach(function (f) {
+    const meta = f.imageMediaMetadata || {};
+    const sd = shotDate(meta);
+    let year = sd ? sd.year : null, from = sd ? '撮影日' : '';
+    if (year == null) { year = yearOfPath(f.path, f.name); if (year != null) from = 'フォルダ名'; }
+    if (year == null) unknown++;
+    const notes = [];
+    if (sd) notes.push('撮影時刻：' + sd.stamp);
+    let show = true;
+    const same = f.md5Checksum && keyMd5[f.md5Checksum];
+    const r = ratio(meta.width, meta.height);
+    const twin = !same && sd && r && keyShot[sd.stamp + '|' + r];
+    if (same) {
+      show = false;
+      notes.unshift('重複（同じファイル：' + same['ファイル名'] + '）');
+    } else if (twin) {
+      show = false;
+      notes.unshift('重複（同じ撮影時刻で、大きいほうの ' + twin['ファイル名'] + ' を残した）');
+    }
+    if (!show) dup++;
+    const rec = {
+      'ファイルID': f.id, 'ファイル名': cleanLine(f.name, 200), 'フォルダ': cleanLine(f.path, 300), '撮影日': sd ? sd.date : '',
+      '年度': year == null ? '' : year, '年度の出どころ': from, '幅': meta.width || '', '高さ': meta.height || '',
+      'md5': f.md5Checksum || '', '掲載': show, 'メモ': notes.join('／'),
+    };
+    if (show) {
+      if (f.md5Checksum) keyMd5[f.md5Checksum] = rec;
+      if (sd && r) keyShot[sd.stamp + '|' + r] = rec;
+    }
+    recs.push(rec);
+  });
+  withLock(function () { appendRecords(sheet, recs); });
+  clearCache();
+  const text = '写真：' + recs.length + ' 枚を新しく一覧に入れました（そのうち重複 ' + dup + ' 枚はサイトに出しません。年度不明 ' + unknown + ' 枚）。' +
+    'フォルダの写真は全部で ' + files.length + ' 枚です。';
+  Logger.log(text);
+  try { SpreadsheetApp.getUi().alert('写真の取り込み', text, SpreadsheetApp.getUi().ButtonSet.OK); } catch (err) { /* 画面がないとき */ }
+  return text;
+}
+
+// サイトに見せる写真（掲載にチェック。年度の順、撮影日の順）
+function publishedPhotos(ss) {
+  const cached = cacheGet(CACHE_PHOTOS);
+  if (cached) return JSON.parse(cached);
+  const list = readTable(ss.getSheetByName(SHEETS.photos.name)).filter(function (r) {
+    return isChecked(r[PUBLISH_COL]) && /^[\w-]{10,200}$/.test(String(r['ファイルID']));
+  }).map(function (r) {
+    const d = String(r['撮影日'] instanceof Date ? Utilities.formatDate(r['撮影日'], 'Asia/Tokyo', "yyyy-MM-dd'T'HH:mm:ssXXX").slice(0, 10) : r['撮影日'] || '').slice(0, 10);
+    return { id: String(r['ファイルID']), year: toYear(r['年度'], 2100), date: /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : '', w: Number(r['幅']) || 0, h: Number(r['高さ']) || 0, _row: r._row };
+  });
+  list.sort(function (a, b) {
+    return (a.year == null ? 9999 : a.year) - (b.year == null ? 9999 : b.year) || (a.date || '9').localeCompare(b.date || '9') || a._row - b._row;
+  });
+  const out = list.map(function (p) { return { id: p.id, year: p.year, date: p.date, w: p.w, h: p.h }; });
+  cachePut(CACHE_PHOTOS, JSON.stringify(out), CACHE_PUBLIC_SEC);
+  return out;
+}
+
+// 写真館の呼び出し：photos（一覧）・thumbs（小さい絵）・photo（ファイルそのもの。ダウンロードが許されているときだけ）
+function handlePhotos(body) {
+  const clientId = String(props().getProperty('CLIENT_ID') || '').trim();
+  const ss = book();
+  if (!clientId || !ss) return { ok: false, error: 'not_configured' };
+  const email = verifiedEmail(body.idToken, clientId);
+  if (!email) return { ok: false, error: 'invalid_token' };
+  if (memberList(ss).indexOf(normEmail(email)) < 0) return { ok: false, error: 'not_member' };
+  const list = publishedPhotos(ss);
+  const download = isChecked(setting(ss, '写真のダウンロード'));
+  if (body.type === 'photos') return { ok: true, download: download, photos: list };
+  // 見せてよい写真の id だけ（よその Drive のファイルを読ませない）
+  const allowed = {};
+  list.forEach(function (p) { allowed[p.id] = true; });
+  if (body.type === 'thumbs') {
+    const size = Number(body.size) === 1600 ? 1600 : 400;
+    const ids = (Array.isArray(body.ids) ? body.ids : []).map(String).filter(function (id) { return allowed[id]; }).slice(0, PHOTO_THUMB_MAX);
+    return { ok: true, images: thumbs(ids, size) };
+  }
+  const id = String(body.id || '');
+  if (!allowed[id]) return { ok: false, error: 'bad_request' };
+  if (!download) return { ok: false, error: 'not_allowed' };
+  const file = DriveApp.getFileById(id);
+  if (file.getSize() > PHOTO_FILE_MAX) return { ok: false, error: 'too_large' };
+  const blob = file.getBlob();
+  return { ok: true, name: cleanLine(file.getName(), 200), mime: blob.getContentType(), data: Utilities.base64Encode(blob.getBytes()) };
+}
+
+// 小さい絵（Drive のサムネイル。大きさをかえて読む）→ { id: 'data:image/jpeg;base64,…' }
+function thumbs(ids, size) {
+  const out = {};
+  const cache = CacheService.getScriptCache();
+  const need = [];
+  ids.forEach(function (id) {
+    const hit = size === 400 ? cache.get('th_' + id) : null;
+    if (hit) out[id] = hit; else need.push(id);
+  });
+  if (!need.length) return out;
+  const auth = { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() };
+  const metas = UrlFetchApp.fetchAll(need.map(function (id) {
+    return { url: DRIVE_API + '/' + encodeURIComponent(id) + '?fields=thumbnailLink&supportsAllDrives=true', headers: auth, muteHttpExceptions: true };
+  }));
+  const reqs = [], forIds = [];
+  metas.forEach(function (res, i) {
+    if (res.getResponseCode() !== 200) return;
+    let link = '';
+    try { link = JSON.parse(res.getContentText()).thumbnailLink || ''; } catch (err) { link = ''; }
+    if (!/^https:\/\/[\w.-]+\.googleusercontent\.com\//.test(link)) return;
+    reqs.push({ url: link.replace(/=s\d+(-[\w-]+)?$/, '') + '=s' + size, headers: auth, muteHttpExceptions: true });
+    forIds.push(need[i]);
+  });
+  UrlFetchApp.fetchAll(reqs).forEach(function (res, i) {
+    if (res.getResponseCode() !== 200) return;
+    const blob = res.getBlob();
+    const url = 'data:' + (blob.getContentType() || 'image/jpeg') + ';base64,' + Utilities.base64Encode(blob.getBytes());
+    out[forIds[i]] = url;
+    if (size === 400 && url.length < 90000) { try { cache.put('th_' + forIds[i], url, 21600); } catch (err) { /* 入らなければ毎回読む */ } }
+  });
+  return out;
+}
+
 // ---- onEdit：手で直したら、すぐサイトに出るようにキャッシュを消す ------------
 
 function onEdit(e) {
@@ -1323,6 +1586,7 @@ function onEdit(e) {
 }
 
 function clearCache() {
+  cacheRemove(CACHE_PHOTOS);
   cacheRemove(CACHE_PUBLIC);
   cacheRemove(CACHE_MEMBERS);
 }

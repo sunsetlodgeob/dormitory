@@ -62,7 +62,8 @@ test('Code.gs は V8 で読める・appsscript.json の中身', () => {
     assert.ok(m.oauthScopes.some((x) => x.includes('/auth/' + s)), 'スコープ ' + s);
   }
   assert.ok(!m.oauthScopes.some((x) => /\/auth\/(forms|script\.scriptapp)/.test(x)), 'フォームとトリガーはもう使わない');
-  assert.ok(!m.oauthScopes.some((x) => /\/auth\/(drive|gmail|documents)/.test(x)), '要らない権限はない');
+  assert.ok(!m.oauthScopes.some((x) => /\/auth\/(drive|drive\.file|gmail|documents)$/.test(x)), '要らない権限はない（ドライブは読むだけ）');
+  assert.ok(m.oauthScopes.includes('https://www.googleapis.com/auth/drive.readonly'), '写真館：ドライブの写真を読む');
   assert.ok(m.oauthScopes.includes('https://www.googleapis.com/auth/script.send_mail'), '申請を幹事にメールで知らせる');
 });
 
@@ -1079,6 +1080,126 @@ test('申請：名前なし・トークンがおかしい・設定がまだ・�
   for (let i = 0; i < env5.get('REQUEST_PER_HOUR'); i++) assert.strictEqual(post(env5, { type: 'request', idToken: TOKEN, name: 'p' }).ok, true);
   assert.strictEqual(post(env5, { type: 'request', idToken: TOKEN, name: 'p' }).error, 'too_many');
   assert.strictEqual(env5.mails.length, env5.get('REQUEST_PER_HOUR'));
+});
+
+// ---- 写真館 ----
+const DRIVE = 'https://www.googleapis.com/drive/v3/files';
+function photoEnv(email = 'viewer@example.com', extra = {}) {
+  const meta = (time, w, h) => ({ time, width: w, height: h });
+  const tree = {
+    'root-folder-0001': [
+      { id: 'folder-2005-0001', name: '2005新歓', mimeType: 'application/vnd.google-apps.folder' },
+      { id: 'photo-big-0001', name: 'big.jpg', mimeType: 'image/jpeg', md5Checksum: 'md5-a', size: '3000000', imageMediaMetadata: meta('2005:04:12 10:00:00', 3000, 2000) },
+      { id: 'photo-small-001', name: 'small.jpg', mimeType: 'image/jpeg', md5Checksum: 'md5-b', size: '300000', imageMediaMetadata: meta('2005:04:12 10:00:00', 1500, 1000) },
+      { id: 'photo-feb-00001', name: 'feb.jpg', mimeType: 'image/jpeg', md5Checksum: 'md5-c', size: '100', imageMediaMetadata: meta('2006:02:10 09:00:00', 800, 600) },
+      { id: 'photo-none-0001', name: 'IMG_1.JPG', mimeType: 'image/jpeg', md5Checksum: 'md5-d', size: '100', imageMediaMetadata: {} },
+      { id: 'doc-file-000001', name: 'memo.txt', mimeType: 'text/plain' },
+    ],
+    'folder-2005-0001': [
+      { id: 'photo-copy-0001', name: 'big のコピー.jpg', mimeType: 'image/jpeg', md5Checksum: 'md5-a', size: '3000000', imageMediaMetadata: meta('2005:04:12 10:00:00', 3000, 2000) },
+      { id: 'photo-fold-0001', name: 'scan.jpg', mimeType: 'image/jpeg', md5Checksum: 'md5-e', size: '100', imageMediaMetadata: {} },
+    ],
+  };
+  const asked = [];
+  const env = freshSetup(Object.assign({
+    props: { CLIENT_ID: CID, PHOTO_FOLDER_ID: 'root-folder-0001' },
+    viewers: ['viewer@example.com'],
+    driveFiles: { 'photo-big-0001': { name: 'big.jpg', bytes: Buffer.from('BIGFILE') } },
+    fetch: (url, p) => {
+      asked.push({ url, auth: p.headers && p.headers.Authorization });
+      if (url.startsWith('https://oauth2.googleapis.com/tokeninfo')) return { code: 200, body: goodInfo(email) };
+      if (url.startsWith(DRIVE + '?q=')) {
+        const q = decodeURIComponent(url.split('q=')[1].split('&')[0]);
+        const id = q.match(/'([^']+)' in parents/)[1];
+        return { code: 200, body: { files: tree[id] || [] } };
+      }
+      let m = url.match(/\/files\/([\w-]+)\?fields=thumbnailLink/);
+      if (m) return { code: 200, body: { thumbnailLink: 'https://lh3.googleusercontent.com/drive-storage/x' + m[1] + '=s220' } };
+      m = url.match(/^https:\/\/lh3\.googleusercontent\.com\/drive-storage\/x([\w-]+)=s(\d+)$/);
+      if (m) return { code: 200, body: '', bytes: Buffer.from('IMG:' + m[1] + ':' + m[2]), type: 'image/jpeg' };
+      return { code: 404, body: {} };
+    },
+  }, extra));
+  return { env, asked };
+}
+
+test('写真館：取り込み（下のフォルダまで。同じファイル・同じ撮影時刻の小さい版は重複。年度は撮影日→フォルダ名→不明）', () => {
+  const { env, asked } = photoEnv();
+  const msg = env.ctx.importPhotos();
+  assert.ok(msg.includes('6 枚を新しく') && msg.includes('重複 2 枚') && msg.includes('年度不明 1 枚'), msg);
+  const sh = env.ss.getSheetByName('写真');
+  const by = {};
+  sh.table().forEach((r, i) => { const o = rec(sh, i + 2); by[o['ファイルID']] = o; });
+  assert.deepStrictEqual(Object.keys(by).sort(), ['photo-big-0001', 'photo-copy-0001', 'photo-feb-00001', 'photo-fold-0001', 'photo-none-0001', 'photo-small-001'], '写真だけ（テキストは入れない）');
+  assert.strictEqual(by['photo-big-0001']['掲載'], true);
+  assert.strictEqual(by['photo-big-0001']['年度'], 2005);
+  assert.strictEqual(by['photo-big-0001']['年度の出どころ'], '撮影日');
+  assert.strictEqual(by['photo-big-0001']['撮影日'], '2005-04-12');
+  assert.strictEqual(by['photo-copy-0001']['掲載'], false);
+  assert.ok(by['photo-copy-0001']['メモ'].startsWith('重複（同じファイル：big.jpg）'));
+  assert.strictEqual(by['photo-small-001']['掲載'], false);
+  assert.ok(by['photo-small-001']['メモ'].includes('大きいほうの big.jpg を残した'));
+  assert.strictEqual(by['photo-feb-00001']['年度'], 2005, '2006年2月 → 2005年度');
+  assert.strictEqual(by['photo-fold-0001']['年度'], 2005);
+  assert.strictEqual(by['photo-fold-0001']['年度の出どころ'], 'フォルダ名');
+  assert.strictEqual(by['photo-fold-0001']['フォルダ'], '2005新歓');
+  assert.strictEqual(by['photo-none-0001']['年度'], '');
+  assert.ok(asked.filter((a) => a.url.startsWith(DRIVE)).every((a) => a.auth === 'Bearer owner-token'), 'OB会のアカウントとして読む');
+  // 2 回目：増えない
+  assert.ok(env.ctx.importPhotos().includes('0 枚を新しく'));
+  assert.strictEqual(sh.getLastRow(), 7);
+  // シート「設定」
+  const st = env.ss.getSheetByName('設定');
+  assert.strictEqual(rec(st, 2)['項目'], '写真のダウンロード');
+  assert.strictEqual(rec(st, 2)['値'], false);
+});
+
+test('写真館：一覧（見る権限のある人だけ。年度→撮影日の順、年度不明は最後）・小さい絵・ダウンロードの切りかえ', () => {
+  const { env, asked } = photoEnv();
+  env.ctx.importPhotos();
+  const r = post(env, { type: 'photos', idToken: TOKEN });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.download, false);
+  assert.deepStrictEqual(r.photos.map((p) => p.id), ['photo-big-0001', 'photo-feb-00001', 'photo-fold-0001', 'photo-none-0001']);
+  assert.deepStrictEqual(r.photos[0], { id: 'photo-big-0001', year: 2005, date: '2005-04-12', w: 3000, h: 2000 });
+  assert.strictEqual(r.photos[3].year, null);
+  // 小さい絵：見せてよい写真だけ。大きさは 400 か 1600
+  const t = post(env, { type: 'thumbs', idToken: TOKEN, ids: ['photo-big-0001', 'photo-copy-0001', 'doc-file-000001', '../x'], size: 400 });
+  assert.deepStrictEqual(Object.keys(t.images), ['photo-big-0001'], '重複で隠した写真や、よそのファイルは読まない');
+  assert.strictEqual(t.images['photo-big-0001'], 'data:image/jpeg;base64,' + Buffer.from('IMG:photo-big-0001:400').toString('base64'));
+  const t2 = post(env, { type: 'thumbs', idToken: TOKEN, ids: ['photo-big-0001'], size: 1600 });
+  assert.ok(Buffer.from(t2.images['photo-big-0001'].split(',')[1], 'base64').toString().endsWith(':1600'));
+  // 2 回目の 400 はキャッシュから（Drive に聞かない）
+  const before = asked.length;
+  post(env, { type: 'thumbs', idToken: TOKEN, ids: ['photo-big-0001'], size: 400 });
+  assert.strictEqual(asked.length, before, 'トークンも小さい絵も、覚えておいたものを使う');
+  // ダウンロード：設定でチェックするまでは不可
+  assert.strictEqual(post(env, { type: 'photo', idToken: TOKEN, id: 'photo-big-0001' }).error, 'not_allowed');
+  const st = env.ss.getSheetByName('設定');
+  st.write(2, 2, true);
+  env.ctx.onEdit({});
+  assert.strictEqual(post(env, { type: 'photos', idToken: TOKEN }).download, true);
+  const f = post(env, { type: 'photo', idToken: TOKEN, id: 'photo-big-0001' });
+  assert.deepStrictEqual([f.ok, f.name, f.mime, Buffer.from(f.data, 'base64').toString()], [true, 'big.jpg', 'image/jpeg', 'BIGFILE']);
+  assert.strictEqual(post(env, { type: 'photo', idToken: TOKEN, id: 'photo-copy-0001' }).error, 'bad_request', '隠した写真はダウンロードさせない');
+  // 幹事が年度を書きかえると、その年度へ
+  const sh = env.ss.getSheetByName('写真');
+  const row = sh.table().findIndex((x) => x[0] === 'photo-none-0001') + 2;
+  sh.write(row, col(sh, '年度') + 1, 2003);
+  env.ctx.onEdit({});
+  assert.strictEqual(post(env, { type: 'photos', idToken: TOKEN }).photos[0].id, 'photo-none-0001');
+});
+
+test('写真館：権限のない人・トークンがおかしい・設定がまだ', () => {
+  const { env } = photoEnv('stranger@example.com');
+  env.ctx.importPhotos();
+  assert.strictEqual(post(env, { type: 'photos', idToken: TOKEN }).error, 'not_member');
+  assert.strictEqual(post(env, { type: 'thumbs', idToken: TOKEN, ids: ['photo-big-0001'] }).error, 'not_member');
+  assert.strictEqual(post(env, { type: 'photos', idToken: 'bad' }).error, 'invalid_token');
+  const { env: env2 } = photoEnv('viewer@example.com', { props: { PHOTO_FOLDER_ID: 'root-folder-0001' } });
+  assert.strictEqual(post(env2, { type: 'photos', idToken: TOKEN }).error, 'not_configured');
+  assert.strictEqual(env2.ctx.folderIdOf('https://drive.google.com/drive/folders/1AbCdEfGhIjKlMn?usp=sharing'), '1AbCdEfGhIjKlMn');
+  assert.strictEqual(env2.ctx.folderIdOf('ふつうの文'), '');
 });
 
 // ---- 実行 ----

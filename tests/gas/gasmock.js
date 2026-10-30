@@ -286,6 +286,7 @@ function loadGas(opts = {}) {
 
   const triggers = [];
   const ScriptApp = {
+    getOAuthToken: () => 'owner-token',
     EventType: { ON_FORM_SUBMIT: 'ON_FORM_SUBMIT', ON_EDIT: 'ON_EDIT' },
     getProjectTriggers: () => triggers.slice(),
     deleteTrigger: (t) => { const i = triggers.indexOf(t); if (i >= 0) triggers.splice(i, 1); },
@@ -311,8 +312,13 @@ function loadGas(opts = {}) {
       if (!opts.fetch) throw new Error('fetch は用意されていません: ' + url);
       const r = opts.fetch(url, params || {});
       const body = typeof r.body === 'string' ? r.body : JSON.stringify(r.body);
-      return { getResponseCode: () => r.code, getContentText: () => body };
+      const bytes = r.bytes || Buffer.from(body);
+      return {
+        getResponseCode: () => r.code, getContentText: () => body,
+        getBlob: () => ({ getBytes: () => Array.from(bytes), getContentType: () => r.type || 'image/jpeg' }),
+      };
     },
+    fetchAll: (reqs) => reqs.map((q) => UrlFetchApp.fetch(q.url, q)),
   };
 
   const Session = {
@@ -325,6 +331,7 @@ function loadGas(opts = {}) {
   const pad = (n) => String(n).padStart(2, '0');
   const Utilities = {
     sleep: () => { calls.sleep++; },
+    base64Encode: (b) => Buffer.from(b).toString('base64'),
     formatDate: (d, tz, fmt) => {
       if (tz !== 'Asia/Tokyo' || fmt !== "yyyy-MM-dd'T'HH:mm:ssXXX") throw new Error('formatDate: 想定外の書式 ' + fmt);
       const j = new Date(d.getTime() + 9 * 3600 * 1000);
@@ -333,13 +340,21 @@ function loadGas(opts = {}) {
     },
   };
 
+  const driveFiles = opts.driveFiles || {};
+  const DriveApp = {
+    getFileById: (id) => {
+      const f = driveFiles[id];
+      if (!f) throw new Error('ファイルがありません');
+      return { getName: () => f.name, getSize: () => f.bytes.length, getBlob: () => ({ getBytes: () => Array.from(f.bytes), getContentType: () => f.type || 'image/jpeg' }) };
+    },
+  };
   const mails = [];
   const MailApp = { sendEmail: (o) => { if (opts.mailFails) throw new Error('メールの上限'); mails.push(o); } };
   const Logger = { log: (...a) => { logs.push(a.map(String).join(' ')); } };
   const quiet = { log: Logger.log, info: Logger.log, warn: Logger.log, error: Logger.log };
 
   const ctx = vm.createContext({
-    SpreadsheetApp, FormApp, UrlFetchApp, PropertiesService, CacheService, ContentService, MailApp,
+    SpreadsheetApp, FormApp, UrlFetchApp, PropertiesService, CacheService, ContentService, MailApp, DriveApp,
     LockService, ScriptApp, Session, Utilities, Logger, console: quiet,
   });
   vm.runInContext(fs.readFileSync(CODE_PATH, 'utf8'), ctx, { filename: 'Code.gs' });
