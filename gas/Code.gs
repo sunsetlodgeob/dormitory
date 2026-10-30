@@ -366,7 +366,8 @@ function callGemini(prompt, schema, quick) {
   // いつものモデルが混んでいて返事がもらえないとき（429・5xx が続く）は、軽いモデルにかえる
   let models = (model === DEFAULT_MODEL ? [model] : [model, DEFAULT_MODEL]).concat([FALLBACK_MODEL]);
   // quick：たくさんまとめて整えるとき（取り込み）は、速い軽いモデルを先に使う
-  if (quick) models = [FALLBACK_MODEL].concat(models.filter(function (m) { return m !== FALLBACK_MODEL; }));
+  // （GEMINI_MODEL で幹事がモデルを決めているときは、そちらを先に）
+  if (quick && model === DEFAULT_MODEL) models = [FALLBACK_MODEL, DEFAULT_MODEL];
   const payload = JSON.stringify({
     systemInstruction: { parts: [{ text: GEMINI_SYSTEM }] },
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
@@ -511,8 +512,17 @@ function handlePost(body) {
   const n = Number(cache.get(hourKey)) || 0;
   if (n >= POST_PER_HOUR) return { ok: false, error: 'too_many' };
   cache.put(hourKey, String(n + 1), 3600);
+  // 同じ内容の 2 回目（ボタンの押しなおしなど）をはじくための印。途中で失敗したら消す（消さないと、送りなおしても入らない）
   cache.put(sig, '1', POST_DUP_SEC);
+  try {
+    return savePost(ss, p);
+  } catch (err) {
+    try { cache.remove(sig); } catch (e2) { /* そのまま */ }
+    throw err;
+  }
+}
 
+function savePost(ss, p) {
   // 1. 原文を「投稿」シートに残す（Gemini がだめでも、投稿はなくならない）
   const posts = sheetOf(ss, SHEETS.posts);
   const logRow = withLock(function () {
@@ -587,7 +597,7 @@ function saveEvent(ss, p, ref) {
   const notes = [];
   let ev;
   try {
-    ev = normalizeTimeline(callGemini(timelinePrompt(a), TIMELINE_SCHEMA), a, notes);
+    ev = normalizeTimeline(callGemini(timelinePrompt(a), TIMELINE_SCHEMA, true), a, notes);
   } catch (err) {
     Logger.log('Gemini（年表）：' + errText(err));
     notes.length = 0;
@@ -613,7 +623,7 @@ function saveMember(ss, p, ref) {
   const notes = [];
   let m;
   try {
-    m = normalizeMember(callGemini(memberPrompt(a), MEMBER_SCHEMA), a, notes);
+    m = normalizeMember(callGemini(memberPrompt(a), MEMBER_SCHEMA, true), a, notes);
   } catch (err) {
     Logger.log('Gemini（名簿）：' + errText(err));
     notes.length = 0;
@@ -674,7 +684,7 @@ function saveRooms(ss, p, ref) {
   const notes = [];
   let list;
   try {
-    list = normalizeRooms(callGemini(roomsPrompt(p.rooms, self), ROOMS_SCHEMA), notes);
+    list = normalizeRooms(callGemini(roomsPrompt(p.rooms, self), ROOMS_SCHEMA, true), notes);
   } catch (err) {
     Logger.log('Gemini（部屋割り）：' + errText(err));
     notes.length = 0;

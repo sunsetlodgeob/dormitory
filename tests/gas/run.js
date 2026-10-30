@@ -361,7 +361,7 @@ test('投稿 事件：Gemini で整理して、掲載ありで年表に 1 行。
 
   // Gemini への頼み方
   assert.strictEqual(seen.length, 1);
-  assert.strictEqual(seen[0].url, 'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent');
+  assert.strictEqual(seen[0].url, 'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent', '投稿は速い軽いモデルから');
   assert.strictEqual(seen[0].p.method, 'post');
   assert.strictEqual(seen[0].p.headers['x-goog-api-key'], 'test-key');
   assert.ok(!seen[0].url.includes('test-key'), 'キーは URL に入れない');
@@ -399,7 +399,7 @@ test('投稿 事件：Gemini が失敗しても、原文を残す（メモ：Gem
   send(env, { event: { when: '平成17年の秋、10月ごろ', title: '=IMPORTXML("http://example.com","//a")', what: '何かがあった。\n2行目。' }, by: '一年C' });
   assert.strictEqual(n, 6, '混んでいたら 2 回まで待ってやりなおし、それでもだめなら軽いモデルで同じように');
   assert.strictEqual(env.calls.sleep, 4);
-  assert.ok(urls[3].includes('/gemini-flash-lite-latest:'), '予備のモデル');
+  assert.ok(urls[0].includes('/gemini-flash-lite-latest:') && urls[3].includes('/gemini-flash-latest:'), '軽いモデルがだめなら、いつものモデル');
   const t = env.ss.getSheetByName('年表');
   const r = rec(t, 2);
   assert.strictEqual(r.ID, 'e1');
@@ -447,7 +447,7 @@ test('投稿：モデル名は GEMINI_MODEL で変えられる（おかしな名
   send(env2, { event: { when: '?', title: 'a', what: 'b' } });
   assert.deepStrictEqual(urls, [
     'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash:generateContent',
-    'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent',
+    'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent', // おかしな名前は使わず、いつもの順（投稿は軽いモデルから）
   ]);
 });
 
@@ -745,7 +745,7 @@ test('Gemini：既定のモデルは gemini-flash-latest。古いモデル名で
   };
   const env = geminiEnv(h);
   send(env, { event: { when: '2005', title: 'a', what: 'b' } });
-  assert.deepStrictEqual(urls, ['https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent']);
+  assert.deepStrictEqual(urls, ['https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent'], '投稿は軽いモデルから');
   assert.ok(!('temperature' in bodies[0].generationConfig), 'Gemini 3 では温度を下げないほうがよい');
   urls.length = 0;
   const env2 = geminiEnv(h, { GEMINI_API_KEY: 'k', GEMINI_MODEL: 'gemini-2.5-flash' });
@@ -1001,6 +1001,26 @@ test('シートに足す行：「掲載」のチェックボックス（FALSE）
   const at = env.ctx.appendRecord(t, { '見出し': '最後', '掲載': true });
   assert.strictEqual(at, 1001);
   assert.strictEqual(t.cell(1001, 4), '最後');
+});
+
+test('投稿：途中でエラーになったら、同じ内容をもう一度送れる（二重防止の印を消す）', () => {
+  const env = geminiEnv(() => geminiOk({ year: 2005, month: 4, title: 't', body: 'b', tags: [] }));
+  const sheetOf = env.ctx.sheetOf;
+  let broken = true;
+  env.ctx.sheetOf = (ss, def) => { if (broken && def.name === '投稿') throw new Error('書けない'); return sheetOf(ss, def); };
+  assert.strictEqual(send(env, ev('2005', '一回目はエラー', 'b')).error, 'server_error');
+  broken = false;
+  const r = send(env, ev('2005', '一回目はエラー', 'b'));
+  assert.strictEqual(r.ok, true);
+  assert.ok(!r.duplicate, '二回目は「もう受けとった」にならない');
+  assert.strictEqual(r.saved.event, 'e1');
+});
+
+test('投稿：整えるのは速い軽いモデルから', () => {
+  const urls = [];
+  const env = geminiEnv((url) => { urls.push(url); return geminiOk({ year: 2005, month: 4, title: 't', body: 'b', tags: [] }); });
+  send(env, ev('2005', 'a', 'b'));
+  assert.ok(urls[0].includes('/gemini-flash-lite-latest:'), urls[0]);
 });
 
 // ---- 年表の閲覧申請 ----

@@ -80,7 +80,7 @@
       });
       const d = await res.json();
       if (d && d.ok) {
-        if (d.duplicate) say('同じ内容は、もう受けとっています。ありがとうございました！', 'done');
+        if (d.duplicate) say('同じ内容を、少し前に受けとっています（いま AI が整えているところかもしれません）。数分たっても載っていなければ、10分ほどしてから、もう一度送ってください。', 'done');
         else say('送りました。ありがとうございました！', 'done', d.results);
         // 次の投稿のために、中身だけ消す（投稿者と確認の答えは残す）
         for (const name of ['ev_when', 'ev_title', 'ev_what', 'ev_who', 'mb_name', 'mb_entry', 'mb_grad', 'mb_fix', 'rm_text']) form.elements[name].value = '';
@@ -90,7 +90,7 @@
         if (code === 'quiz') form.elements.quiz.focus();
       }
     } catch (err) {
-      say('うまく送れませんでした。通信のぐあいを確かめて、もう一度送ってください（書いた内容は残っています）。', 'error');
+      say('返事が来ませんでした。届いていて、いま AI が整えているところかもしれません。数分たっても載っていなければ、もう一度送ってください（書いた内容は残っています）。', 'error');
     } finally {
       if (timer) clearTimeout(timer);
       busy = false;
