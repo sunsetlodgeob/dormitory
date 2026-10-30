@@ -282,7 +282,7 @@ async function heyaSafety(browser, base) {
 async function heyaLive(browser, base) {
   const ctx = await browser.newContext({ viewport: { width: 1000, height: 800 } });
   await ctx.route('**/js/site/config.js', async (route) => {
-    const body = fs.readFileSync(path.join(ROOT, 'js/site/config.js'), 'utf8').replace("GAS_URL: ''", "GAS_URL: 'https://gas.example.test/exec'");
+    const body = fs.readFileSync(path.join(ROOT, 'js/site/config.js'), 'utf8').replace(/GAS_URL: '[^']*'/, "GAS_URL: 'https://gas.example.test/exec'");
     await route.fulfill({ status: 200, contentType: 'text/javascript', body });
   });
   let release;

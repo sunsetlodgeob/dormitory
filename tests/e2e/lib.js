@@ -11,6 +11,7 @@ let pw;
 try { pw = require('playwright'); } catch (e) { pw = require('/opt/node22/lib/node_modules/playwright'); }
 
 const ROOT = path.resolve(__dirname, '..', '..');
+const EMPTY_CONFIG = "window.OB_CONFIG = { GAS_URL: '', GOOGLE_CLIENT_ID: '', ALBUM_URL: '', CONTACT_EMAIL: '' };";
 
 function waitPort(port, ms = 8000) {
   const t0 = Date.now();
@@ -31,6 +32,14 @@ async function withSite(port, fn, opts = {}) {
   try {
     await waitPort(port);
     browser = await pw.chromium.launch();
+    // js/site/config.js には本番の URL が入っているが、確認はデモ表示（設定が空）を前提にする。
+    // どの画面（context）でも、まず空の設定を返す。確認の中で ctx.route した設定のほうが先に使われる
+    const newContext = browser.newContext.bind(browser);
+    browser.newContext = async (...args) => {
+      const ctx = await newContext(...args);
+      await ctx.route('**/js/site/config.js', (r) => r.fulfill({ status: 200, contentType: 'application/javascript', body: EMPTY_CONFIG }));
+      return ctx;
+    };
     const base = 'http://127.0.0.1:' + port + '/';
     // phone: true でスマホの大きさ・タッチあり
     const open = async (rel, o = {}) => {

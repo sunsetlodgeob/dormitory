@@ -5,7 +5,7 @@
  */
 window.OB_CONFIG = {
   // Apps Script の Web アプリの URL（https://script.google.com/macros/s/……/exec）
-  GAS_URL: '',
+  GAS_URL: 'https://script.google.com/macros/s/AKfycbxT2G_FrcSidI-UGkpw9vs8bUgZctD3bRcbZ0a-N8C3C1GCUyUot_S9ceVwiIGwAYNs9Q/exec',
   // 年表を見るときの Google ログイン用のクライアント ID（……apps.googleusercontent.com）
   GOOGLE_CLIENT_ID: '',
   // 写真館（Google フォトの共有アルバムなど）の URL
