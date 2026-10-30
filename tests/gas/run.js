@@ -1083,7 +1083,6 @@ test('申請：名前なし・トークンがおかしい・設定がまだ・�
 });
 
 // ---- 写真館 ----
-const DRIVE = 'https://www.googleapis.com/drive/v3/files';
 function photoEnv(email = 'viewer@example.com', extra = {}) {
   const meta = (time, w, h) => ({ time, width: w, height: h });
   const tree = {
@@ -1105,17 +1104,22 @@ function photoEnv(email = 'viewer@example.com', extra = {}) {
     props: { CLIENT_ID: CID, PHOTO_FOLDER_ID: 'root-folder-0001' },
     viewers: ['viewer@example.com'],
     driveFiles: { 'photo-big-0001': { name: 'big.jpg', bytes: Buffer.from('BIGFILE') } },
+    drive: {
+      list: (o) => {
+        asked.push({ drive: 'list', o });
+        const id = o.q.match(/'([^']+)' in parents/)[1];
+        return { files: tree[id] || [] };
+      },
+      get: (id, o) => {
+        asked.push({ drive: 'get', id });
+        if (o.fields !== 'thumbnailLink') throw new Error('fields');
+        return { thumbnailLink: 'https://lh3.googleusercontent.com/drive-storage/x' + id + '=s220' };
+      },
+    },
     fetch: (url, p) => {
       asked.push({ url, auth: p.headers && p.headers.Authorization });
       if (url.startsWith('https://oauth2.googleapis.com/tokeninfo')) return { code: 200, body: goodInfo(email) };
-      if (url.startsWith(DRIVE + '?q=')) {
-        const q = decodeURIComponent(url.split('q=')[1].split('&')[0]);
-        const id = q.match(/'([^']+)' in parents/)[1];
-        return { code: 200, body: { files: tree[id] || [] } };
-      }
-      let m = url.match(/\/files\/([\w-]+)\?fields=thumbnailLink/);
-      if (m) return { code: 200, body: { thumbnailLink: 'https://lh3.googleusercontent.com/drive-storage/x' + m[1] + '=s220' } };
-      m = url.match(/^https:\/\/lh3\.googleusercontent\.com\/drive-storage\/x([\w-]+)=s(\d+)$/);
+      const m = url.match(/^https:\/\/lh3\.googleusercontent\.com\/drive-storage\/x([\w-]+)=s(\d+)$/);
       if (m) return { code: 200, body: '', bytes: Buffer.from('IMG:' + m[1] + ':' + m[2]), type: 'image/jpeg' };
       return { code: 404, body: {} };
     },
@@ -1144,7 +1148,7 @@ test('写真館：取り込み（下のフォルダまで。同じファイル�
   assert.strictEqual(by['photo-fold-0001']['年度の出どころ'], 'フォルダ名');
   assert.strictEqual(by['photo-fold-0001']['フォルダ'], '2005新歓');
   assert.strictEqual(by['photo-none-0001']['年度'], '');
-  assert.ok(asked.filter((a) => a.url.startsWith(DRIVE)).every((a) => a.auth === 'Bearer owner-token'), 'OB会のアカウントとして読む');
+  assert.ok(asked.some((a) => a.drive === 'list' && a.o.supportsAllDrives && /trashed = false/.test(a.o.q) && /imageMediaMetadata/.test(a.o.fields)), 'ドライブ API のサービスで、ゴミ箱以外を読む');
   // 2 回目：増えない
   assert.ok(env.ctx.importPhotos().includes('0 枚を新しく'));
   assert.strictEqual(sh.getLastRow(), 7);
@@ -1188,6 +1192,14 @@ test('写真館：一覧（見る権限のある人だけ。年度→撮影日�
   sh.write(row, col(sh, '年度') + 1, 2003);
   env.ctx.onEdit({});
   assert.strictEqual(post(env, { type: 'photos', idToken: TOKEN }).photos[0].id, 'photo-none-0001');
+});
+
+test('写真館：フォルダが読めないときは、わけを知らせる。appsscript.json でドライブ API のサービスを使う', () => {
+  const env = freshSetup({ props: { PHOTO_FOLDER_ID: 'root-folder-0001' }, drive: { list: () => { throw new Error('File not found: root-folder-0001'); }, get: () => ({}) } });
+  const msg = env.ctx.importPhotos();
+  assert.ok(msg.includes('読めませんでした') && msg.includes('写真のフォルダを変える'), msg);
+  const m = JSON.parse(fs.readFileSync(path.join(ROOT, 'gas/appsscript.json'), 'utf8'));
+  assert.deepStrictEqual(m.dependencies.enabledAdvancedServices, [{ userSymbol: 'Drive', serviceId: 'drive', version: 'v3' }]);
 });
 
 test('写真館：権限のない人・トークンがおかしい・設定がまだ', () => {

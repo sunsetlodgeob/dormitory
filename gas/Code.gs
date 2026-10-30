@@ -80,7 +80,6 @@ const CACHE_MEMBERS = 'members_v1';
 const CACHE_PHOTOS = 'photos_v1';
 const PHOTO_THUMB_MAX = 24; // 1 回でわたす写真の小さい絵の数
 const PHOTO_FILE_MAX = 25 * 1024 * 1024; // ダウンロードできるファイルの大きさの上限（Apps Script の返事の上限より小さく）
-const DRIVE_API = 'https://www.googleapis.com/drive/v3/files';
 const CACHE_PUBLIC_SEC = 300; // 名簿・部屋割り：5 分
 const CACHE_MEMBERS_SEC = 120; // 見る権限のある人の一覧：2 分
 
@@ -1380,11 +1379,12 @@ function folderIdOf(text) {
   return m ? m[1] : '';
 }
 
-// ドライブ（REST）を呼ぶ。スクリプトのオーナー（OB会のアカウント）として
-function driveGet(url) {
-  const res = UrlFetchApp.fetch(url, { headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true });
-  if (res.getResponseCode() !== 200) throw new Error('Drive HTTP ' + res.getResponseCode());
-  return JSON.parse(res.getContentText());
+// ドライブを読む：Apps Script の「ドライブ API」サービス（appsscript.json の enabledAdvancedServices で、
+// プロジェクトの Drive API も自動で使えるようになる）。スクリプトのオーナー（OB会のアカウント）として読む
+function driveList(q, fields, page) {
+  const opt = { q: q, fields: fields, pageSize: 1000, supportsAllDrives: true, includeItemsFromAllDrives: true };
+  if (page) opt.pageToken = page;
+  return Drive.Files.list(opt);
 }
 
 // フォルダの中を、下のフォルダまでたどって、写真（image/*）を集める
@@ -1398,8 +1398,7 @@ function listPhotos(rootId, t0) {
     let page = '';
     do {
       const q = "'" + f.id + "' in parents and trashed = false";
-      const d = driveGet(DRIVE_API + '?q=' + encodeURIComponent(q) + '&fields=' + encodeURIComponent(fields) +
-        '&pageSize=1000&supportsAllDrives=true&includeItemsFromAllDrives=true' + (page ? '&pageToken=' + encodeURIComponent(page) : ''));
+      const d = driveList(q, fields, page);
       (d.files || []).forEach(function (x) {
         if (x.mimeType === 'application/vnd.google-apps.folder') queue.push({ id: x.id, path: f.path ? f.path + '/' + x.name : x.name });
         else if (/^image\//.test(x.mimeType || '')) out.push(Object.assign({ path: f.path }, x));
@@ -1437,7 +1436,18 @@ function importPhotos() {
   if (!folder) return '写真のフォルダが決まっていません';
   const t0 = Date.now();
   progress('写真のフォルダを読んでいます…');
-  const files = listPhotos(folder, t0);
+  let files;
+  try {
+    files = listPhotos(folder, t0);
+  } catch (err) {
+    const why = errText(err);
+    const text = '写真のフォルダを読めませんでした（' + why + '）。' + (/not found|見つかりません|File not found/i.test(why)
+      ? 'フォルダの URL がちがうかもしれません。メニュー「写真のフォルダを変える」で、もう一度貼ってください。'
+      : 'appsscript.json を貼りなおして、setup を実行して許可したかを確かめてください。');
+    Logger.log(text);
+    try { SpreadsheetApp.getUi().alert('写真の取り込み', text, SpreadsheetApp.getUi().ButtonSet.OK); } catch (e2) { /* 画面がないとき */ }
+    return text;
+  }
   const sheet = sheetOf(ss, SHEETS.photos);
   const rows = readTable(sheet);
   const known = {};
@@ -1557,17 +1567,13 @@ function thumbs(ids, size) {
   });
   if (!need.length) return out;
   const auth = { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() };
-  const metas = UrlFetchApp.fetchAll(need.map(function (id) {
-    return { url: DRIVE_API + '/' + encodeURIComponent(id) + '?fields=thumbnailLink&supportsAllDrives=true', headers: auth, muteHttpExceptions: true };
-  }));
   const reqs = [], forIds = [];
-  metas.forEach(function (res, i) {
-    if (res.getResponseCode() !== 200) return;
+  need.forEach(function (id) {
     let link = '';
-    try { link = JSON.parse(res.getContentText()).thumbnailLink || ''; } catch (err) { link = ''; }
+    try { link = Drive.Files.get(id, { fields: 'thumbnailLink', supportsAllDrives: true }).thumbnailLink || ''; } catch (err) { link = ''; }
     if (!/^https:\/\/[\w.-]+\.googleusercontent\.com\//.test(link)) return;
     reqs.push({ url: link.replace(/=s\d+(-[\w-]+)?$/, '') + '=s' + size, headers: auth, muteHttpExceptions: true });
-    forIds.push(need[i]);
+    forIds.push(id);
   });
   UrlFetchApp.fetchAll(reqs).forEach(function (res, i) {
     if (res.getResponseCode() !== 200) return;

@@ -23,7 +23,7 @@ function coerce(s) {
 
 function loadGas(opts = {}) {
   const logs = [];
-  const calls = { fetch: [], lock: 0, sleep: 0 };
+  const calls = { fetch: [], lock: 0, sleep: 0, drive: [] };
   let sheetSeq = 100;
   let formSeq = 1;
   let trigSeq = 1;
@@ -348,13 +348,20 @@ function loadGas(opts = {}) {
       return { getName: () => f.name, getSize: () => f.bytes.length, getBlob: () => ({ getBytes: () => Array.from(f.bytes), getContentType: () => f.type || 'image/jpeg' }) };
     },
   };
+  // Apps Script の「ドライブ API」サービス（Drive.Files.list / get）。opts.drive が { list(opt), get(id, opt) }
+  const Drive = {
+    Files: {
+      list: (o) => { calls.drive.push({ list: o }); if (!opts.drive) throw new Error('Drive は用意されていません'); return opts.drive.list(o); },
+      get: (id, o) => { calls.drive.push({ get: id, o }); if (!opts.drive) throw new Error('Drive は用意されていません'); return opts.drive.get(id, o); },
+    },
+  };
   const mails = [];
   const MailApp = { sendEmail: (o) => { if (opts.mailFails) throw new Error('メールの上限'); mails.push(o); } };
   const Logger = { log: (...a) => { logs.push(a.map(String).join(' ')); } };
   const quiet = { log: Logger.log, info: Logger.log, warn: Logger.log, error: Logger.log };
 
   const ctx = vm.createContext({
-    SpreadsheetApp, FormApp, UrlFetchApp, PropertiesService, CacheService, ContentService, MailApp, DriveApp,
+    SpreadsheetApp, FormApp, UrlFetchApp, PropertiesService, CacheService, ContentService, MailApp, DriveApp, Drive,
     LockService, ScriptApp, Session, Utilities, Logger, console: quiet,
   });
   vm.runInContext(fs.readFileSync(CODE_PATH, 'utf8'), ctx, { filename: 'Code.gs' });
