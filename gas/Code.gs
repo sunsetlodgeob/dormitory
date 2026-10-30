@@ -35,7 +35,7 @@ const SOURCES = {
   d1: { label: 'D-1選手権年表', names: ['D-1選手権年表'], need: ['年度', '出場'] },
 };
 const IMPORT_SEC = 200; // 1 回の実行で取り込みに使う時間（Apps Script は 6 分で止まる。Gemini の返事を 1 回待つ分をあけておく）
-const IMPORT_BATCH = 8; // Gemini に 1 回で渡す事件の数（多いと返事が遅くなる）
+const IMPORT_BATCH = 5; // Gemini に 1 回で渡す事件の数（多いと返事が遅くなる）
 const PUBLISH_COL = '掲載';
 // 文字のまま扱う列（"101" が数字に化けないように）
 const TEXT_COLS = ['ID', '部屋'];
@@ -187,19 +187,31 @@ function nextEventId(sheet) {
 
 // 見出しの名前で列を合わせて 1 行足す。「掲載」はチェックボックス（rec の掲載が true ならチェックあり）。足した行の番号を返す
 function appendRecord(sheet, rec) {
+  return appendRecords(sheet, [rec]);
+}
+
+// 何行かまとめて足す（1 行ずつ書くと遅いので、1 回で書く）。最初に足した行の番号を返す
+function appendRecords(sheet, recs) {
+  if (!recs.length) return 0;
   const heads = headerRow(sheet, null);
-  const row = heads.map(function (h) {
-    if (!Object.prototype.hasOwnProperty.call(rec, h)) return '';
-    // ID・部屋はコードが作る決まった形（e12・305）。書式なしテキストの列なので ' は付けない
-    return TEXT_COLS.indexOf(h) >= 0 && /^\w+$/.test(String(rec[h])) ? String(rec[h]) : toCell(rec[h]);
+  const rows = recs.map(function (rec) {
+    return heads.map(function (h) {
+      if (!Object.prototype.hasOwnProperty.call(rec, h)) return '';
+      // ID・部屋はコードが作る決まった形（e12・305）。書式なしテキストの列なので ' は付けない
+      return TEXT_COLS.indexOf(h) >= 0 && /^\w+$/.test(String(rec[h])) ? String(rec[h]) : toCell(rec[h]);
+    });
   });
   // appendRow は使わない：「掲載」のチェックボックス（チェックなし＝FALSE）が 1000 行目まであると、
   // シートの最後の行が 1000 行目とみなされて、1001 行目に足されてしまうため
   const pub = heads.indexOf(PUBLISH_COL);
   const at = lastContentRow(sheet, pub) + 1;
-  if (at > sheet.getMaxRows()) sheet.insertRowsAfter(sheet.getMaxRows(), 100);
-  sheet.getRange(at, 1, 1, row.length).setValues([row]);
-  if (pub >= 0) sheet.getRange(at, pub + 1).insertCheckboxes().setValue(rec[PUBLISH_COL] === true);
+  const need = at + rows.length - 1 - sheet.getMaxRows();
+  if (need > 0) sheet.insertRowsAfter(sheet.getMaxRows(), need + 100);
+  sheet.getRange(at, 1, rows.length, heads.length).setValues(rows);
+  if (pub >= 0) {
+    sheet.getRange(at, pub + 1, rows.length, 1).insertCheckboxes()
+      .setValues(recs.map(function (rec) { return [rec[PUBLISH_COL] === true]; }));
+  }
   return at;
 }
 
@@ -336,14 +348,16 @@ function roomsPrompt(a, self) {
     '投稿（JSON）：\n' + JSON.stringify({ 部屋割り: a.text, 投稿した人: self || '' });
 }
 
-function callGemini(prompt, schema) {
+function callGemini(prompt, schema, quick) {
   const key = String(props().getProperty('GEMINI_API_KEY') || '').trim();
   if (!key) throw new Error('APIキーが未設定');
   let model = String(props().getProperty('GEMINI_MODEL') || '').trim().replace(/^models\//, '');
   if (!/^[A-Za-z0-9][\w.\-]*$/.test(model)) model = DEFAULT_MODEL;
   // GEMINI_MODEL のモデルが引退していたら（404）、いつものモデルでやりなおす。
   // いつものモデルが混んでいて返事がもらえないとき（429・5xx が続く）は、軽いモデルにかえる
-  const models = (model === DEFAULT_MODEL ? [model] : [model, DEFAULT_MODEL]).concat([FALLBACK_MODEL]);
+  let models = (model === DEFAULT_MODEL ? [model] : [model, DEFAULT_MODEL]).concat([FALLBACK_MODEL]);
+  // quick：たくさんまとめて整えるとき（取り込み）は、速い軽いモデルを先に使う
+  if (quick) models = [FALLBACK_MODEL].concat(models.filter(function (m) { return m !== FALLBACK_MODEL; }));
   const payload = JSON.stringify({
     systemInstruction: { parts: [{ text: GEMINI_SYSTEM }] },
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
@@ -1016,7 +1030,7 @@ function importJikenbo(ss, t0) {
     let byRow = {};
     let fail = '';
     try {
-      const g = callGemini(jikenboPrompt(batch), JIKENBO_SCHEMA);
+      const g = callGemini(jikenboPrompt(batch), JIKENBO_SCHEMA, true);
       (Array.isArray(g.items) ? g.items : []).forEach(function (it) { if (it && it.n != null) byRow[it.n] = it; });
     } catch (err) {
       // 原文のまま入れると、あとで AI で整えなおせないので、入れずに止める（キーを直して、もう一度）
@@ -1025,6 +1039,7 @@ function importJikenbo(ss, t0) {
       break;
     }
     withLock(function () {
+      const recs = [];
       batch.forEach(function (b, k) {
         const g = byRow[k + 1] || {};
         const f = fiscalOf(b.when);
@@ -1039,12 +1054,13 @@ function importJikenbo(ss, t0) {
         let body = cleanBlock(g.body, 5000);
         if (!title) title = cut(cleanLine(first, 200), 30);
         if (!body) body = b.text === title ? '' : b.text;
-        appendRecord(sheet, {
+        recs.push({
           'ID': nextEventId(sheet), '年度': year, '月': month, '見出し': title, '本文': body, 'タグ': cleanTags(g.tags).join('、'),
           '掲載': true, '元の回答': b.ref, 'メモ': notes.join('／'),
         });
-        added++;
       });
+      appendRecords(sheet, recs);
+      added += recs.length;
     });
   }
   const rest = todo.length - added;
@@ -1093,6 +1109,7 @@ function importMeibo(ss) {
   readTable(sheet).forEach(function (r) { have[normName(r['名前']) + '|' + String(r['入学年度'] == null ? '' : r['入学年度']).trim()] = true; });
   let added = 0, same = 0;
   let curYear = '';
+  const recs = [];
   withLock(function () {
     src.rows.forEach(function (row, i) {
       const raw = cleanLine(row[cYear], 40);
@@ -1106,13 +1123,14 @@ function importMeibo(ss) {
         const key = normName(name) + '|' + yearCell;
         if (have[key]) { same++; return; }
         have[key] = true;
-        appendRecord(sheet, {
+        recs.push({
           '名前': name, '入学年度': yearCell, '卒業年度': '', '掲載': true,
           '元の回答': SOURCES.meibo.label + ' ' + (src.headRow + 1 + i) + '行目', 'メモ': note,
         });
         added++;
       });
     });
+    appendRecords(sheet, recs);
   });
   return '名簿（元）→ 名簿：' + added + ' 人を入れました' + (same ? '（' + same + ' 人は、もう入っていたのでとばしました）' : '');
 }
@@ -1126,6 +1144,7 @@ function importD1(ss) {
   const sheet = sheetOf(ss, SHEETS.d1);
   const done = importedRefs(sheet);
   let added = 0;
+  const recs = [];
   withLock(function () {
     src.rows.forEach(function (row, i) {
       const r = src.headRow + 1 + i;
@@ -1136,13 +1155,14 @@ function importD1(ss) {
       if (!yearText && !mem.members.length) return;
       const info = cInfo >= 0 ? splitInfo(row[cInfo]) : { host: '', referee: '', kuroko: '', note: '' };
       const y = toYear(yearText);
-      appendRecord(sheet, {
+      recs.push({
         '年度': y, '優勝': mem.winner.join('、'), '準優勝': mem.second.join('、'), '出場メンバー': mem.members.join('、'),
         '主催者': info.host, 'レフェリー': info.referee, '黒子': info.kuroko, '補足': info.note,
         '掲載': true, '元の回答': ref, 'メモ': y == null && yearText ? '年度（原文）：' + yearText : '',
       });
       added++;
     });
+    appendRecords(sheet, recs);
   });
   return 'D-1選手権年表 → D-1：' + added + ' 年分を入れました';
 }
