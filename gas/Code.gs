@@ -80,6 +80,10 @@ const CACHE_MEMBERS = 'members_v1';
 const CACHE_PHOTOS = 'photos_v1';
 const PHOTO_THUMB_MAX = 24; // 1 回でわたす写真の小さい絵の数
 const PHOTO_FILE_MAX = 25 * 1024 * 1024; // ダウンロードできるファイルの大きさの上限（Apps Script の返事の上限より小さく）
+const UPLOAD_MAX = 20 * 1024 * 1024; // 送ってもらう写真 1 枚の上限
+const UPLOAD_PER_HOUR = 300; // 1 人が 1 時間に送れる枚数
+const UPLOAD_FOLDER_NAME = '写真館_受付';
+const UPLOAD_TYPES = /^image\/(jpeg|png|gif|webp|heic|heif)$/;
 const CACHE_PUBLIC_SEC = 300; // 名簿・部屋割り：5 分
 const CACHE_MEMBERS_SEC = 120; // 見る権限のある人の一覧：2 分
 
@@ -811,6 +815,7 @@ function doPost(e) {
     if (body && typeof body === 'object' && body.type === 'post') return jsonOut(handlePost(body));
     if (body && typeof body === 'object' && body.type === 'request') return jsonOut(handleRequest(body));
     if (body && typeof body === 'object' && /^(photos|thumbs|photo)$/.test(body.type)) return jsonOut(handlePhotos(body));
+    if (body && typeof body === 'object' && body.type === 'upload') return jsonOut(handleUpload(body));
     if (!body || typeof body !== 'object' || body.type !== 'timeline') return jsonOut({ ok: false, error: 'bad_request' });
     const clientId = String(props().getProperty('CLIENT_ID') || '').trim();
     const ss = book();
@@ -1529,13 +1534,21 @@ function publishedPhotos(ss) {
 }
 
 // 写真館の呼び出し：photos（一覧）・thumbs（小さい絵）・photo（ファイルそのもの。ダウンロードが許されているときだけ）
-function handlePhotos(body) {
+// 見る権限のある人か（ID トークンで確かめる）→ { ss, email } か { error }
+function memberAuth(body) {
   const clientId = String(props().getProperty('CLIENT_ID') || '').trim();
   const ss = book();
-  if (!clientId || !ss) return { ok: false, error: 'not_configured' };
+  if (!clientId || !ss) return { error: 'not_configured' };
   const email = verifiedEmail(body.idToken, clientId);
-  if (!email) return { ok: false, error: 'invalid_token' };
-  if (memberList(ss).indexOf(normEmail(email)) < 0) return { ok: false, error: 'not_member' };
+  if (!email) return { error: 'invalid_token' };
+  if (memberList(ss).indexOf(normEmail(email)) < 0) return { error: 'not_member' };
+  return { ss: ss, email: email };
+}
+
+function handlePhotos(body) {
+  const auth = memberAuth(body);
+  if (auth.error) return { ok: false, error: auth.error };
+  const ss = auth.ss;
   const list = publishedPhotos(ss);
   const download = isChecked(setting(ss, '写真のダウンロード'));
   if (body.type === 'photos') return { ok: true, download: download, photos: list };
@@ -1554,6 +1567,92 @@ function handlePhotos(body) {
   if (file.getSize() > PHOTO_FILE_MAX) return { ok: false, error: 'too_large' };
   const blob = file.getBlob();
   return { ok: true, name: cleanLine(file.getName(), 200), mime: blob.getContentType(), data: Utilities.base64Encode(blob.getBytes()) };
+}
+
+// ---- 写真を送ってもらう（写真館のページから。1 回に 1 枚） ----------------------
+// 本文 { type: 'upload', idToken, name, mime, data（base64）, year（任意。申告）, note（任意） }
+// 同じ写真（中身がまったく同じ）がもうあれば、入れずに duplicate を返す。新しければ「写真館_受付」フォルダに入れ、シート「写真」に 1 行
+function handleUpload(body) {
+  const auth = memberAuth(body);
+  if (auth.error) return { ok: false, error: auth.error };
+  const ss = auth.ss;
+  const mime = String(body.mime || '').toLowerCase();
+  if (!UPLOAD_TYPES.test(mime)) return { ok: false, error: 'bad_type' };
+  const data = typeof body.data === 'string' ? body.data : '';
+  if (!data) return { ok: false, error: 'bad_request' };
+  if (data.length > Math.ceil(UPLOAD_MAX / 3) * 4 + 4) return { ok: false, error: 'too_large' };
+  let bytes;
+  try { bytes = Utilities.base64Decode(data); } catch (err) { return { ok: false, error: 'bad_request' }; }
+  if (!bytes.length) return { ok: false, error: 'bad_request' };
+  if (bytes.length > UPLOAD_MAX) return { ok: false, error: 'too_large' };
+  const cache = CacheService.getScriptCache();
+  const hourKey = 'up_' + hashText(normEmail(auth.email)) + '_' + Math.floor(Date.now() / 3600000);
+  const n = Number(cache.get(hourKey)) || 0;
+  if (n >= UPLOAD_PER_HOUR) return { ok: false, error: 'too_many' };
+  cache.put(hourKey, String(n + 1), 3600);
+
+  const md5 = Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, bytes).map(function (b) {
+    return ('0' + ((b + 256) % 256).toString(16)).slice(-2);
+  }).join('');
+  const name = cleanLine(String(body.name || '').replace(/[\\/]/g, '_'), 200) || 'photo';
+  const declared = looseYear(cleanLine(body.year, 30), 2100);
+  const note = cleanLine(body.note, 200);
+  return withLock(function () {
+    const sheet = sheetOf(ss, SHEETS.photos);
+    const rows = readTable(sheet);
+    const same = rows.filter(function (r) { return String(r['md5']) === md5; })[0];
+    if (same) return { ok: true, duplicate: true, same: cleanLine(same['ファイル名'], 200) };
+    // 撮影日：写真の中の日時（EXIF）を、ファイルの頭から探す
+    const sd = exifDate(bytes);
+    const file = Drive.Files.create({ name: name, parents: [uploadFolder()], mimeType: mime },
+      Utilities.newBlob(bytes, mime, name), { fields: 'id,imageMediaMetadata(time,width,height)', supportsAllDrives: true });
+    const meta = (file && file.imageMediaMetadata) || {};
+    const shot = sd || shotDate(meta);
+    let year = declared, from = declared != null ? '申告' : '';
+    if (year == null && shot) { year = shot.year; from = '撮影日'; }
+    const notes = ['送った人：' + auth.email];
+    if (shot) notes.push('撮影時刻：' + shot.stamp);
+    if (note) notes.push('ひとこと：' + note);
+    if (declared != null && shot && shot.year !== declared) notes.push('撮影日では ' + shot.year + '年度');
+    appendRecord(sheet, {
+      'ファイルID': file.id, 'ファイル名': name, 'フォルダ': UPLOAD_FOLDER_NAME, '撮影日': shot ? shot.date : '',
+      '年度': year == null ? '' : year, '年度の出どころ': from, '幅': meta.width || '', '高さ': meta.height || '',
+      'md5': md5, '掲載': true, 'メモ': notes.join('／'),
+    });
+    clearCache();
+    return { ok: true, id: file.id, year: year == null ? null : year };
+  });
+}
+
+// 送ってもらった写真を入れるフォルダ（なければ作る）
+function uploadFolder() {
+  const id = props().getProperty('PHOTO_UPLOAD_FOLDER_ID');
+  if (id) {
+    try {
+      const f = Drive.Files.get(id, { fields: 'id,trashed', supportsAllDrives: true });
+      if (f && !f.trashed) return id;
+    } catch (err) { /* 消されていたら作りなおす */ }
+  }
+  const made = Drive.Files.create({ name: UPLOAD_FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder' }, null, { fields: 'id' });
+  props().setProperty('PHOTO_UPLOAD_FOLDER_ID', made.id);
+  return made.id;
+}
+
+// JPEG などの頭（128KB まで）から、「2005:04:12 13:45:00」の形の日時を探す。いちばん古いもの（撮った日時。直した日時より前）
+function exifDate(bytes) {
+  const n = Math.min(bytes.length, 131072);
+  let text = '';
+  for (let i = 0; i < n; i++) {
+    const c = (bytes[i] + 256) % 256;
+    text += c >= 32 && c < 127 ? String.fromCharCode(c) : ' ';
+  }
+  const all = text.match(/(19|20)\d{2}:[01]\d:[0-3]\d [0-2]\d:[0-5]\d:[0-5]\d/g) || [];
+  let best = null;
+  all.forEach(function (t) {
+    const d = shotDate({ time: t });
+    if (d && d.year != null && (!best || d.stamp < best.stamp)) best = d;
+  });
+  return best;
 }
 
 // 小さい絵（Drive のサムネイル。大きさをかえて読む）→ { id: 'data:image/jpeg;base64,…' }

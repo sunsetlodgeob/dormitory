@@ -332,6 +332,10 @@ function loadGas(opts = {}) {
   const Utilities = {
     sleep: () => { calls.sleep++; },
     base64Encode: (b) => Buffer.from(b).toString('base64'),
+    base64Decode: (t) => { if (!/^[A-Za-z0-9+/=\s]*$/.test(t)) throw new Error('base64 ではない'); return Array.from(Buffer.from(t, 'base64')).map((x) => (x > 127 ? x - 256 : x)); },
+    DigestAlgorithm: { MD5: 'md5' },
+    computeDigest: (alg, bytes) => Array.from(require('crypto').createHash(alg).update(Buffer.from(bytes.map((x) => (x + 256) % 256))).digest()).map((x) => (x > 127 ? x - 256 : x)),
+    newBlob: (bytes, type, name) => ({ bytes, type, name }),
     formatDate: (d, tz, fmt) => {
       if (tz !== 'Asia/Tokyo' || fmt !== "yyyy-MM-dd'T'HH:mm:ssXXX") throw new Error('formatDate: 想定外の書式 ' + fmt);
       const j = new Date(d.getTime() + 9 * 3600 * 1000);
@@ -353,6 +357,7 @@ function loadGas(opts = {}) {
     Files: {
       list: (o) => { calls.drive.push({ list: o }); if (!opts.drive) throw new Error('Drive は用意されていません'); return opts.drive.list(o); },
       get: (id, o) => { calls.drive.push({ get: id, o }); if (!opts.drive) throw new Error('Drive は用意されていません'); return opts.drive.get(id, o); },
+      create: (meta, blob, o) => { calls.drive.push({ create: meta, blob, o }); if (!opts.drive || !opts.drive.create) throw new Error('Drive は用意されていません'); return opts.drive.create(meta, blob, o); },
     },
   };
   const mails = [];

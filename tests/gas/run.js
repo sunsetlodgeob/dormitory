@@ -62,7 +62,8 @@ test('Code.gs は V8 で読める・appsscript.json の中身', () => {
     assert.ok(m.oauthScopes.some((x) => x.includes('/auth/' + s)), 'スコープ ' + s);
   }
   assert.ok(!m.oauthScopes.some((x) => /\/auth\/(forms|script\.scriptapp)/.test(x)), 'フォームとトリガーはもう使わない');
-  assert.ok(!m.oauthScopes.some((x) => /\/auth\/(drive|drive\.file|gmail|documents)$/.test(x)), '要らない権限はない（ドライブは読むだけ）');
+  assert.ok(!m.oauthScopes.some((x) => /\/auth\/(drive|gmail|documents)$/.test(x)), '要らない権限はない（ドライブは、読むのと、自分で作ったファイルだけ）');
+  assert.ok(m.oauthScopes.includes('https://www.googleapis.com/auth/drive.file'), '送ってもらった写真を入れる');
   assert.ok(m.oauthScopes.includes('https://www.googleapis.com/auth/drive.readonly'), '写真館：ドライブの写真を読む');
   assert.ok(m.oauthScopes.includes('https://www.googleapis.com/auth/script.send_mail'), '申請を幹事にメールで知らせる');
 });
@@ -1100,6 +1101,7 @@ function photoEnv(email = 'viewer@example.com', extra = {}) {
     ],
   };
   const asked = [];
+  const created = {};
   const env = freshSetup(Object.assign({
     props: { CLIENT_ID: CID, PHOTO_FOLDER_ID: 'root-folder-0001' },
     viewers: ['viewer@example.com'],
@@ -1112,8 +1114,14 @@ function photoEnv(email = 'viewer@example.com', extra = {}) {
       },
       get: (id, o) => {
         asked.push({ drive: 'get', id });
+        if (/trashed/.test(o.fields)) { if (!created[id]) throw new Error('File not found'); return { id, trashed: false }; }
         if (o.fields !== 'thumbnailLink') throw new Error('fields');
         return { thumbnailLink: 'https://lh3.googleusercontent.com/drive-storage/x' + id + '=s220' };
+      },
+      create: (meta, blob) => {
+        const id = (meta.mimeType === 'application/vnd.google-apps.folder' ? 'upload-folder-' : 'upload-file-') + String(Object.keys(created).length + 1).padStart(4, '0');
+        created[id] = { meta, blob };
+        return { id, imageMediaMetadata: {} };
       },
     },
     fetch: (url, p) => {
@@ -1124,7 +1132,7 @@ function photoEnv(email = 'viewer@example.com', extra = {}) {
       return { code: 404, body: {} };
     },
   }, extra));
-  return { env, asked };
+  return { env, asked, created };
 }
 
 test('写真館：取り込み（下のフォルダまで。同じファイル・同じ撮影時刻の小さい版は重複。年度は撮影日→フォルダ名→不明）', () => {
@@ -1192,6 +1200,63 @@ test('写真館：一覧（見る権限のある人だけ。年度→撮影日�
   sh.write(row, col(sh, '年度') + 1, 2003);
   env.ctx.onEdit({});
   assert.strictEqual(post(env, { type: 'photos', idToken: TOKEN }).photos[0].id, 'photo-none-0001');
+});
+
+test('写真を送る：新しい写真は「写真館_受付」に入れてシートに 1 行（年度は申告→撮影日）。同じ写真は入れない', () => {
+  const { env, created } = photoEnv();
+  env.ctx.importPhotos();
+  const exif = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe1]), Buffer.from('Exif\0\0MM 2008:01:05 10:00:00 \0 2007:12:24 21:30:00 \0'), Buffer.alloc(200, 7)]);
+  const b64 = (b) => b.toString('base64');
+  const up = (o) => post(env, Object.assign({ type: 'upload', idToken: TOKEN, name: 'IMG_9.JPG', mime: 'image/jpeg' }, o));
+  // 撮影日から（いちばん古い日時。2007年12月 → 2007年度）
+  const r1 = up({ data: b64(exif), note: '屋上で' });
+  assert.strictEqual(r1.ok, true);
+  assert.strictEqual(r1.year, 2007);
+  const folderId = Object.keys(created).find((k) => k.startsWith('upload-folder-'));
+  assert.ok(folderId && created[folderId].meta.name === '写真館_受付', '受付のフォルダを作る');
+  assert.strictEqual(env.store.PHOTO_UPLOAD_FOLDER_ID, folderId);
+  const file = created[r1.id];
+  assert.deepStrictEqual(plain(file.meta.parents), [folderId]);
+  assert.ok(Buffer.from(file.blob.bytes.map((x) => (x + 256) % 256)).equals(exif), '送られたとおりのバイトで保存');
+  const sh = env.ss.getSheetByName('写真');
+  const row = rec(sh, sh.getLastRow());
+  assert.strictEqual(row['ファイルID'], r1.id);
+  assert.strictEqual(row['フォルダ'], '写真館_受付');
+  assert.strictEqual(row['年度'], 2007);
+  assert.strictEqual(row['年度の出どころ'], '撮影日');
+  assert.strictEqual(row['撮影日'], '2007-12-24');
+  assert.strictEqual(row['掲載'], true);
+  assert.ok(row['メモ'].includes('送った人：viewer@example.com') && row['メモ'].includes('ひとこと：屋上で'));
+  assert.ok(post(env, { type: 'photos', idToken: TOKEN }).photos.some((p) => p.id === r1.id), 'すぐ写真館に出る');
+  // 同じ写真：入れない（フォルダも 2 つ目は作らない）
+  const before = Object.keys(created).length;
+  assert.deepStrictEqual(up({ data: b64(exif) }), { ok: true, duplicate: true, same: 'IMG_9.JPG' });
+  assert.strictEqual(Object.keys(created).length, before);
+  // 申告の年度が優先。撮影日とちがえばメモ
+  const r2 = up({ data: b64(Buffer.concat([exif, Buffer.from('x')])), year: '平成15年度' });
+  assert.strictEqual(r2.year, 2003);
+  const row2 = rec(sh, sh.getLastRow());
+  assert.strictEqual(row2['年度の出どころ'], '申告');
+  assert.ok(row2['メモ'].includes('撮影日では 2007年度'));
+  // 撮影日も申告もない
+  assert.strictEqual(up({ data: b64(Buffer.from('plain bytes')) }).year, null);
+  // 受付のフォルダは使いまわす
+  assert.strictEqual(Object.keys(created).filter((k) => k.startsWith('upload-folder-')).length, 1);
+});
+
+test('写真を送る：写真でない・大きすぎる・こわれた・権限なし・送りすぎ', () => {
+  const { env } = photoEnv();
+  const up = (o) => post(env, Object.assign({ type: 'upload', idToken: TOKEN, name: 'a.jpg', mime: 'image/jpeg', data: 'QUJD' }, o));
+  assert.strictEqual(up({ mime: 'application/pdf' }).error, 'bad_type');
+  assert.strictEqual(up({ mime: 'image/svg+xml' }).error, 'bad_type', 'SVG は受けない（中にスクリプトを入れられる）');
+  assert.strictEqual(up({ data: '' }).error, 'bad_request');
+  assert.strictEqual(up({ data: '***' }).error, 'bad_request');
+  assert.strictEqual(up({ data: 'A'.repeat(Math.ceil((20 * 1024 * 1024) / 3) * 4 + 8) }).error, 'too_large');
+  const per = env.get('UPLOAD_PER_HOUR');
+  for (let i = 0; i < per; i++) up({ data: Buffer.from('p' + i).toString('base64') });
+  assert.strictEqual(up({ data: Buffer.from('one more').toString('base64') }).error, 'too_many');
+  const { env: env2 } = photoEnv('stranger@example.com');
+  assert.strictEqual(post(env2, { type: 'upload', idToken: TOKEN, name: 'a.jpg', mime: 'image/jpeg', data: 'QUJD' }).error, 'not_member');
 });
 
 test('写真館：フォルダが読めないときは、わけを知らせる。appsscript.json でドライブ API のサービスを使う', () => {
