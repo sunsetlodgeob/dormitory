@@ -112,6 +112,28 @@
     return { name: String(d.name || ''), mime: String(d.mime || ''), data: String(d.data || ''), sample: false };
   }
 
+  // 写真を送る（1 回に 1 枚）。photo：{ name, mime, data（もとのファイルの base64）, year（年度の文字。空でよい）, note }
+  // 返事：{ ok: true, id, year }（入れた。year は null のこともある）・{ ok: true, duplicate: true, same }（同じ写真がもうある。入れない）
+  // 失敗したときは Error に code（'too_large' | 'bad_type' | 'too_many' | 'not_member' | 'invalid_token' |
+  // 'not_configured' | 'bad_request' | 'network' など）
+  // デモ（GAS_URL が空）では送らずに、少し待って「入れた」と返す（5 枚目ごとに「同じ写真がもうある」）
+  let demoSent = 0;
+  async function uploadPhoto(idToken, photo) {
+    const f = photo || {};
+    if (!isLive()) {
+      await new Promise((r) => setTimeout(r, 150));
+      demoSent++;
+      if (demoSent % 5 === 0) return { ok: true, duplicate: true, same: 'sample-' + (demoSent - 1) + '.jpg', sample: true };
+      const y = /^\d{4}$/.test(String(f.year || '').trim()) ? Number(String(f.year).trim()) : null;
+      return { ok: true, id: 'demo-up-' + demoSent, year: y, sample: true };
+    }
+    return post({
+      type: 'upload', idToken,
+      name: String(f.name || ''), mime: String(f.mime || ''), data: String(f.data || ''),
+      year: String(f.year == null ? '' : f.year), note: String(f.note == null ? '' : f.note),
+    }, '送れませんでした');
+  }
+
   // 部屋番号の一覧（1階の 101、2・3階の 01〜17）
   const ROOM_NUMBERS = ['101'];
   for (const f of [2, 3]) for (let n = 1; n <= 17; n++) ROOM_NUMBERS.push(String(f * 100 + n));
@@ -134,5 +156,5 @@
     return by;
   }
 
-  OB.data = { isLive, loadPublic, loadTimeline, requestAccess, loadPhotos, loadThumbs, loadPhotoFile, roomsByYear, ROOM_NUMBERS };
+  OB.data = { isLive, loadPublic, loadTimeline, requestAccess, loadPhotos, loadThumbs, loadPhotoFile, uploadPhoto, roomsByYear, ROOM_NUMBERS };
 })();

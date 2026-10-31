@@ -12,6 +12,64 @@
 /* ログイン・準備中のウインドウと、ログイン中の帯は css/login.css */
 .ps-board:focus { outline: none; }
 
+/* ── 写真を送る ── */
+.ps-send-open { display: flex; justify-content: flex-start; margin: 0 5px 12px; }
+.ps-send-toggle { background: var(--fc-green); }
+.ps-send-toggle.is-open { background: var(--fc-white); color: var(--fc-blue); }
+.ps-send { position: relative; }
+.ps-send h2 { margin: 0 0 6px; font-size: 18px; }
+.ps-send-note { margin: 0 0 12px; font-size: 14px; line-height: 1.7; color: var(--fc-yellow-2); word-break: auto-phrase; text-wrap: pretty; }
+.ps-send-form { display: grid; gap: 12px; }
+.ps-send-form label { display: grid; gap: 4px; min-width: 0; font: 14px/1.4 var(--font-pixel); color: var(--fc-white); }
+.ps-send-form label small { font: 12px/1.5 var(--font-body); color: var(--fc-yellow-2); }
+.ps-send-form input:not([type="file"]) {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  font: 16px/1.5 var(--font-body); /* 16px 未満だと、iPhone が入力のときに拡大してしまう */
+  color: var(--fc-black);
+  background: var(--fc-white);
+  border: 2px solid var(--fc-black);
+  border-radius: 0;
+}
+.ps-send-form input:focus { outline: 3px solid var(--fc-yellow); outline-offset: 0; }
+.ps-drop { padding: 12px; border: 2px dashed var(--fc-white); background: var(--fc-navy); min-width: 0; }
+.ps-send.is-drag .ps-drop { border-color: var(--fc-yellow); background: #2a2470; }
+.ps-file input[type="file"] { width: 100%; max-width: 100%; box-sizing: border-box; font: 14px/1.4 var(--font-body); color: var(--fc-white); }
+.ps-file input[type="file"]::file-selector-button {
+  margin-right: 10px;
+  padding: 7px 12px;
+  font: 14px/1 var(--font-pixel);
+  color: var(--fc-blue);
+  background: var(--fc-white);
+  border: 2px solid var(--fc-black);
+  cursor: pointer;
+}
+.ps-picked { margin: 8px 0 0; font-size: 13px; color: var(--fc-gray); overflow-wrap: anywhere; }
+.ps-send-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.ps-send-go { background: var(--fc-green); }
+.ps-send-stop { background: var(--fc-red); }
+.ps-prog { display: grid; gap: 6px; }
+.ps-prog-text { margin: 0; font: 14px/1.6 var(--font-pixel); letter-spacing: 0.02em; overflow-wrap: anywhere; }
+/* ドット絵ふうのゲージ（4 ドットずつの目盛り） */
+.ps-prog-track { height: 16px; padding: 2px; background: var(--fc-black); border: 2px solid var(--fc-white); box-sizing: content-box; }
+.ps-prog-fill {
+  width: 0;
+  height: 100%;
+  background: repeating-linear-gradient(90deg, var(--fc-yellow) 0 6px, var(--fc-brown) 6px 8px);
+  transition: width 0.2s steps(4);
+}
+.ps-send-status { margin: 0; font-size: 14px; line-height: 1.7; color: var(--fc-yellow-2); overflow-wrap: anywhere; }
+.ps-send-status:empty { display: none; }
+.ps-send-status.is-error { color: #ffb0a0; }
+.ps-send-status.is-done { color: var(--fc-lime); }
+.ps-send-status.is-busy::after { content: "▮"; margin-left: 4px; animation: ob-blink 0.8s steps(1) infinite; }
+.ps-problems { padding: 8px 12px; border: 2px dashed var(--fc-red); }
+.ps-problems h3 { margin: 0 0 4px; font-size: 14px; color: #ffd0c4; }
+.ps-problems ul { margin: 0; padding-left: 1.2em; max-height: 240px; overflow-y: auto; font-size: 13px; line-height: 1.6; color: #ffd0c4; }
+.ps-problems li { overflow-wrap: anywhere; }
+.ps-problems b { font-weight: bold; color: var(--fc-white); }
+
 /* ── 年度へとぶ ── */
 .ps-bar { padding: 10px 14px 12px; }
 .ps-bar-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; margin-bottom: 6px; }
@@ -227,6 +285,8 @@ html.ps-lock, html.ps-lock body { overflow: hidden; }
 @media (max-width: 560px) {
   .ps-intro { text-align: left; font-size: 14px; }
   .ps-bar { padding: 10px 10px 10px; }
+  .ps-send { padding: 12px 10px; }
+  .ps-drop { padding: 10px 8px; }
   .ps-chip { min-height: 32px; font-size: 13px; padding: 4px 8px 2px; }
   .ps-years { padding: 0 2px; }
   .ps-year-head { font-size: 18px; padding: 4px 10px; }
@@ -242,5 +302,6 @@ html.ps-lock, html.ps-lock body { overflow: hidden; }
 
 /* 動きをへらす設定：点滅を止める（css/site.css の * では、::after まで止まらない） */
 @media (prefers-reduced-motion: reduce) {
-  .ps-thumb::after, .ps-dl-status.is-busy::after { animation: none; }
+  .ps-thumb::after, .ps-dl-status.is-busy::after, .ps-send-status.is-busy::after { animation: none; }
+  .ps-prog-fill { transition: none; }
 }

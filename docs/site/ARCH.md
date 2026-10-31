@@ -34,6 +34,7 @@ js/site/sample.js        サンプルデータ（すべて架空）
 js/site/data.js          データの読み込み（OB.data）、部屋割りのそろえ方（OB.data.roomsByYear）
 js/site/common.js        注記の表示（OB.DISCLAIMER）、OB.esc・OB.safeUrl・OB.wareki・OB.normSearch
 js/site/login.js         Google のログインの入り口（OB.loginGate）。年表と写真館で使う
+js/site/zip.js           ZIP を開く小さな道具（OB.zip）。写真館の「写真を送る」で使う
 gas/                     Google Apps Script（トップページの投稿 → Gemini → スプレッドシート → サイト）
 tools/build_artifact.py  寮さんぽを 1 枚の HTML にまとめる（claude.ai に公開する用）
 tests/e2e/               ブラウザでの確認（Playwright）
@@ -144,6 +145,37 @@ docs/site/SETUP.md       Google 側の設定手順（幹事向け）
 - ページは Blob にして、`<a download>` で保存する。
 - ID トークンは 1 時間ほどで切れる。一覧や大きい写真で `invalid_token` が返ったら、ログインの画面にもどして「もう一度ログイン」と出す。
 - 設定が空のとき（デモ）は `js/site/sample.js` の `photos`（色の四角の絵。`OB.SAMPLE.photoImage` で作る）を返す。ダウンロードもできる。
+
+#### 写真を送る（見る権限のある人だけ）
+
+`OB.data.uploadPhoto(idToken, { name, mime, data, year, note })` → 本文
+`{"type":"upload","idToken":"…","name":"IMG_0001.JPG","mime":"image/jpeg","data":"（ファイルの base64）","year":"2005","note":"…"}`
+
+```json
+{ "ok": true, "id": "1AbC…", "year": 2005 }          // 入れた（year は null のこともある）
+{ "ok": true, "duplicate": true, "same": "big.jpg" }  // 同じ写真がもう写真館にある（入れない）
+{ "ok": false, "error": "too_large" | "bad_type" | "too_many" | "not_member" | "invalid_token" | "not_configured" | "bad_request" }
+```
+
+- 1 回に 1 枚。`name` はファイルの名前（ZIP の中のものは、フォルダを除いた名前。200 字まで）。`mime` は拡張子から（jpg・jpeg → `image/jpeg`、png・gif・webp・heic・heif）。
+  `year` は「年度」の欄の文字のまま（空でよい。「平成17年度」なども Apps Script 側で読む）。書いてあれば、撮影日より優先する。`note` は「ひとこと」（200 字まで。空でよい）。
+- 失敗したときは、ほかと同じく `code` 付きの Error（通信できなかったときは `'network'`）。
+- ページ（`js/shashin.js`）の約束：
+  - 送れるのは拡張子が jpg・jpeg・png・gif・webp・heic・heif のものだけ。1 枚 20MB（20×1024×1024 バイト）をこえるものは、送らずに一覧に出す。
+  - えらんだ順に送り、同時に送るのは 2 枚まで。ファイルは送る直前に 1 枚ずつ読み、base64 は少しずつ作る（大きい文字列を一度に作らない）。
+  - `too_large`・`bad_type`・`bad_request`・`network` は、その 1 枚だけ「送れなかった」にして続ける（`network` が 3 回続いたら止める）。
+  - `too_many` と `not_configured` は止めて、文を出す。`invalid_token`・`not_member` は止めて、ログインの画面にもどす（一覧と同じ）。
+  - 「やめる」は、いま送っている分が終わってから止める。送れたもの（重複も）は覚えておき、同じえらび方で「送る」を押しなおすと、残りだけ送る（メモリだけ。ログアウトで消す）。
+  - 1 枚でも入ったら、終わったあとに `loadPhotos` で一覧を読みなおす（読んだ小さい写真はそのまま使い、見ていた所から動かさない）。
+- デモ（設定が空）では通信せず、少し待って「入れた」と返す（5 枚目ごとに `duplicate`）。
+
+ZIP は `js/site/zip.js` の `OB.zip.entries(file)` で開く（外のライブラリは使わない）。返すのは `[{ name, size, read }]`（`read()` → `Uint8Array`）。
+
+- ZIP 全体を一度に読みこまない。うしろの 64KB + 22 バイトから「おわりの目次」（End Of Central Directory）をさがし、中央の目次を読む。中身は `read()` のときに `File.slice` で 1 個ずつ読む。
+- 入れ方は「そのまま（0）」と deflate（8。`DecompressionStream('deflate-raw')` でほどく）だけ。ほかは `zip_method`。
+- 名前は、フラグの 11 番目が立っていれば UTF-8。立っていなければ、UTF-8 として正しく読めればそのまま（Mac で作った ZIP）、だめなら Shift_JIS（Windows で作った ZIP）、それもだめなら UTF-8。
+- フォルダ、`__MACOSX/`、「.」で始まるもの（`.DS_Store` など）は一覧に入れない。
+- 開けないときの `code`：`zip_not`（ZIP でない・こわれている）・`zip64`（ZIP64。大きすぎる ZIP）・`zip_encrypted`（パスワード付き）・`zip_broken`・`zip_browser`（ほどけないブラウザ）。
 
 ### 見る権限の申請（ログインして not_member だった人。年表・写真館）
 
@@ -274,7 +306,7 @@ OTK.register({
 - ぜんぶまとめて動かすときは `sh tests/run-all.sh`（1 つでも失敗すると、終了コードが 0 以外になる）。30 分ほどかかる。
 - `gas/Code.gs` の確認は `node tests/gas/run.js`（Google には出ない。Apps Script のまねをして動かす）。
 - 同時に動かしても重ならないように、ポートを分ける：
-  ゲームのエンジン 8801、ホーム 8802、部屋割り 8803、名簿・年表 8804、ミニゲーム 8811〜8815、サイト全体 8805、ゲームの寸劇 8806、D-1選手権 8807、写真館 8808、確認役 8821〜。
+  ゲームのエンジン 8801、ホーム 8802、部屋割り 8803、名簿・年表 8804、ミニゲーム 8811〜8815、サイト全体 8805、ゲームの寸劇 8806、D-1選手権 8807、写真館 8808、写真館の「写真を送る」8809、確認役 8821〜。
 - どの確認も、環境変数 `PORT` でポートを変えられる（例：`PORT=8821 node tests/e2e/home.test.js`）。古い名前の `HOME_PORT`・`HEYA_PORT`・`MEIBO_PORT`・`NENPYO_PORT` も使える。
 - このリポジトリの外（Google Fonts など）には出られないことがある。フォントが読めないことによるエラーは無視してよい（`realErrors()`）。
 - 確認のための入り口：
