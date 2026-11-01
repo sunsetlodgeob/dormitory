@@ -1,5 +1,5 @@
 #!/bin/sh
-# 確認をぜんぶ動かす（ブラウザの確認 tests/e2e/*.test.js と、Apps Script の確認 tests/gas/run.js）
+# 確認をぜんぶ動かす（ブラウザの確認 tests/e2e/*.test.js と、Apps Script の確認 tests/gas/run.js・tests/gas/taikai.js）
 #   sh tests/run-all.sh                 … ぜんぶ（30 分ほど）
 #   sh tests/run-all.sh home meibo      … 名前に home か meibo を含むものだけ
 #   PORT=8821 sh tests/run-all.sh       … ポートを変える（ふだんは、それぞれの確認に割り当てたポート）
@@ -43,6 +43,7 @@ for f in tests/e2e/*.test.js; do
   run "$(basename "$f" .test.js)" node "$f"
 done
 run gas node tests/gas/run.js
+run gas-taikai node tests/gas/taikai.js
 
 echo
 if [ -n "$failed" ]; then
