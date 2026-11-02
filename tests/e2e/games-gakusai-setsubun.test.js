@@ -366,14 +366,18 @@ async function gakusaiDesktop(open) {
   check(mash.some((m) => m.stats.oba > 0 || m.stats.danshi > 0), '連打だと、おばちゃんや男子にも声をかけてしまう');
 
   // とりのおばちゃんは −10 人、男子は数えない（2 倍速。見られたら、そこでおしまい）
-  let probe = null;
-  for (const seed of [11, 12, 13]) {
+  // 1 回の遊びで、おばちゃんと男子の両方に声をかけられるとは限らない（来るかどうかは種と、遊ぶ速さしだい）。
+  // 見られた分をためて、両方そろうまで種を変える（声をかけられた回の結果は、どの回でも同じはず）
+  let obaDrop = null, danshiSame = null;
+  for (const seed of [11, 12, 13, 14, 15, 16, 17, 18]) {
     await restart(page, 'gakusai', seed, 2);
-    probe = await gakusaiBot(page, ctl, { probe: true, label: 'gakusai-probe' });
-    if (probe.obaDrop != null && probe.danshiSame != null) break;
+    const probe = await gakusaiBot(page, ctl, { probe: true, label: 'gakusai-probe' });
+    if (obaDrop == null) obaDrop = probe.obaDrop;
+    if (danshiSame == null) danshiSame = probe.danshiSame;
+    if (obaDrop != null && danshiSame != null) break;
   }
-  check(probe.obaDrop === 10, 'とりのおばちゃんが来ると、10 人へる');
-  check(probe.danshiSame === true, '男子が来ても、数は変わらない');
+  check(obaDrop === 10, 'とりのおばちゃんが来ると、10 人へる（' + obaDrop + '）');
+  check(danshiSame === true, '男子が来ても、数は変わらない（' + danshiSame + '）');
 
   // しっぱい：だれにも声をかけないと、時間切れ（4 倍速）
   await restart(page, 'gakusai', 21, 4);
