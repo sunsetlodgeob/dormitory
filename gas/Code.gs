@@ -81,7 +81,8 @@ const CACHE_PHOTOS = 'photos_v1';
 const PHOTO_THUMB_MAX = 24; // 1 回でわたす写真の小さい絵の数
 const PHOTO_FILE_MAX = 25 * 1024 * 1024; // ダウンロードできるファイルの大きさの上限（Apps Script の返事の上限より小さく）
 const UPLOAD_MAX = 20 * 1024 * 1024; // 送ってもらう写真 1 枚の上限
-const UPLOAD_PER_HOUR = 300; // 1 人が 1 時間に送れる枚数
+const UPLOAD_PER_HOUR = 300; // 1 人が 1 時間に送れる枚数（ログインして写真館から）
+const UPLOAD_GUEST_PER_HOUR = 300; // ログインなし（トップページから）で、全員あわせて 1 時間に送れる枚数
 const UPLOAD_FOLDER_NAME = '写真館_受付';
 const UPLOAD_TYPES = /^image\/(jpeg|png|gif|webp|heic|heif)$/;
 const CACHE_PUBLIC_SEC = 300; // 名簿・部屋割り：5 分
@@ -1572,9 +1573,19 @@ function handlePhotos(body) {
 // ---- 写真を送ってもらう（写真館のページから。1 回に 1 枚） ----------------------
 // 本文 { type: 'upload', idToken, name, mime, data（base64）, year（任意。申告）, note（任意） }
 // 同じ写真（中身がまったく同じ）がもうあれば、入れずに duplicate を返す。新しければ「写真館_受付」フォルダに入れ、シート「写真」に 1 行
+// ログインなし（トップページの投稿の欄から）でも送れる：そのときは、文字の投稿と同じいたずらよけ（問い・わなの欄）と、全員で 1 時間の上限
 function handleUpload(body) {
-  const auth = memberAuth(body);
-  if (auth.error) return { ok: false, error: auth.error };
+  let auth;
+  if (body.idToken) {
+    auth = memberAuth(body);
+    if (auth.error) return { ok: false, error: auth.error };
+  } else {
+    if (cleanLine(body.hp, 100)) return { ok: true, skipped: true };
+    if (!quizOk(body.quiz)) return { ok: false, error: 'quiz' };
+    const ss0 = book();
+    if (!ss0) return { ok: false, error: 'not_configured' };
+    auth = { ss: ss0, email: '', guest: cleanLine(body.by, 100) || '（名前なし）' };
+  }
   const ss = auth.ss;
   const mime = String(body.mime || '').toLowerCase();
   if (!UPLOAD_TYPES.test(mime)) return { ok: false, error: 'bad_type' };
@@ -1585,10 +1596,12 @@ function handleUpload(body) {
   try { bytes = Utilities.base64Decode(data); } catch (err) { return { ok: false, error: 'bad_request' }; }
   if (!bytes.length) return { ok: false, error: 'bad_request' };
   if (bytes.length > UPLOAD_MAX) return { ok: false, error: 'too_large' };
+  // 中身がほんとうに写真か（ファイルの頭の印）。写真のふりをした、ほかのファイルは受けない
+  if (!imageMagic(bytes, mime)) return { ok: false, error: 'bad_type' };
   const cache = CacheService.getScriptCache();
-  const hourKey = 'up_' + hashText(normEmail(auth.email)) + '_' + Math.floor(Date.now() / 3600000);
+  const hourKey = (auth.email ? 'up_' + hashText(normEmail(auth.email)) : 'upguest') + '_' + Math.floor(Date.now() / 3600000);
   const n = Number(cache.get(hourKey)) || 0;
-  if (n >= UPLOAD_PER_HOUR) return { ok: false, error: 'too_many' };
+  if (n >= (auth.email ? UPLOAD_PER_HOUR : UPLOAD_GUEST_PER_HOUR)) return { ok: false, error: 'too_many' };
   cache.put(hourKey, String(n + 1), 3600);
 
   const md5 = Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, bytes).map(function (b) {
@@ -1610,7 +1623,7 @@ function handleUpload(body) {
     const shot = sd || shotDate(meta);
     let year = declared, from = declared != null ? '申告' : '';
     if (year == null && shot) { year = shot.year; from = '撮影日'; }
-    const notes = ['送った人：' + auth.email];
+    const notes = ['送った人：' + (auth.email || auth.guest + '（ログインなし。トップページから）')];
     if (shot) notes.push('撮影時刻：' + shot.stamp);
     if (note) notes.push('ひとこと：' + note);
     if (declared != null && shot && shot.year !== declared) notes.push('撮影日では ' + shot.year + '年度');
@@ -1622,6 +1635,18 @@ function handleUpload(body) {
     clearCache();
     return { ok: true, id: file.id, year: year == null ? null : year };
   });
+}
+
+// ファイルの頭の印で、写真の種類を確かめる（JPEG・PNG・GIF・WebP・HEIC/HEIF）
+function imageMagic(bytes, mime) {
+  const b = function (i) { return i < bytes.length ? (bytes[i] + 256) % 256 : -1; };
+  const ascii = function (i, n) { let t = ''; for (let k = 0; k < n; k++) t += String.fromCharCode(Math.max(0, b(i + k))); return t; };
+  if (mime === 'image/jpeg') return b(0) === 0xff && b(1) === 0xd8 && b(2) === 0xff;
+  if (mime === 'image/png') return b(0) === 0x89 && ascii(1, 3) === 'PNG';
+  if (mime === 'image/gif') return ascii(0, 4) === 'GIF8';
+  if (mime === 'image/webp') return ascii(0, 4) === 'RIFF' && ascii(8, 4) === 'WEBP';
+  if (mime === 'image/heic' || mime === 'image/heif') return ascii(4, 4) === 'ftyp' && /^(heic|heix|hevc|hevx|heim|heis|mif1|msf1)$/.test(ascii(8, 4));
+  return false;
 }
 
 // 送ってもらった写真を入れるフォルダ（なければ作る）

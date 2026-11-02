@@ -1239,24 +1239,48 @@ test('写真を送る：新しい写真は「写真館_受付」に入れてシ�
   assert.strictEqual(row2['年度の出どころ'], '申告');
   assert.ok(row2['メモ'].includes('撮影日では 2007年度'));
   // 撮影日も申告もない
-  assert.strictEqual(up({ data: b64(Buffer.from('plain bytes')) }).year, null);
+  assert.strictEqual(up({ data: b64(Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xdb]), Buffer.from('plain bytes')])) }).year, null);
   // 受付のフォルダは使いまわす
   assert.strictEqual(Object.keys(created).filter((k) => k.startsWith('upload-folder-')).length, 1);
 });
 
 test('写真を送る：写真でない・大きすぎる・こわれた・権限なし・送りすぎ', () => {
   const { env } = photoEnv();
-  const up = (o) => post(env, Object.assign({ type: 'upload', idToken: TOKEN, name: 'a.jpg', mime: 'image/jpeg', data: 'QUJD' }, o));
+  const jpg = (t) => Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from(t)]).toString('base64');
+  const up = (o) => post(env, Object.assign({ type: 'upload', idToken: TOKEN, name: 'a.jpg', mime: 'image/jpeg', data: jpg('ABC') }, o));
   assert.strictEqual(up({ mime: 'application/pdf' }).error, 'bad_type');
   assert.strictEqual(up({ mime: 'image/svg+xml' }).error, 'bad_type', 'SVG は受けない（中にスクリプトを入れられる）');
   assert.strictEqual(up({ data: '' }).error, 'bad_request');
   assert.strictEqual(up({ data: '***' }).error, 'bad_request');
   assert.strictEqual(up({ data: 'A'.repeat(Math.ceil((20 * 1024 * 1024) / 3) * 4 + 8) }).error, 'too_large');
   const per = env.get('UPLOAD_PER_HOUR');
-  for (let i = 0; i < per; i++) up({ data: Buffer.from('p' + i).toString('base64') });
-  assert.strictEqual(up({ data: Buffer.from('one more').toString('base64') }).error, 'too_many');
+  // 写真のふりをしたファイル（頭の印がちがう）は受けない
+  assert.strictEqual(up({ data: Buffer.from('MZ\x90\x00 not a photo').toString('base64') }).error, 'bad_type');
+  assert.strictEqual(up({ mime: 'image/png', data: jpg('x') }).error, 'bad_type', 'PNG と言っているのに JPEG の頭');
+  for (let i = 0; i < per; i++) up({ data: jpg('p' + i) });
+  assert.strictEqual(up({ data: jpg('one more') }).error, 'too_many');
   const { env: env2 } = photoEnv('stranger@example.com');
   assert.strictEqual(post(env2, { type: 'upload', idToken: TOKEN, name: 'a.jpg', mime: 'image/jpeg', data: 'QUJD' }).error, 'not_member');
+});
+
+test('写真を送る：ログインなし（トップページから）でも、問いに答えれば送れる。わなの欄・全員の上限', () => {
+  const { env, created } = photoEnv();
+  const jpg = (t) => Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from(t)]).toString('base64');
+  const up = (o) => post(env, Object.assign({ type: 'upload', name: 'g.jpg', mime: 'image/jpeg', data: jpg('guest') }, o));
+  assert.strictEqual(up({}).error, 'quiz', '問いに答えていない');
+  assert.strictEqual(up({ quiz: 'ちがう' }).error, 'quiz');
+  assert.strictEqual(up({ quiz: '夕照寮', hp: 'spam' }).ok, true);
+  assert.strictEqual(Object.keys(created).length, 0, 'わなの欄に何か入っていたら、入れない');
+  const r = up({ quiz: '夕照寮', by: '一年C', year: '2004' });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.year, 2004);
+  const sh = env.ss.getSheetByName('写真');
+  assert.ok(rec(sh, sh.getLastRow())['メモ'].includes('送った人：一年C（ログインなし。トップページから）'));
+  const per = env.get('UPLOAD_GUEST_PER_HOUR');
+  for (let i = 1; i < per; i++) up({ quiz: '夕照寮', data: jpg('g' + i) });
+  assert.strictEqual(up({ quiz: '夕照寮', data: jpg('over') }).error, 'too_many', '全員あわせての上限');
+  // トークンがあれば、ログインした人として（問いは要らない）
+  assert.strictEqual(post(env, { type: 'upload', idToken: TOKEN, name: 'm.jpg', mime: 'image/jpeg', data: jpg('member') }).ok, true);
 });
 
 test('写真館：フォルダが読めないときは、わけを知らせる。appsscript.json でドライブ API のサービスを使う', () => {
