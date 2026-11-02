@@ -75,26 +75,26 @@
     <p>送った内容は、Google の AI（Gemini）が形を整えて、そのまま年表・名簿・部屋割りに載ります。まちがいは、あとで幹事が直します。写真は写真館に並びます。</p>
     <p class="ob-notice" id="post-off" hidden>投稿フォームは、いま準備中です。もうしばらくお待ちください。</p>
     <form class="home-post-form" id="post-form" novalidate>
-      <fieldset class="fc-window">
-        <legend>事件・出来事<small>年表に載ります（見られるのは、ログインした寮生だけ）</small></legend>
+      <div class="fc-window home-post-sec" role="group" aria-labelledby="post-h-ev">
+        <h3 class="home-post-legend" id="post-h-ev">事件・出来事<small>年表に載ります（見られるのは、ログインした寮生だけ）</small></h3>
         <label>いつごろ？<small>だいたいでOK。例：2005年度の4月、平成17年の秋</small><input name="ev_when" maxlength="200" autocomplete="off"></label>
         <label>見出し<small>ひとことで。例：屋上でBBQ</small><input name="ev_title" maxlength="200" autocomplete="off"></label>
         <label>何があった？<textarea name="ev_what" rows="5" maxlength="5000"></textarea></label>
         <label>関わった人<small>任意。呼び名でOK（年表には出ず、幹事のメモに残ります）</small><input name="ev_who" maxlength="300" autocomplete="off"></label>
-      </fieldset>
-      <fieldset class="fc-window">
-        <legend>名簿の追加・訂正<small>名簿はだれでも見られます</small></legend>
+      </div>
+      <div class="fc-window home-post-sec" role="group" aria-labelledby="post-h-mb">
+        <h3 class="home-post-legend" id="post-h-mb">名簿の追加・訂正<small>名簿はだれでも見られます</small></h3>
         <label>お名前<small>例：夕照 一郎</small><input name="mb_name" maxlength="40" autocomplete="off"></label>
         <label>入学年度<small>例：2003、平成15年度</small><input name="mb_entry" maxlength="100" autocomplete="off"></label>
         <label>卒業年度<small>任意。2007年3月に卒業したなら 2006</small><input name="mb_grad" maxlength="100" autocomplete="off"></label>
         <label>訂正したいこと<small>任意。例：入学年度は2004でした／名前の漢字は「一郎」です／名簿から外してください</small><textarea name="mb_fix" rows="3" maxlength="1000"></textarea></label>
-      </fieldset>
-      <fieldset class="fc-window">
-        <legend>部屋割り<small>部屋割りのページに載ります（だれでも見られます）</small></legend>
+      </div>
+      <div class="fc-window home-post-sec" role="group" aria-labelledby="post-h-rm">
+        <h3 class="home-post-legend" id="post-h-rm">部屋割り<small>部屋割りのページに載ります（だれでも見られます）</small></h3>
         <label>年度・部屋・名前<small>1 行に 1 部屋。例：2005年度 305号室 夕照一郎・六浦二郎（自分のことは「自分」でOK。名簿の欄のお名前になります）</small><textarea name="rm_text" rows="4" maxlength="3000"></textarea></label>
-      </fieldset>
-      <fieldset class="fc-window home-post-photo" id="post-photo">
-        <legend>写真<small>写真館に並びます（見られるのは、承認された寮生だけ）。ZIP でまとめて送れます。1 枚 20MB まで</small></legend>
+      </div>
+      <div class="fc-window home-post-photo home-post-sec" role="group" aria-labelledby="post-h-ph" id="post-photo">
+        <h3 class="home-post-legend" id="post-h-ph">写真<small>写真館に並びます（見られるのは、承認された寮生だけ）。ZIP でまとめて送れます。1 枚 20MB まで</small></h3>
         <div class="ob-up-drop" id="post-drop">
           <label class="ob-up-file">写真か ZIP をえらぶ<small>いくつでもえらべます。パソコンなら、ここにドラッグして入れることもできます</small>
             <input type="file" id="post-files" name="files" accept="image/*,.zip,application/zip" multiple>
@@ -102,7 +102,7 @@
           <p class="ob-up-picked" id="post-picked">まだ何もえらんでいません。</p>
         </div>
         <label>写真の年度<small>任意。わかれば。例：2005、平成17年度。書いておくと、撮影日よりこちらを使います</small><input name="ph_year" maxlength="30" autocomplete="off"></label>
-      </fieldset>
+      </div>
       <div class="fc-window home-post-send">
         <label>投稿者<small>任意。呼び名でOK（サイトには出ません）</small><input name="by" maxlength="100" autocomplete="off"></label>
         <label>確認：食堂のおばちゃんのうち、眼鏡でタバコを吸う方の苗字は？<small>いたずら防止のためです。ひらがなでもOK</small><input name="quiz" maxlength="30" autocomplete="off"></label>

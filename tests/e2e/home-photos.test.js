@@ -165,9 +165,9 @@ withSite(PORT, async ({ browser, base, open }) => {
     const intro = await page.textContent('#post');
     assert.ok(intro.includes('寮の事件・出来事、名簿の追加や訂正、部屋割り、写真を送ってください。'), '説明に写真');
     assert.ok(!intro.includes('写真はここでは受けつけていません'));
-    const legends = await page.$$eval('#post-form legend', (ls) => ls.map((l) => l.firstChild.textContent.trim()));
+    const legends = await page.$$eval('#post-form .home-post-legend', (ls) => ls.map((l) => l.firstChild.textContent.trim()));
     assert.deepStrictEqual(legends, ['事件・出来事', '名簿の追加・訂正', '部屋割り', '写真']);
-    assert.ok((await page.textContent('#post-photo legend small')).includes('写真館に並びます（見られるのは、承認された寮生だけ）。ZIP でまとめて送れます。1 枚 20MB まで'));
+    assert.ok((await page.textContent('#post-photo .home-post-legend small')).includes('写真館に並びます（見られるのは、承認された寮生だけ）。ZIP でまとめて送れます。1 枚 20MB まで'));
     assert.strictEqual(await page.getAttribute('#post-files', 'accept'), 'image/*,.zip,application/zip');
     assert.strictEqual(await page.getAttribute('#post-files', 'multiple'), '');
     assert.ok((await page.textContent('#post-photo')).includes('写真の年度') && (await page.textContent('#post-photo')).includes('わかれば。例：2005、平成17年度。書いておくと、撮影日よりこちらを使います'));
