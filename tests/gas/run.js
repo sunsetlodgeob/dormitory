@@ -597,7 +597,7 @@ test('投稿 名簿：名前が = で始まっても式にしない', () => {
   assert.strictEqual(heya.cell(2, 3), '=IMAGE("http://e.example/a.png")');
 });
 
-test('問いの答え：シート「設定」の「合言葉の答え」だけを見る。まだ書いていなければ「準備中」、行がなければ足す', () => {
+test('問いと答え：問いは「設定」の「合言葉の問い」、答えは「合言葉の答え」だけを見る。まだ書いていなければ「準備中」、行がなければ足す', () => {
   const env = freshSetup({ props: { GEMINI_API_KEY: 'k' }, fetch: () => geminiOk({ year: 2005, month: null, title: 't', body: 'b', tags: [] }) });
   const raw = (b) => out(env.ctx.doPost({ postData: { contents: JSON.stringify(b) } }));
   const jpg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x41]).toString('base64');
@@ -617,6 +617,18 @@ test('問いの答え：シート「設定」の「合言葉の答え」だけ�
   st.write(r, 2, '');
   assert.deepStrictEqual(raw({ type: 'post', quiz: '鈴木', event: { title: 'a' } }), { ok: false, error: 'not_configured' });
   assert.ok(st.table().some((x) => x[0] === '合言葉の答え'), '行が足された');
+  // 問いの文：GET ?type=quiz で読める（答えは返さない）。「設定」で変えると、そちらになる
+  const q = () => out(env.ctx.doGet({ parameter: { type: 'quiz' } }));
+  assert.deepStrictEqual(q(), { ok: true, question: '食堂のおばちゃんのうち、眼鏡でタバコを吸う方の苗字は？' });
+  const qr = st.table().findIndex((x) => x[0] === '合言葉の問い') + 2;
+  assert.ok(qr >= 2, '「設定」に「合言葉の問い」の行がある');
+  st.write(qr, 2, '  寮の電話番号の下 4 けたは？ ');
+  env.ctx.onEdit({});
+  assert.deepStrictEqual(q(), { ok: true, question: '寮の電話番号の下 4 けたは？' });
+  assert.ok(!JSON.stringify(q()).includes('鈴木'), '答えは返さない');
+  st.write(qr, 2, '');
+  env.ctx.onEdit({});
+  assert.strictEqual(q().question, '食堂のおばちゃんのうち、眼鏡でタバコを吸う方の苗字は？', '空なら、もとの問い');
   // 答えはコードに書かない
   assert.ok(!/夕照寮|せきしょう/.test(fs.readFileSync(path.join(ROOT, 'gas/Code.gs'), 'utf8').match(/function quizCheck[\s\S]*?\n}/)[0]));
 });

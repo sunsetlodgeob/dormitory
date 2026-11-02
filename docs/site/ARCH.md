@@ -64,6 +64,11 @@ docs/site/SETUP.md       Google 側の設定手順（幹事向け）
 
 ## 3. データの形
 
+### 投稿の「確認」の問い（誰でも見られる）
+
+`OB.data.loadQuiz()` → `GET {GAS_URL}?type=quiz` → `{ "ok": true, "question": "…" }`。シート「設定」の「合言葉の問い」（空なら、はじめの問い）。
+答え（「合言葉の答え」）は返さない。読めなければ `''` を返し、トップページは `index.html` に書いてある問いのまま。
+
 ### 名簿・部屋割り・D-1選手権（誰でも見られる）
 
 `OB.data.loadPublic()` → `GET {GAS_URL}?type=public`

@@ -158,5 +158,17 @@
     return by;
   }
 
-  OB.data = { isLive, loadPublic, loadTimeline, requestAccess, loadPhotos, loadThumbs, loadPhotoFile, uploadPhoto, roomsByYear, ROOM_NUMBERS };
+  // トップページの投稿の「確認」の問い（シート「設定」の「合言葉の問い」）。読めなければ ''（ページに書いてある問いのまま）
+  async function loadQuiz() {
+    if (!isLive()) return '';
+    try {
+      const res = await fetch(cfg().GAS_URL + '?type=quiz', { redirect: 'follow' });
+      const d = res.ok ? await res.json() : null;
+      return d && d.ok && typeof d.question === 'string' ? d.question.trim().slice(0, 200) : '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  OB.data = { isLive, loadPublic, loadQuiz, loadTimeline, requestAccess, loadPhotos, loadThumbs, loadPhotoFile, uploadPhoto, roomsByYear, ROOM_NUMBERS };
 })();

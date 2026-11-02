@@ -20,7 +20,7 @@
 
   const val = (name) => String(form.elements[name].value || '').trim();
   const MSG = {
-    quiz: '確認の答えがちがいます。食堂のおばちゃんのうち、眼鏡でタバコを吸う方の苗字を入れてください。',
+    quiz: '確認の答えがちがいます。「確認」の問いの答えを、もう一度入れてください。',
     empty: 'どこか 1 つは書くか、写真をえらんでください（事件の見出しか本文、名簿のお名前か訂正、部屋割り、写真）。',
     too_many: 'いま投稿がこみあっています。1 時間ほどしてから、もう一度送ってください。',
     not_configured: '投稿フォームは、いま準備中です。もうしばらくお待ちください。',
@@ -42,6 +42,11 @@
       btn.disabled = true;
     }
     files.disabled = true;
+  }
+
+  // 「確認」の問いは、シート「設定」の「合言葉の問い」から読む（読めなければ、ページに書いてある問いのまま）
+  if (url && OB.data && OB.data.loadQuiz) {
+    OB.data.loadQuiz().then((q) => { if (q && $('post-quiz-q')) $('post-quiz-q').textContent = q; });
   }
 
   function say(text, kind, list) {
@@ -125,7 +130,7 @@
       return;
     }
     if (!body.quiz) {
-      say('確認の欄に、食堂のおばちゃんのうち、眼鏡でタバコを吸う方の苗字を入れてください。', 'error');
+      say('「確認」の欄に、問いの答えを入れてください。', 'error');
       form.elements.quiz.focus();
       return;
     }

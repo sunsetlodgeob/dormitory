@@ -78,6 +78,7 @@ const TOKENINFO_URL = 'https://oauth2.googleapis.com/tokeninfo?id_token=';
 const CACHE_PUBLIC = 'public_v1';
 const CACHE_MEMBERS = 'members_v1';
 const CACHE_PHOTOS = 'photos_v1';
+const CACHE_QUIZ = 'quiz_v1';
 const PHOTO_THUMB_MAX = 24; // 1 回でわたす写真の小さい絵の数
 const PHOTO_FILE_MAX = 25 * 1024 * 1024; // ダウンロードできるファイルの大きさの上限（Apps Script の返事の上限より小さく）
 const UPLOAD_MAX = 20 * 1024 * 1024; // 送ってもらう写真 1 枚の上限
@@ -563,14 +564,30 @@ function savePost(ss, p) {
   return { ok: true, saved: saved, results: results };
 }
 
-// いたずらよけの問い（トップページの投稿の「確認」）。問いの文は index.html、答えはシート「設定」の「合言葉の答え」にだけ置く
-// （このコードは公開しているので、答えはここに書かない）。答えはいくつか書ける（「、」で区切る）。
+// いたずらよけの問い（トップページの投稿の「確認」）。問いの文はシート「設定」の「合言葉の問い」（サイトは ?type=quiz で読む）、
+// 答えは「合言葉の答え」にだけ置く（このコードは公開しているので、答えはここに書かない）。答えはいくつか書ける（「、」で区切る）。
 // くらべるときは、空白をとり、全角・半角とカタカナ・ひらがなのちがい、終わりの「さん」は見ない。
 // まちがい → 'quiz'、答えがまだ設定されていない → 'not_configured'、正しい → ''
 function quizNorm(v) {
   return String(v == null ? '' : v).normalize('NFKC').replace(/\s/g, '')
     .replace(/[\u30a1-\u30f6]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0x60); })
     .replace(/(さん|様|さま)$/, '');
+}
+const QUIZ_DEFAULT = '食堂のおばちゃんのうち、眼鏡でタバコを吸う方の苗字は？';
+function quizQuestion(ss) {
+  const v = setting(ss, '合言葉の問い');
+  if (v == null) ensureSettings(ss);
+  return cleanLine(v, 200) || QUIZ_DEFAULT;
+}
+// GET ?type=quiz → { ok, question }（答えは返さない）
+function quizOut() {
+  const cached = cacheGet(CACHE_QUIZ);
+  if (cached) return textOut(cached);
+  const ss = book();
+  if (!ss) return jsonOut({ ok: false, error: 'not_configured' });
+  const text = JSON.stringify({ ok: true, question: quizQuestion(ss) });
+  cachePut(CACHE_QUIZ, text, CACHE_PUBLIC_SEC);
+  return textOut(text);
 }
 function quizCheck(ss, v) {
   if (!ss) return 'not_configured';
@@ -771,6 +788,7 @@ function hashText(s) {
 function doGet(e) {
   try {
     const type = e && e.parameter ? e.parameter.type : '';
+    if (type === 'quiz') return quizOut();
     if (type !== 'public') return jsonOut({ ok: false, error: 'bad_request' });
     const cached = cacheGet(CACHE_PUBLIC);
     if (cached) return textOut(cached);
@@ -1363,6 +1381,7 @@ function splitInfo(v) {
 
 const SETTINGS = [
   { key: '写真のダウンロード', check: true, value: false, note: 'チェックすると、写真館で写真をダウンロードできる' },
+  { key: '合言葉の問い', value: QUIZ_DEFAULT, note: 'トップページの投稿の「確認」に出す問い。変えたら「合言葉の答え」も変える（サイトには数分で出る）' },
   { key: '合言葉の答え', value: '', note: 'トップページの投稿の「確認」の答え。ひらがな・カタカナ・前後の空白・終わりの「さん」はどれでも通る。いくつか書くときは「、」で区切る（例：漢字の答え、ひらがなの読み）' },
 ];
 
@@ -1734,6 +1753,7 @@ function onEdit(e) {
 function clearCache() {
   cacheRemove(CACHE_PHOTOS);
   cacheRemove(CACHE_PUBLIC);
+  cacheRemove(CACHE_QUIZ);
   cacheRemove(CACHE_MEMBERS);
 }
 

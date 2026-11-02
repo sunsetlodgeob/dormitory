@@ -360,7 +360,12 @@ async function postForm(open, base) {
       status: 200, contentType: 'application/javascript', body: 'window.OB_CONFIG = { GAS_URL: ' + JSON.stringify(GAS) + ' };',
     }));
     const sent = [];
+    let quizAsked = 0;
     await ctx.route(GAS + '*', async (r) => {
+      if (r.request().method() === 'GET' && /[?&]type=quiz/.test(r.request().url())) {
+        quizAsked++;
+        return r.fulfill({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ ok: true, question: 'テスト用の問い？' }) });
+      }
       const body = JSON.parse(r.request().postData() || '{}');
       sent.push({ body, type: r.request().headers()['content-type'] });
       const res = body.quiz !== '山田' ? { ok: false, error: 'quiz' }
@@ -371,6 +376,9 @@ async function postForm(open, base) {
     await page.reload();
     await page.waitForTimeout(400);
     assert.ok(!(await page.locator('#post-off').isVisible()));
+    // 「確認」の問いは、シート「設定」の「合言葉の問い」（?type=quiz）から
+    await page.waitForFunction(() => document.getElementById('post-quiz-q').textContent === 'テスト用の問い？', null, { timeout: 4000 });
+    assert.ok(quizAsked >= 1, tag + '：問いを読みに行く');
     // メニューの「投稿」（いちばん下。↑ で回りこむ）
     if (phone) {
       await page.locator('#home-screen').tap();
@@ -406,7 +414,7 @@ async function postForm(open, base) {
     await page.fill('[name=mb_entry]', '平成15年度');
     await page.fill('[name=rm_text]', '2005年度 305号室 自分・六浦二郎');
     await page.click('#post-send');
-    assert.ok((await page.textContent('#post-status')).includes('眼鏡でタバコを吸う方の苗字'), tag + '：確認の欄が空');
+    assert.ok((await page.textContent('#post-status')).includes('問いの答えを入れてください'), tag + '：確認の欄が空');
     assert.strictEqual(sent.length, 0);
     await page.fill('[name=quiz]', 'ちがう寮');
     await page.click('#post-send');

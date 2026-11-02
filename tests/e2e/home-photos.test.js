@@ -17,7 +17,7 @@ const { withSite, realErrors } = require('./lib');
 const PORT = Number(process.env.PORT) || 8810; // ARCH.md の割り当て
 const SHOTS = process.env.HOME_SHOTS || '';
 const GAS = 'https://script.google.com/macros/s/TEST/exec';
-const QUIZ_MSG = '確認の答えがちがいます。食堂のおばちゃんのうち、眼鏡でタバコを吸う方の苗字を入れてください。';
+const QUIZ_MSG = '確認の答えがちがいます。「確認」の問いの答えを、もう一度入れてください。';
 const TOO_MANY = 'たくさん送られたので、少し休んでいます。1 時間ほどしてから、残りを送ってください。';
 
 // ── 小さな ZIP 作り ──
@@ -101,6 +101,7 @@ async function openLive(browser, base, o = {}) {
     const req = r.request();
     const body = JSON.parse(req.postData() || '{}');
     const json = (obj) => r.fulfill({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(obj) });
+    if (req.method() === 'GET' && /[?&]type=quiz/.test(req.url())) return json({ ok: true, question: 'テスト用の問い？' });
     srv.log.push({ type: body.type, ct: req.headers()['content-type'] || '', at: Date.now() });
     if (body.type === 'post') {
       srv.posts.push(body);
@@ -185,7 +186,7 @@ withSite(PORT, async ({ browser, base, open }) => {
     ]);
     assert.ok((await page.textContent('#post-picked')).includes('a.jpg ほか 2 個（ZIP 1 個）'), await page.textContent('#post-picked'));
     await page.click('#post-send');
-    assert.ok((await page.textContent('#post-status')).includes('眼鏡でタバコを吸う方の苗字'), '確認の欄が空');
+    assert.ok((await page.textContent('#post-status')).includes('問いの答えを入れてください'), '確認の欄が空');
     assert.strictEqual(srv.log.length, 0);
 
     // 写真だけで送る
