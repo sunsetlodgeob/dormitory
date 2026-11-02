@@ -157,8 +157,10 @@ async function gakusaiBot(page, ctl, o) {
     // 確かめ中：返事が来るまで待つ（ことわられたら、また今度）
     if (probe) {
       if (s.stats.tried > probe.tried && !s.thinking) {
-        if (probe.kind === 'oba' && s.stats.oba > probe.oba) { seen.obaDrop = probe.before - s.count; await shot(page, label + '-oba'); }
-        if (probe.kind === 'danshi' && s.stats.danshi > probe.danshi) seen.danshiSame = s.count === probe.before;
+        // 前に声をかけた女子の返事が、同じころに届くことがある。その分（来てくれた人数）は差し引いて見る
+        const girls = s.stats.girlsIn - probe.girlsIn;
+        if (probe.kind === 'oba' && s.stats.oba > probe.oba) { seen.obaDrop = probe.before + girls - s.count; await shot(page, label + '-oba'); }
+        if (probe.kind === 'danshi' && s.stats.danshi > probe.danshi) seen.danshiSame = s.count === probe.before + girls;
         probe = null;
       } else if (Date.now() - probe.at > 2000) probe = null;
       await page.waitForTimeout(10);
@@ -174,7 +176,7 @@ async function gakusaiBot(page, ctl, o) {
     const w = pick.want;
     if (s.sel && s.sel.id === w.id) {
       if (!pick.go) { await page.waitForTimeout(10); continue; }
-      if (pick.probe) probe = { kind: w.kind, before: s.count, tried: s.stats.tried, oba: s.stats.oba, danshi: s.stats.danshi, at: Date.now() };
+      if (pick.probe) probe = { kind: w.kind, before: s.count, tried: s.stats.tried, oba: s.stats.oba, danshi: s.stats.danshi, girlsIn: s.stats.girlsIn, at: Date.now() };
       if (w.mood === 'love') seen.love++;
       if (pt && seen.presses++ % 2) await tapGroup(w);
       else await ctl.tap('a');
