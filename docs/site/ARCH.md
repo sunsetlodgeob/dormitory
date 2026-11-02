@@ -154,7 +154,7 @@ docs/site/SETUP.md       Google 側の設定手順（幹事向け）
 `{"type":"upload","idToken":"…","name":"IMG_0001.JPG","mime":"image/jpeg","data":"（ファイルの base64）","year":"2005","note":"…"}`
 
 ログインなし（トップページの投稿フォーム）は、`idToken` を空にして `OB.data.uploadPhoto('', { name, mime, data, year, note, quiz, hp, by })` → 本文
-`{"type":"upload","quiz":"夕照寮","hp":"","by":"一年C","name":"…","mime":"…","data":"…","year":"…","note":""}`（`idToken` は付けない）。
+`{"type":"upload","quiz":"（確認の答え）","hp":"","by":"一年C","name":"…","mime":"…","data":"…","year":"…","note":""}`（`idToken` は付けない）。
 `quiz`・`hp`・`by` は文字の投稿と同じ欄（確認の問い・わなの欄・投稿者）。
 
 ```json
@@ -212,7 +212,7 @@ ZIP は `js/site/zip.js` の `OB.zip.entries(file)` で開く（外のライブ�
 
 ```json
 {
-  "type": "post", "quiz": "夕照寮", "hp": "", "by": "一年C",
+  "type": "post", "quiz": "（確認の答え）", "hp": "", "by": "一年C",
   "event":  { "when": "平成17年の4月", "title": "屋上でBBQ", "what": "…", "who": "先輩A" },
   "member": { "name": "夕照 一郎", "entry": "2003", "grad": "", "fix": "入学年度は2004でした" },
   "rooms":  { "text": "2005年度 305号室 自分・六浦二郎" }
@@ -223,7 +223,7 @@ ZIP は `js/site/zip.js` の `OB.zip.entries(file)` で開く（外のライブ�
 { "ok": true, "saved": { "event": "e12", "member": "added", "rooms": { "added": 2, "same": 0, "removed": 0 } },
   "results": ["年表：「屋上でBBQ」を載せました（2005年度）", "名簿：…", "部屋割り：2 件を載せました"] }
 { "ok": true, "duplicate": true, "saved": {}, "results": [] }  // 10 分以内に同じ内容
-{ "ok": false, "error": "quiz" }            // いたずらよけの問い（寮の名前）がちがう
+{ "ok": false, "error": "quiz" }            // いたずらよけの問いの答えがちがう（答えはシート「設定」の「合言葉の答え」。空なら "not_configured"）
 { "ok": false, "error": "empty" }           // 書いてある所がない
 { "ok": false, "error": "too_many" }        // 1 時間に 30 件をこえた
 ```

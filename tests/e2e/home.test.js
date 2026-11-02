@@ -363,7 +363,7 @@ async function postForm(open, base) {
     await ctx.route(GAS + '*', async (r) => {
       const body = JSON.parse(r.request().postData() || '{}');
       sent.push({ body, type: r.request().headers()['content-type'] });
-      const res = body.quiz !== '夕照寮' ? { ok: false, error: 'quiz' }
+      const res = body.quiz !== '山田' ? { ok: false, error: 'quiz' }
         : { ok: true, saved: { member: 'added', rooms: { added: 2, same: 0, removed: 0 } }, results: ['名簿：夕照 一郎 を載せました（2003年度入学）', '部屋割り：2 件を載せました'] };
       await new Promise((ok) => setTimeout(ok, 300)); // AI が整えるあいだ
       await r.fulfill({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(res) });
@@ -406,7 +406,7 @@ async function postForm(open, base) {
     await page.fill('[name=mb_entry]', '平成15年度');
     await page.fill('[name=rm_text]', '2005年度 305号室 自分・六浦二郎');
     await page.click('#post-send');
-    assert.ok((await page.textContent('#post-status')).includes('寮の名前'), tag + '：確認の欄が空');
+    assert.ok((await page.textContent('#post-status')).includes('眼鏡でタバコを吸う方の苗字'), tag + '：確認の欄が空');
     assert.strictEqual(sent.length, 0);
     await page.fill('[name=quiz]', 'ちがう寮');
     await page.click('#post-send');
@@ -414,7 +414,7 @@ async function postForm(open, base) {
     assert.ok((await page.textContent('#post-status')).includes('確認の答えがちがいます'));
     assert.strictEqual(await page.inputValue('[name=rm_text]'), '2005年度 305号室 自分・六浦二郎', 'まちがえても書いた内容は残る');
     // 正しく送る
-    await page.fill('[name=quiz]', '夕照寮');
+    await page.fill('[name=quiz]', '山田');
     await page.fill('[name=by]', '一年C');
     await page.click('#post-send');
     assert.ok(await page.locator('#post-send').isDisabled(), '送っているあいだは押せない');

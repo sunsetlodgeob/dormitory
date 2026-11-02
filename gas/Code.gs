@@ -510,10 +510,11 @@ function rawRooms(text, notes, why) {
 function handlePost(body) {
   // 人には見えない欄（わな）に何か入っていたら、機械の投稿とみなして、入れずに「受けとった」とだけ返す
   if (cleanLine(body.hp, 100)) return { ok: true, saved: {}, results: [] };
-  if (!quizOk(body.quiz)) return { ok: false, error: 'quiz' };
+  const ss = book();
+  const quiz = quizCheck(ss, body.quiz);
+  if (quiz) return { ok: false, error: quiz };
   const p = readPost(body);
   if (!p.event && !p.member && !p.rooms) return { ok: false, error: 'empty' };
-  const ss = book();
   if (!ss) return { ok: false, error: 'not_configured' };
 
   const cache = CacheService.getScriptCache();
@@ -562,10 +563,23 @@ function savePost(ss, p) {
   return { ok: true, saved: saved, results: results };
 }
 
-// いたずらよけの問い「寮の名前は？」
-function quizOk(v) {
-  const t = String(v == null ? '' : v).normalize('NFKC').replace(/\s/g, '');
-  return t.length <= 30 && /夕照|せきしょう|セキショウ/.test(t);
+// いたずらよけの問い（トップページの投稿の「確認」）。問いの文は index.html、答えはシート「設定」の「合言葉の答え」にだけ置く
+// （このコードは公開しているので、答えはここに書かない）。答えはいくつか書ける（「、」で区切る）。
+// くらべるときは、空白をとり、全角・半角とカタカナ・ひらがなのちがい、終わりの「さん」は見ない。
+// まちがい → 'quiz'、答えがまだ設定されていない → 'not_configured'、正しい → ''
+function quizNorm(v) {
+  return String(v == null ? '' : v).normalize('NFKC').replace(/\s/g, '')
+    .replace(/[\u30a1-\u30f6]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0x60); })
+    .replace(/(さん|様|さま)$/, '');
+}
+function quizCheck(ss, v) {
+  if (!ss) return 'not_configured';
+  let raw = setting(ss, '合言葉の答え');
+  if (raw == null) { ensureSettings(ss); raw = ''; } // 「設定」に行がなければ足しておく（答えは幹事が書く）
+  const answers = String(raw).split(/[、,，\n]/).map(quizNorm).filter(Boolean);
+  if (!answers.length) return 'not_configured';
+  const t = quizNorm(v);
+  return t && t.length <= 30 && answers.indexOf(t) >= 0 ? '' : 'quiz';
 }
 
 function readPost(body) {
@@ -1349,6 +1363,7 @@ function splitInfo(v) {
 
 const SETTINGS = [
   { key: '写真のダウンロード', check: true, value: false, note: 'チェックすると、写真館で写真をダウンロードできる' },
+  { key: '合言葉の答え', value: '', note: 'トップページの投稿の「確認」の答え。ひらがな・カタカナ・前後の空白・終わりの「さん」はどれでも通る。いくつか書くときは「、」で区切る（例：漢字の答え、ひらがなの読み）' },
 ];
 
 // シート「設定」に、決まった項目がなければ足す
@@ -1581,9 +1596,10 @@ function handleUpload(body) {
     if (auth.error) return { ok: false, error: auth.error };
   } else {
     if (cleanLine(body.hp, 100)) return { ok: true, skipped: true };
-    if (!quizOk(body.quiz)) return { ok: false, error: 'quiz' };
     const ss0 = book();
     if (!ss0) return { ok: false, error: 'not_configured' };
+    const quiz = quizCheck(ss0, body.quiz);
+    if (quiz) return { ok: false, error: quiz };
     auth = { ss: ss0, email: '', guest: cleanLine(body.by, 100) || '（名前なし）' };
   }
   const ss = auth.ss;

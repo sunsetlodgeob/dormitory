@@ -26,9 +26,18 @@ function geminiOk(obj) {
   return { code: 200, body: { candidates: [{ content: { role: 'model', parts: [{ text: JSON.stringify(obj) }] }, finishReason: 'STOP' }] } };
 }
 
+// いたずらよけの問いの答え（テスト用の架空の答え。本物はシート「設定」にだけ書く）
+const QUIZ = '山田';
+function setQuiz(env, v) {
+  const st = env.ss.getSheetByName('設定');
+  const r = st.table().findIndex((x) => x[0] === '合言葉の答え') + 2;
+  assert.ok(r >= 2, '「設定」に「合言葉の答え」の行がある');
+  st.write(r, 2, v);
+}
 function freshSetup(opts) {
   const env = loadGas(opts);
   env.ctx.setup();
+  setQuiz(env, QUIZ + '、やまだ');
   return env;
 }
 
@@ -45,7 +54,7 @@ function rec(sheet, r) { // r 行目を { 見出し: 値 } に
 
 // トップページの投稿を 1 件送る（doPost の type 'post'。いたずらよけの問いには正しく答える）
 function send(env, body) {
-  const o = env.ctx.doPost({ postData: { contents: JSON.stringify(Object.assign({ type: 'post', quiz: '夕照寮' }, body)), type: 'text/plain' } });
+  const o = env.ctx.doPost({ postData: { contents: JSON.stringify(Object.assign({ type: 'post', quiz: QUIZ }, body)), type: 'text/plain' } });
   return out(o);
 }
 const ev = (when, title, what, extra = {}) => ({ event: Object.assign({ when, title, what }, extra) });
@@ -588,13 +597,38 @@ test('投稿 名簿：名前が = で始まっても式にしない', () => {
   assert.strictEqual(heya.cell(2, 3), '=IMAGE("http://e.example/a.png")');
 });
 
+test('問いの答え：シート「設定」の「合言葉の答え」だけを見る。まだ書いていなければ「準備中」、行がなければ足す', () => {
+  const env = freshSetup({ props: { GEMINI_API_KEY: 'k' }, fetch: () => geminiOk({ year: 2005, month: null, title: 't', body: 'b', tags: [] }) });
+  const raw = (b) => out(env.ctx.doPost({ postData: { contents: JSON.stringify(b) } }));
+  const jpg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x41]).toString('base64');
+  const upload = (q) => raw({ type: 'upload', quiz: q, name: 'g.jpg', mime: 'image/jpeg', data: jpg });
+  // 空にすると、どの答えも通らない（準備中）
+  setQuiz(env, '');
+  assert.deepStrictEqual(raw({ type: 'post', quiz: QUIZ, event: { title: 'a' } }), { ok: false, error: 'not_configured' });
+  assert.deepStrictEqual(upload(QUIZ), { ok: false, error: 'not_configured' });
+  // 書きかえると、すぐその答えになる
+  setQuiz(env, '鈴木、すずき');
+  assert.strictEqual(raw({ type: 'post', quiz: QUIZ, event: { title: 'a' } }).error, 'quiz', '前の答えは通らない');
+  assert.ok(!['quiz', 'not_configured'].includes(upload('スズキ').error), '新しい答え（カタカナ）で通る');
+  // 行を消してしまっても、次の投稿で行を足す（答えは空のまま＝準備中）
+  const st = env.ss.getSheetByName('設定');
+  const r = st.table().findIndex((x) => x[0] === '合言葉の答え') + 2;
+  st.write(r, 1, '');
+  st.write(r, 2, '');
+  assert.deepStrictEqual(raw({ type: 'post', quiz: '鈴木', event: { title: 'a' } }), { ok: false, error: 'not_configured' });
+  assert.ok(st.table().some((x) => x[0] === '合言葉の答え'), '行が足された');
+  // 答えはコードに書かない
+  assert.ok(!/夕照寮|せきしょう/.test(fs.readFileSync(path.join(ROOT, 'gas/Code.gs'), 'utf8').match(/function quizCheck[\s\S]*?\n}/)[0]));
+});
+
 test('投稿：いたずらよけ（問い・わなの欄・空・同じ内容の 2 回目・1 時間の上限）', () => {
   let n = 0;
   const env = geminiEnv(() => { n++; return geminiOk({ year: 2005, month: null, title: 't', body: 'b', tags: [] }); });
   const raw = (b) => out(env.ctx.doPost({ postData: { contents: JSON.stringify(b) } }));
   assert.deepStrictEqual(raw({ type: 'post', quiz: 'わからない', event: { title: 'a' } }), { ok: false, error: 'quiz' });
   assert.deepStrictEqual(raw({ type: 'post', event: { title: 'a' } }), { ok: false, error: 'quiz' });
-  for (const q of ['夕照寮', ' 夕照 ', 'せきしょうりょう', 'ｾｷｼｮｳ']) assert.notStrictEqual(raw({ type: 'post', quiz: q }).error, 'quiz', q);
+  for (const q of ['山田', ' 山田 ', '山田さん', 'やまだ', 'ヤマダ', 'ﾔﾏﾀﾞ', '山　田']) assert.notStrictEqual(raw({ type: 'post', quiz: q }).error, 'quiz', q);
+  for (const q of ['山', '山田太郎', '夕照寮', 'やまだやまだ']) assert.strictEqual(raw({ type: 'post', quiz: q }).error, 'quiz', q);
   assert.deepStrictEqual(send(env, {}), { ok: false, error: 'empty' });
   assert.deepStrictEqual(send(env, { event: { when: '2005', who: 'x' }, member: { entry: '2003' }, rooms: { text: '   ' } }), { ok: false, error: 'empty' }, '見出しも本文も名前もない');
   // わな：入れずに ok だけ返す
@@ -1269,16 +1303,16 @@ test('写真を送る：ログインなし（トップページから）でも�
   const up = (o) => post(env, Object.assign({ type: 'upload', name: 'g.jpg', mime: 'image/jpeg', data: jpg('guest') }, o));
   assert.strictEqual(up({}).error, 'quiz', '問いに答えていない');
   assert.strictEqual(up({ quiz: 'ちがう' }).error, 'quiz');
-  assert.strictEqual(up({ quiz: '夕照寮', hp: 'spam' }).ok, true);
+  assert.strictEqual(up({ quiz: QUIZ, hp: 'spam' }).ok, true);
   assert.strictEqual(Object.keys(created).length, 0, 'わなの欄に何か入っていたら、入れない');
-  const r = up({ quiz: '夕照寮', by: '一年C', year: '2004' });
+  const r = up({ quiz: 'やまだ', by: '一年C', year: '2004' });
   assert.strictEqual(r.ok, true);
   assert.strictEqual(r.year, 2004);
   const sh = env.ss.getSheetByName('写真');
   assert.ok(rec(sh, sh.getLastRow())['メモ'].includes('送った人：一年C（ログインなし。トップページから）'));
   const per = env.get('UPLOAD_GUEST_PER_HOUR');
-  for (let i = 1; i < per; i++) up({ quiz: '夕照寮', data: jpg('g' + i) });
-  assert.strictEqual(up({ quiz: '夕照寮', data: jpg('over') }).error, 'too_many', '全員あわせての上限');
+  for (let i = 1; i < per; i++) up({ quiz: QUIZ, data: jpg('g' + i) });
+  assert.strictEqual(up({ quiz: QUIZ, data: jpg('over') }).error, 'too_many', '全員あわせての上限');
   // トークンがあれば、ログインした人として（問いは要らない）
   assert.strictEqual(post(env, { type: 'upload', idToken: TOKEN, name: 'm.jpg', mime: 'image/jpeg', data: jpg('member') }).ok, true);
 });

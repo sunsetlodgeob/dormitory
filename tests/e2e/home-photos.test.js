@@ -17,7 +17,7 @@ const { withSite, realErrors } = require('./lib');
 const PORT = Number(process.env.PORT) || 8810; // ARCH.md の割り当て
 const SHOTS = process.env.HOME_SHOTS || '';
 const GAS = 'https://script.google.com/macros/s/TEST/exec';
-const QUIZ_MSG = '確認の答えがちがいます。寮の名前を漢字で入れてください。';
+const QUIZ_MSG = '確認の答えがちがいます。食堂のおばちゃんのうち、眼鏡でタバコを吸う方の苗字を入れてください。';
 const TOO_MANY = 'たくさん送られたので、少し休んでいます。1 時間ほどしてから、残りを送ってください。';
 
 // ── 小さな ZIP 作り ──
@@ -106,7 +106,7 @@ async function openLive(browser, base, o = {}) {
       srv.posts.push(body);
       await new Promise((ok) => setTimeout(ok, 300)); // AI が整えるあいだ
       srv.postDone = Date.now();
-      return json(body.quiz !== '夕照寮' ? { ok: false, error: 'quiz' }
+      return json(body.quiz !== '山田' ? { ok: false, error: 'quiz' }
         : { ok: true, saved: { member: 'added' }, results: ['名簿：夕照 一郎 を載せました（2003年度入学）'] });
     }
     if (body.type === 'upload') {
@@ -117,7 +117,7 @@ async function openLive(browser, base, o = {}) {
       await new Promise((ok) => setTimeout(ok, 150));
       srv.inflight--;
       srv.uploads.push(body);
-      if (body.quiz !== '夕照寮') return json({ ok: false, error: 'quiz' });
+      if (body.quiz !== '山田') return json({ ok: false, error: 'quiz' });
       return json(srv.answer(body, n));
     }
     return json({ ok: false, error: 'bad_request' });
@@ -185,11 +185,11 @@ withSite(PORT, async ({ browser, base, open }) => {
     ]);
     assert.ok((await page.textContent('#post-picked')).includes('a.jpg ほか 2 個（ZIP 1 個）'), await page.textContent('#post-picked'));
     await page.click('#post-send');
-    assert.ok((await page.textContent('#post-status')).includes('寮の名前'), '確認の欄が空');
+    assert.ok((await page.textContent('#post-status')).includes('眼鏡でタバコを吸う方の苗字'), '確認の欄が空');
     assert.strictEqual(srv.log.length, 0);
 
     // 写真だけで送る
-    await page.fill('[name=quiz]', '夕照寮');
+    await page.fill('[name=quiz]', '山田');
     await page.fill('[name=by]', '一年C');
     await page.fill('[name=ph_year]', '平成17年度');
     await page.click('#post-send');
@@ -206,7 +206,7 @@ withSite(PORT, async ({ browser, base, open }) => {
       assert.strictEqual(u.type, 'upload');
       assert.ok(Buffer.from(u.data, 'base64').equals(want[u.name][0]), u.name + ' の中身（base64）がちがう');
       assert.strictEqual(u.mime, want[u.name][1]);
-      assert.strictEqual(u.quiz, '夕照寮');
+      assert.strictEqual(u.quiz, '山田');
       assert.strictEqual(u.by, '一年C');
       assert.strictEqual(u.hp, '');
       assert.strictEqual(u.year, '平成17年度');
@@ -224,7 +224,7 @@ withSite(PORT, async ({ browser, base, open }) => {
     assert.strictEqual(await page.inputValue('#post-files'), '');
     assert.ok((await page.textContent('#post-picked')).includes('まだ何もえらんでいません'));
     assert.strictEqual(await page.inputValue('[name=ph_year]'), '', '全部送れたら年度は消す');
-    assert.strictEqual(await page.inputValue('[name=quiz]'), '夕照寮', '確認の答えは残す');
+    assert.strictEqual(await page.inputValue('[name=quiz]'), '山田', '確認の答えは残す');
     assert.strictEqual(await page.inputValue('[name=by]'), '一年C', '投稿者は残す');
     if (SHOTS) await page.locator('#post').screenshot({ path: path.join(SHOTS, 'post-photos-pc.png') });
     console.log('ok: 写真だけで送る（写真 2 枚と ZIP・idToken なし・base64・同時に 2 枚まで）');
@@ -275,7 +275,7 @@ withSite(PORT, async ({ browser, base, open }) => {
     // too_many：止まる → 押しなおすと残りだけ
     reset();
     await page.fill('[name=rm_text]', '');
-    await page.fill('[name=quiz]', '夕照寮');
+    await page.fill('[name=quiz]', '山田');
     let busy = true;
     srv.answer = (d, n) => (busy && n >= 3 ? { ok: false, error: 'too_many' } : { ok: true, id: 'n' + n, year: null });
     await page.setInputFiles('#post-files', [1, 2, 3, 4, 5, 6].map((i) => file('m' + i + '.jpg', fakeJpeg(800 + i), 'image/jpeg')));
@@ -315,7 +315,7 @@ withSite(PORT, async ({ browser, base, open }) => {
     const { page, ctx, errors, srv } = await openLive(browser, base, { phone: true });
     assert.ok(await noOverflow(page), '幅 390 で横にはみ出す');
     await page.setInputFiles('#post-files', [file('long-long-long-long-long-long-name-IMG_20050401_123456.jpg', fakeJpeg(600), 'image/jpeg'), file('bad.pdf', Buffer.from('%PDF'), 'application/pdf')]);
-    await page.fill('[name=quiz]', '夕照寮');
+    await page.fill('[name=quiz]', '山田');
     await page.locator('#post-send').scrollIntoViewIfNeeded();
     await page.tap('#post-send');
     await idle(page);

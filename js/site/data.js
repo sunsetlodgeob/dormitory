@@ -113,7 +113,7 @@
   }
 
   // 写真を送る（1 回に 1 枚）。photo：{ name, mime, data（もとのファイルの base64）, year（年度の文字。空でよい）, note }
-  // idToken が空のとき（トップページの投稿フォーム。ログインなし）は、かわりに photo の quiz（寮の名前）・hp（わなの欄）・by（投稿者）を送る
+  // idToken が空のとき（トップページの投稿フォーム。ログインなし）は、かわりに photo の quiz（確認の問いの答え）・hp（わなの欄）・by（投稿者）を送る
   // 返事：{ ok: true, id, year }（入れた。year は null のこともある）・{ ok: true, duplicate: true, same }（同じ写真がもうある。入れない）
   //       { ok: true, skipped: true }（ログインなしで、わなの欄に何か入っていた。入れない）
   // 失敗したときは Error に code（'too_large' | 'bad_type' | 'too_many' | 'not_member' | 'invalid_token' | 'quiz' |
