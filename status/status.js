@@ -4,7 +4,7 @@
  * status：'完了' | '確認中' | '作成中' | '未着手' | '設定待ち' | 'あとで'
  */
 window.OB_STATUS = {
-  updated: '2026-10-30',
+  updated: '2026-11-02',
   release: '2026-11-21', // 公開の予定
   event: '2026-11-28',   // 寮生大会
 
@@ -62,16 +62,17 @@ window.OB_STATUS = {
 
   // Google 側と、公開までの仕上げ
   tasks: [
-    { area: 'Google 側', name: '投稿フォーム → Gemini で整理 → スプシにそのまま掲載', status: '完了', note: 'Apps Script。名簿は同じ名前の行を直す・部屋割りは重ならないように足す。原文はシート「投稿」。本物の Google ではまだ動かしていない' },
+    { area: 'Google 側', name: '投稿フォーム → Gemini で整理 → スプシにそのまま掲載', status: '完了', note: 'Apps Script。名簿は同じ名前の行を直す・部屋割りは重ならないように足す。原文はシート「投稿」。本物で動いている' },
     { area: 'Google 側', name: '名簿・部屋割りの公開データ', status: '完了', note: '「掲載」にチェックがある行だけ出る' },
     { area: 'Google 側', name: '年表のログインと権限の確認', status: '完了', note: '「メンバー」シートの人だけ見られる' },
     { area: 'Google 側', name: '幹事向けの設定手順書', status: '完了', note: 'docs/site/SETUP.md', link: 'https://github.com/sunsetlodgeob/dormitory/blob/claude/quirky-mccarthy-cozapk/docs/site/SETUP.md' },
     { area: '仕上げ', name: 'サイト全体の通し確認', status: '完了', note: '全ページをスマホとパソコンで確認。テスト 12 本がすべて通る' },
     { area: '仕上げ', name: 'GitHub Pages の公開設定', status: '完了', note: '設定ずみ' },
-    { area: '仕上げ', name: 'Google 側の設定', status: '作成中', note: 'チャットで 1 ステップずつ案内しながら進める（手順書は docs/site/SETUP.md）' },
-    { area: '仕上げ', name: '本番のデータを入れる', status: '未着手', note: '名簿・部屋割り・事件簿の元データをもらってから' },
+    { area: '仕上げ', name: 'Google 側の設定', status: '完了', note: 'スプシ・Apps Script・Gemini・ログイン・年表の申請・写真館。写真を送るしくみの許可と公開しなおしは確認中' },
+    { area: '寮生大会', name: '出欠フォーム → 確認メールとカレンダーの招待', status: '完了', note: 'gas/taikai。事前準備・1次会・2次会ごと。変更・前日のお知らせ（11/27 12時）。締め切り 11/14' },
+    { area: '仕上げ', name: '本番のデータを入れる', status: '作成中', note: '事件簿・名簿・D-1 は取り込みずみ。写真も取り込みずみ。部屋割りは準備中' },
     { area: '仕上げ', name: '人が遊んで、むずかしさと音を確かめる', status: '未着手', note: 'ミニゲームのむずかしさは自動の確認だけ。曲もまだ人の耳で聞いていない' },
-    { area: '仕上げ', name: '本物の Google で動かす', status: '設定待ち', note: 'Google 側の設定のあと、ログインとフォームを一度ためす' },
+    { area: '仕上げ', name: '本物の Google で動かす', status: '完了', note: '名簿・D-1・年表のログインと申請・投稿・写真館を本物で確かめた' },
   ],
 
   schedule: [
@@ -86,7 +87,7 @@ window.OB_STATUS = {
   decisions: [
     { name: '「とりのおばちゃん」の呼び名（そのまま使ってよい）', status: '完了' },
     { name: '名簿に卒業年度を出すか（出す）', status: '完了' },
-    { name: '名簿・部屋割り・事件簿の元データ（準備ができてきた。スプシに直接入れる）', status: '確認中' },
+    { name: '部屋割りの元データ（事件簿・名簿・D-1 は取り込みずみ）', status: '確認中' },
     { name: '投稿は確認なしでそのまま載せる（ときどき見て直す）・投稿フォームはトップページ・写真は別に管理', status: '完了' },
     { name: '部屋割りで「ノックしたときの反応」をどう集めるか', status: 'あとで' },
     { name: 'OB会参加者リストとサイトのつなぎ方', status: 'あとで' },
