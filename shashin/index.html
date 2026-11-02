@@ -13,6 +13,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=DotGothic16&display=swap">
 <link rel="stylesheet" href="../css/site.css">
 <link rel="stylesheet" href="../css/login.css">
+<link rel="stylesheet" href="../css/uploader.css">
 <link rel="stylesheet" href="../css/shashin.css">
 </head>
 <body class="shashin">
@@ -84,11 +85,11 @@
       <h2 id="ps-send-title">写真を送る</h2>
       <p class="ps-send-note">1 枚 20MB まで。ZIP の中の写真も 1 枚ずつ送ります。送った写真は、重複を見て、年度に分けてから写真館に並びます。</p>
       <form class="ps-send-form" id="ps-send-form" novalidate>
-        <div class="ps-drop" id="ps-drop">
-          <label class="ps-file">写真か ZIP をえらぶ<small>いくつでもえらべます。パソコンなら、ここにドラッグして入れることもできます</small>
+        <div class="ob-up-drop" id="ps-drop">
+          <label class="ob-up-file">写真か ZIP をえらぶ<small>いくつでもえらべます。パソコンなら、ここにドラッグして入れることもできます</small>
             <input type="file" id="ps-files" name="files" accept="image/*,.zip,application/zip" multiple>
           </label>
-          <p class="ps-picked" id="ps-picked">まだ何もえらんでいません。</p>
+          <p class="ob-up-picked" id="ps-picked">まだ何もえらんでいません。</p>
         </div>
         <label>年度<small>任意。わかれば。例：2005、平成17年度。書いておくと、撮影日よりこちらを使います</small><input name="year" id="ps-send-year" maxlength="30" autocomplete="off"></label>
         <label>ひとこと<small>任意。200 字まで。例：新歓コンパのときの写真です</small><input name="note" id="ps-send-note" maxlength="200" autocomplete="off"></label>
@@ -96,12 +97,12 @@
           <button type="submit" class="fc-btn ps-send-go" id="ps-send-go">送る ▶</button>
           <button type="button" class="fc-btn ps-send-stop" id="ps-send-stop" hidden>やめる</button>
         </div>
-        <div class="ps-prog" id="ps-prog" hidden>
-          <p class="ps-prog-text" id="ps-prog-text"></p>
-          <div class="ps-prog-track" aria-hidden="true"><div class="ps-prog-fill" id="ps-prog-fill"></div></div>
+        <div class="ob-up-prog" id="ps-prog" hidden>
+          <p class="ob-up-prog-text" id="ps-prog-text"></p>
+          <div class="ob-up-track" aria-hidden="true"><div class="ob-up-fill" id="ps-prog-fill"></div></div>
         </div>
-        <p class="ps-send-status" id="ps-send-status" role="status" aria-live="polite"></p>
-        <div class="ps-problems" id="ps-problems" hidden>
+        <p class="ob-up-status" id="ps-send-status" role="status" aria-live="polite"></p>
+        <div class="ob-up-problems" id="ps-problems" hidden>
           <h3>送らなかったもの・送れなかったもの</h3>
           <ul id="ps-problem-list"></ul>
         </div>
@@ -157,6 +158,7 @@
 <script src="../js/site/common.js"></script>
 <script src="../js/site/login.js"></script>
 <script src="../js/site/zip.js"></script>
+<script src="../js/site/uploader.js"></script>
 <script src="../js/shashin.js"></script>
 </body>
 </html>

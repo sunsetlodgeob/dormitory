@@ -299,7 +299,7 @@
   letter-spacing: 0;
 }
 .home-post-form label { display: grid; gap: 4px; font: 14px/1.4 var(--font-pixel); color: var(--fc-white); }
-.home-post-form input, .home-post-form textarea {
+.home-post-form input:not([type="file"]), .home-post-form textarea {
   width: 100%;
   box-sizing: border-box;
   padding: 8px 10px;
@@ -312,7 +312,12 @@
 .home-post-form textarea { resize: vertical; }
 .home-post-form input:focus, .home-post-form textarea:focus { outline: 3px solid var(--fc-yellow); outline-offset: 0; }
 .home-post-send { margin: 5px; display: grid; gap: 12px; }
-.home-post-send .fc-btn { justify-self: start; padding: 10px 22px; font-size: 17px; }
+.home-post-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.home-post-send .fc-btn { padding: 10px 22px; font-size: 17px; }
+.home-post-send .home-post-stop { background: var(--fc-red); }
+.home-post-album { margin: 0; font: 15px/1.6 var(--font-pixel); }
+.home-post-album a { color: var(--fc-yellow); }
+.home-post-album a:hover { color: var(--fc-white); }
 /* わなの欄：人には見えない（機械だけが入れてしまう） */
 .home-post-hp { position: absolute !important; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
 .home-post-status:empty { display: none; }

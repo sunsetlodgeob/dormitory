@@ -11,7 +11,7 @@
 
 | ページ | 場所 | 中身 |
 | --- | --- | --- |
-| ホーム | `index.html` | ファミコンのゲームふうのメニュー。寮のまわりの地図でカーソルを動かして、行き先をえらぶ。下にふつうのリンクの一覧もある |
+| ホーム | `index.html` | ファミコンのゲームふうのメニュー。寮のまわりの地図でカーソルを動かして、行き先をえらぶ。下にふつうのリンクの一覧と、投稿フォーム（事件・名簿・部屋割り・写真。ログインなしで、確認の問いに答えれば送れる。写真は写真館に並ぶ。ZIP にまとめたものも送れる） |
 | 男魂くんの1年 | `game/` | 新入生・男魂くんが、寮の1年の行事をミニゲーム 10 本でのりきる。行事の間には、寮を舞台にした短い寸劇が入る。練習モードで 1 本ずつも遊べる |
 | 年表 | `nenpyo/` | 寮の事件簿を年度ごとに。Google でログインした、見る権限のある人だけが読める |
 | D-1選手権 | `d1/` | D-1選手権の歴代記録（優勝・準優勝・出場メンバー・主催者・レフェリー・黒子）。だれでも見られる |
@@ -72,7 +72,8 @@ Playwright は `/opt/node22/lib/node_modules/playwright` か、ふつうの `req
 | `nenpyo/`・`d1/`・`heya/`・`meibo/`・`shashin/` と `js/nenpyo.js`・`js/d1.js`・`js/heya.js`・`js/meibo.js`・`js/shashin.js`・`css/<名前>.css` | 年表・D-1選手権・部屋割り・名簿・写真館（年表と写真館のログインは `js/site/login.js`・`css/login.css`） |
 | `sanpo/`・`css/style.css`・`js/world.js`・`js/art.js`・`js/game.js` | 寮さんぽ（間取り・ドット絵・操作） |
 | `css/site.css` | コンテンツのページ共通の見た目（白い二重線のウインドウなど） |
-| `js/site/` | 設定（`config.js`）、サンプル（`sample.js`）、データの読み込み（`data.js`）、注記などの小物（`common.js`）、Google のログインの入り口（`login.js`） |
+| `css/uploader.css` | 写真を送るところの見た目（写真館と、トップページの投稿フォーム） |
+| `js/site/` | 設定（`config.js`）、サンプル（`sample.js`）、データの読み込み（`data.js`）、注記などの小物（`common.js`）、Google のログインの入り口（`login.js`）、写真を送るしくみ（`uploader.js`。写真館とトップページで使う）と ZIP を開く道具（`zip.js`） |
 | `gas/` | Google Apps Script |
 | `tools/build_artifact.py` | 寮さんぽを 1 枚の HTML にまとめる（claude.ai に公開する用）：`python3 tools/build_artifact.py <出力先>` |
 | `tests/` | 確認（`e2e/` はブラウザ、`gas/` は Apps Script、`run-all.sh` はぜんぶ） |

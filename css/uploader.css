@@ -1,0 +1,53 @@
+/*
+ * 夕照寮OB会サイト ― 写真を送るところの見た目（js/site/uploader.js）
+ * 写真館（shashin/）の「写真を送る」と、トップページの投稿フォームの「写真」で使う。
+ * ファイルをえらぶ所・進み具合のゲージ・送れなかったものの一覧。色は css/site.css。
+ * ドラッグ中は、送る欄（uploader の el.box）に is-drag が付く。
+ */
+.ob-up-drop { padding: 12px; border: 2px dashed var(--fc-white); background: var(--fc-navy); min-width: 0; }
+.is-drag .ob-up-drop { border-color: var(--fc-yellow); background: #2a2470; }
+.ob-up-file input[type="file"] { width: 100%; max-width: 100%; box-sizing: border-box; font: 14px/1.4 var(--font-body); color: var(--fc-white); }
+.ob-up-file input[type="file"]::file-selector-button {
+  margin-right: 10px;
+  padding: 7px 12px;
+  font: 14px/1 var(--font-pixel);
+  color: var(--fc-blue);
+  background: var(--fc-white);
+  border: 2px solid var(--fc-black);
+  cursor: pointer;
+}
+.ob-up-file input[type="file"]:disabled::file-selector-button { opacity: 0.5; cursor: default; }
+.ob-up-picked { margin: 8px 0 0; font-size: 13px; color: var(--fc-gray); overflow-wrap: anywhere; }
+
+.ob-up-prog { display: grid; gap: 6px; }
+.ob-up-prog-text { margin: 0; font: 14px/1.6 var(--font-pixel); letter-spacing: 0.02em; overflow-wrap: anywhere; }
+/* ドット絵ふうのゲージ（4 ドットずつの目盛り） */
+.ob-up-track { height: 16px; padding: 2px; background: var(--fc-black); border: 2px solid var(--fc-white); box-sizing: content-box; }
+.ob-up-fill {
+  width: 0;
+  height: 100%;
+  background: repeating-linear-gradient(90deg, var(--fc-yellow) 0 6px, var(--fc-brown) 6px 8px);
+  transition: width 0.2s steps(4);
+}
+
+.ob-up-status { margin: 0; font-size: 14px; line-height: 1.7; color: var(--fc-yellow-2); overflow-wrap: anywhere; }
+.ob-up-status:empty { display: none; }
+.ob-up-status.is-error { color: #ffb0a0; }
+.ob-up-status.is-done { color: var(--fc-lime); }
+.ob-up-status.is-busy::after { content: "▮"; margin-left: 4px; animation: ob-up-blink 0.8s steps(1) infinite; }
+@keyframes ob-up-blink { 50% { opacity: 0; } }
+
+.ob-up-problems { padding: 8px 12px; border: 2px dashed var(--fc-red); }
+.ob-up-problems h3 { margin: 0 0 4px; font-size: 14px; color: #ffd0c4; }
+.ob-up-problems ul { margin: 0; padding-left: 1.2em; max-height: 240px; overflow-y: auto; font-size: 13px; line-height: 1.6; color: #ffd0c4; }
+.ob-up-problems li { overflow-wrap: anywhere; }
+.ob-up-problems b { font-weight: bold; color: var(--fc-white); }
+
+@media (max-width: 560px) {
+  .ob-up-drop { padding: 10px 8px; }
+}
+/* 動きをへらす設定：点滅を止める（css/site.css の * では、::after まで止まらない） */
+@media (prefers-reduced-motion: reduce) {
+  .ob-up-status.is-busy::after { animation: none; }
+  .ob-up-fill { transition: none; }
+}

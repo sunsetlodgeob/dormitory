@@ -1,5 +1,5 @@
 /*
- * 夕照寮OB会サイト ― ZIP を開く小さな道具（写真館の「写真を送る」で使う。外のライブラリは使わない）
+ * 夕照寮OB会サイト ― ZIP を開く小さな道具（写真を送るところ js/site/uploader.js で使う。外のライブラリは使わない）
  *
  *   const list = await OB.zip.entries(file);   // file は <input type="file"> などの File（Blob）
  *   for (const en of list) {

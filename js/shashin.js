@@ -7,7 +7,8 @@
  *  - 一覧の写真は、画面の近くに来たものだけ、24 枚ずつまとめて読む。同時に送るのは 3 つまで
  *  - 読んだ写真と ID トークンはメモリだけに置く（保存しない。ログアウトで消す）
  *  - サーバーから来た id は /^[\w-]{1,200}$/ に合うものだけ使う。文字はすべて textContent か OB.esc を通す
- *  - 「写真を送る」：写真と ZIP（js/site/zip.js で開く）を 1 枚ずつ OB.data.uploadPhoto で送る（同時に 2 枚まで）。約束は ARCH.md
+ *  - 「写真を送る」：写真と ZIP（js/site/zip.js で開く）を 1 枚ずつ OB.data.uploadPhoto で送る（同時に 2 枚まで）。
+ *    送るしくみは js/site/uploader.js（OB.uploader。トップページの投稿フォームと同じ）。約束は ARCH.md
  */
 (function () {
   'use strict';
@@ -406,257 +407,34 @@
   }
 
   // ── 写真を送る ────────────────────────────────────
-  // 写真（ZIP の中のものも）を 1 枚ずつ OB.data.uploadPhoto で送る。同時に送るのは 2 枚まで、えらんだ順に。
-  // ファイルは送る直前に 1 枚ずつ読む（ZIP 全体や、全部の写真を一度にメモリに入れない）。
-  // 送れたもの（同じ写真がもうあったものも）は覚えておき、同じえらび方でもう一度「送る」を押すと、とばす（やめた・休みの続き）
-  const SEND_MAX = 20 * 1024 * 1024; // 1 枚 20MB まで
-  const SEND_FLIGHT = 2;
-  const SHOW_PROBLEMS = 100;         // 問題の一覧は、100 件まで出す
-  const PHOTO_MIME = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', heic: 'image/heic', heif: 'image/heif' };
-  const OTHER_IMAGE = /^(bmp|tiff?|svg|avif|jxl|ico|dng|raw|cr2|cr3|nef|arw|orf|rw2|psd)$/;
-  const VIDEO = /^(mp4|mov|m4v|avi|wmv|mts|m2ts|3gp|mkv|webm|mpe?g)$/;
-  const SEND_MSG = {
-    too_big: '大きすぎるので、送りませんでした（1 枚 20MB まで）',
-    not_photo: '写真ではないので、送りませんでした',
-    video: '動画は送れません（写真だけ）',
-    other_image: 'この形の写真は送れません（送れるのは jpg・png・gif・webp・heic）',
-    no_photo: 'ZIP の中に、送れる写真がありませんでした',
-    zip_not: 'ZIP を開けませんでした（こわれているかもしれません）',
-    zip64: 'この ZIP は大きすぎて開けません。いくつかに分けて作りなおすか、写真をそのままえらんでください',
-    zip_encrypted: 'パスワード付きの ZIP は開けません。パスワードなしで作りなおしてください',
-    zip_broken: 'ZIP の中のこのファイルを読めませんでした（こわれているかもしれません）',
-    zip_method: 'この ZIP の入れ方には対応していません。写真をそのままえらんでください',
-    zip_browser: 'このブラウザでは ZIP を開けません。新しいブラウザで開くか、写真をそのままえらんでください',
-    read: 'ファイルを読めませんでした',
-    too_large: '大きすぎるので、受けとってもらえませんでした',
-    bad_type: '写真として受けとってもらえませんでした',
-    bad_request: 'うまく送れませんでした',
-    network: '通信に失敗したので、送れませんでした',
-    other: 'うまく送れませんでした',
-  };
-  const STOP_MSG = {
-    too_many: 'たくさん送られたので、少し休んでいます。1 時間ほどしてから、残りを送ってください。',
-    not_configured: '写真を受けとる準備が、まだ終わっていません。しばらくしてから、もう一度ためしてください。',
-    network: '通信に何度も失敗したので、止めました。電波のよい所で、もう一度「送る」を押してください（送れたものは、とばします）。',
-  };
-  const up = { files: [], sent: new Set(), busy: false, stop: false, problems: 0 };
+  // 写真（ZIP の中のものも）を 1 枚ずつ OB.data.uploadPhoto で送る。送るしくみは js/site/uploader.js（トップページの投稿フォームと同じ）
   const sendEl = {
-    toggle: $('ps-send-toggle'), box: $('ps-send'), form: $('ps-send-form'), drop: $('ps-drop'), files: $('ps-files'),
-    picked: $('ps-picked'), year: $('ps-send-year'), note: $('ps-send-note'), go: $('ps-send-go'), stop: $('ps-send-stop'),
-    prog: $('ps-prog'), progText: $('ps-prog-text'), progFill: $('ps-prog-fill'), status: $('ps-send-status'),
-    problems: $('ps-problems'), problemList: $('ps-problem-list'),
+    toggle: $('ps-send-toggle'), box: $('ps-send'), form: $('ps-send-form'), year: $('ps-send-year'), note: $('ps-send-note'),
   };
-
-  const extOf = (name) => { const m = /\.([^./]+)$/.exec(String(name || '')); return m ? m[1].toLowerCase() : ''; };
-  const baseName = (name) => String(name || '').split('/').pop().slice(-200);
-  const isZipFile = (f) => extOf(f.name) === 'zip' || /^application\/(x-)?zip(-compressed)?$/.test(f.type || '');
-  const fileKey = (f) => [f.name, f.size, f.lastModified].join('|');
-  // 名前（と、あれば種類）から、送れる写真か。{ mime } か { why }
-  function photoKind(name, type) {
-    const ext = extOf(name);
-    if (PHOTO_MIME[ext]) return { mime: PHOTO_MIME[ext] };
-    const t = String(type || '').toLowerCase();
-    for (const k in PHOTO_MIME) if (PHOTO_MIME[k] === t) return { mime: t };
-    if (OTHER_IMAGE.test(ext) || /^image\//.test(t)) return { why: 'other_image' };
-    if (VIDEO.test(ext) || /^video\//.test(t)) return { why: 'video' };
-    return { why: 'not_photo' };
-  }
-  // バイト列を base64 に（大きい写真でも、少しずつ。3 の倍数で区切ると、つなげても正しい）
-  function toBase64(bytes) {
-    const STEP = 3 * 0x4000;
-    const parts = [];
-    for (let i = 0; i < bytes.length; i += STEP) {
-      const sub = bytes.subarray(i, i + STEP);
-      let bin = '';
-      for (let j = 0; j < sub.length; j += 0x1000) bin += String.fromCharCode.apply(null, sub.subarray(j, j + 0x1000));
-      parts.push(btoa(bin));
-    }
-    return parts.join('');
-  }
-
-  function sendSay(text, kind) {
-    sendEl.status.className = 'ps-send-status' + (kind ? ' is-' + kind : '');
-    sendEl.status.textContent = text || '';
-  }
-  function clearProblems() {
-    up.problems = 0;
-    sendEl.problemList.textContent = '';
-    sendEl.problems.hidden = true;
-  }
-  function problem(label, why) {
-    up.problems++;
-    sendEl.problems.hidden = false;
-    const list = sendEl.problemList;
-    if (up.problems <= SHOW_PROBLEMS) {
-      const li = document.createElement('li');
-      const b = document.createElement('b');
-      b.textContent = label;
-      li.appendChild(b);
-      li.appendChild(document.createTextNode('：' + (SEND_MSG[why] || SEND_MSG.other)));
-      list.appendChild(li);
-      return;
-    }
-    let more = list.querySelector('.ps-problem-more');
-    if (!more) {
-      more = document.createElement('li');
-      more.className = 'ps-problem-more';
-      list.appendChild(more);
-    }
-    more.textContent = 'ほかに ' + (up.problems - SHOW_PROBLEMS) + ' 件';
-  }
-  function showPicked() {
-    const fs = up.files;
-    if (!fs.length) { sendEl.picked.textContent = 'まだ何もえらんでいません。'; return; }
-    const zips = fs.filter(isZipFile).length;
-    const first = fs[0].name;
-    sendEl.picked.textContent = 'えらんだもの：' + (fs.length === 1 ? first : first + ' ほか ' + (fs.length - 1) + ' 個') +
-      (zips ? '（ZIP ' + zips + ' 個）' : '');
-  }
-  function pick(list) {
-    if (up.busy) return;
-    up.files = Array.from(list || []).filter((f) => f && typeof f.slice === 'function');
-    up.sent.clear();
-    showPicked();
-    sendSay('');
-  }
-  function setSendBusy(on) {
-    up.busy = on;
-    sendEl.go.disabled = on;
-    sendEl.files.disabled = on;
-    sendEl.stop.hidden = !on;
-    sendEl.stop.disabled = false;
-    sendEl.box.classList.toggle('is-busy', on);
-    if (on) sendEl.stop.textContent = 'やめる';
-  }
-  function progress(c) {
-    const done = c.saved + c.dup;
-    let t = done + ' / ' + c.total + ' 枚 送りました';
-    if (c.dup) t += '（同じ写真がもうあったので とばした：' + c.dup + ' 枚）';
-    if (c.fail) t += '　送れなかった：' + c.fail + ' 枚';
-    sendEl.prog.hidden = false;
-    sendEl.progText.textContent = t;
-    const pct = c.total ? Math.round(((done + c.fail) / c.total) * 100) : 100;
-    sendEl.progFill.style.width = pct + '%';
-  }
-
-  // えらんだファイルから、送るものの一覧を作る（ZIP は目次だけ読む）
-  async function collect(files) {
-    const items = [];
-    for (const f of files) {
-      if (isZipFile(f)) {
-        let list;
-        try {
-          list = await OB.zip.entries(f);
-        } catch (e) {
-          problem(f.name, (e && e.code) || 'zip_not');
-          continue;
-        }
-        let n = 0;
-        for (const en of list) {
-          const label = f.name + ' の中の ' + en.name;
-          const k = photoKind(en.name, '');
-          if (!k.mime) { problem(label, k.why); continue; }
-          n++;
-          if (en.size > SEND_MAX) { problem(label, 'too_big'); continue; }
-          items.push({ key: fileKey(f) + '|' + en.name, label, name: baseName(en.name), mime: k.mime, size: en.size, read: en.read });
-        }
-        if (!n) problem(f.name, 'no_photo');
-        continue;
-      }
-      const k = photoKind(f.name, f.type);
-      if (!k.mime) { problem(f.name, k.why); continue; }
-      if (f.size > SEND_MAX) { problem(f.name, 'too_big'); continue; }
-      items.push({
-        key: fileKey(f), label: f.name, name: baseName(f.name) || 'photo', mime: k.mime, size: f.size,
-        read: () => f.arrayBuffer().then((b) => new Uint8Array(b)),
-      });
-    }
-    return items;
-  }
+  const up = OB.uploader.create({
+    el: {
+      box: sendEl.box, files: $('ps-files'), picked: $('ps-picked'), go: $('ps-send-go'), stop: $('ps-send-stop'),
+      prog: $('ps-prog'), progText: $('ps-prog-text'), progFill: $('ps-prog-fill'), status: $('ps-send-status'),
+      problems: $('ps-problems'), problemList: $('ps-problem-list'),
+    },
+    fatal: ['invalid_token', 'not_member'], // ログインの画面にもどす（authFailed）
+  });
 
   async function sendPhotos() {
-    if (up.busy) return;
-    if (!up.files.length) { sendSay('写真か ZIP をえらんでください。', 'error'); sendEl.files.focus(); return; }
     const g = gen;
+    const tok = token;
     const year = String(sendEl.year.value || '').trim().slice(0, 30);
     const note = String(sendEl.note.value || '').trim().slice(0, 200);
-    setSendBusy(true);
-    clearProblems();
-    sendEl.prog.hidden = true;
-    sendSay('ファイルを調べています…', 'busy');
-    const c = { total: 0, saved: 0, dup: 0, fail: 0 };
-    let halt = '', authErr = null, netFails = 0;
-    try {
-      const items = await collect(up.files);
-      if (g !== gen) return;
-      const todo = items.filter((it) => !up.sent.has(it.key));
-      c.total = todo.length;
-      if (!todo.length) {
-        sendSay(items.length ? 'えらんだ写真は、もう送ってあります。' : '送れる写真がありませんでした。', 'error');
-        return;
-      }
-      progress(c);
-      sendSay('送っています…' + (todo.length < items.length ? '（前に送れたものは、とばします）' : ''), 'busy');
-      let next = 0;
-      const worker = async () => {
-        while (!up.stop && !halt && g === gen && next < todo.length) {
-          const it = todo[next++];
-          let res;
-          try {
-            const bytes = await it.read();
-            if (g !== gen) return;
-            if (bytes.length > SEND_MAX) throw Object.assign(new Error('大きい'), { code: 'too_big' });
-            res = await OB.data.uploadPhoto(token, { name: it.name, mime: it.mime, data: toBase64(bytes), year, note });
-          } catch (e) {
-            if (g !== gen) return;
-            const code = (e && e.code) || 'read';
-            if (code === 'invalid_token' || code === 'not_member') { halt = code; authErr = e; return; }
-            if (code === 'too_many' || code === 'not_configured') { halt = code; return; }
-            if (code === 'network' && ++netFails >= 3) halt = 'network';
-            c.fail++;
-            problem(it.label, code);
-            progress(c);
-            continue;
-          }
-          if (g !== gen) return;
-          netFails = 0;
-          up.sent.add(it.key);
-          if (res && res.duplicate) c.dup++;
-          else c.saved++;
-          progress(c);
-        }
-      };
-      const workers = [];
-      for (let i = 0; i < SEND_FLIGHT; i++) workers.push(worker());
-      await Promise.all(workers);
-      if (g !== gen) return;
-      if (authErr) {
-        const done = c.saved + c.dup;
-        authFailed(authErr); // ログインの画面にもどす（送る欄も消える）
-        if (authErr.code === 'invalid_token' && done < c.total) {
-          gate.setStatus(EXPIRED + '\n写真は ' + done + ' / ' + c.total + ' 枚まで送れています。残りは、ログインしなおしてから、もう一度えらんで送ってください（送れたものは、同じ写真としてとばします）。', 'error');
-        }
-        return;
-      }
-      const all = c.saved + c.dup + c.fail === c.total;
-      if (halt) sendSay(STOP_MSG[halt] || STOP_MSG.network, 'error');
-      else if (up.stop && !all) sendSay('やめました。もう一度「送る」を押すと、残りを送ります（送れたものは、とばします）。', 'error');
-      else {
-        sendSay(c.fail ? '送り終わりました。送れなかったものは、下の一覧を見てください。' : '送り終わりました。ありがとうございます！', c.fail ? 'error' : 'done');
-        if (!c.fail) {
-          // 全部送れた：えらんだものを空にする（もう一度押して、また送らないように）
-          up.files = [];
-          up.sent.clear();
-          sendEl.files.value = '';
-          showPicked();
-        }
-      }
-      if (c.saved) await reloadPhotos(g);
-    } catch (e) {
-      if (g !== gen) return;
-      sendSay(SEND_MSG.other + '。時間をおいて、もう一度ためしてください。', 'error');
-    } finally {
-      if (g === gen) { up.stop = false; setSendBusy(false); }
+    const c = await up.run({
+      send: (photo) => OB.data.uploadPhoto(tok, Object.assign(photo, { year, note })),
+      // 1 枚でも入ったら、一覧を読みなおす（読みおわるまで「送る」は押せないまま）
+      after: (r) => (r.saved && !r.fatal && g === gen ? reloadPhotos(g) : null),
+    });
+    if (!c || !c.fatal || g !== gen) return;
+    const done = c.saved + c.dup;
+    authFailed(c.fatal); // ログインの画面にもどす（送る欄も消える）
+    if (c.fatal.code === 'invalid_token' && done < c.total) {
+      gate.setStatus(EXPIRED + '\n写真は ' + done + ' / ' + c.total + ' 枚まで送れています。残りは、ログインしなおしてから、もう一度えらんで送ってください（送れたものは、同じ写真としてとばします）。', 'error');
     }
   }
 
@@ -691,17 +469,8 @@
     sendEl.toggle.classList.toggle('is-open', open);
   }
   function resetSend() {
-    up.files = [];
-    up.sent.clear();
-    up.stop = false;
-    setSendBusy(false);
+    up.reset();
     sendEl.form.reset();
-    showPicked();
-    sendSay('');
-    clearProblems();
-    sendEl.prog.hidden = true;
-    sendEl.progFill.style.width = '0%';
-    sendEl.box.classList.remove('is-drag');
     openSend(false);
   }
 
@@ -710,42 +479,7 @@
     openSend(open);
     if (open) sendEl.box.scrollIntoView({ block: 'nearest', behavior: reduceMotion() ? 'auto' : 'smooth' });
   });
-  sendEl.files.addEventListener('change', () => pick(sendEl.files.files));
   sendEl.form.addEventListener('submit', (e) => { e.preventDefault(); sendPhotos(); });
-  sendEl.stop.addEventListener('click', () => {
-    if (!up.busy) return;
-    up.stop = true;
-    sendEl.stop.disabled = true;
-    sendEl.stop.textContent = '止めています…';
-    sendSay('いま送っている分が終わったら、止めます…', 'busy');
-  });
-  // パソコン：送る欄にファイルをドラッグして入れる
-  let dragDepth = 0;
-  const hasFiles = (e) => e.dataTransfer && Array.from(e.dataTransfer.types || []).indexOf('Files') >= 0;
-  sendEl.box.addEventListener('dragenter', (e) => {
-    if (!hasFiles(e)) return;
-    e.preventDefault();
-    dragDepth++;
-    if (!up.busy) sendEl.box.classList.add('is-drag');
-  });
-  sendEl.box.addEventListener('dragover', (e) => {
-    if (!hasFiles(e)) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = up.busy ? 'none' : 'copy';
-  });
-  sendEl.box.addEventListener('dragleave', () => {
-    dragDepth = Math.max(0, dragDepth - 1);
-    if (!dragDepth) sendEl.box.classList.remove('is-drag');
-  });
-  sendEl.box.addEventListener('drop', (e) => {
-    if (!hasFiles(e)) return;
-    e.preventDefault();
-    dragDepth = 0;
-    sendEl.box.classList.remove('is-drag');
-    if (up.busy) return;
-    pick(e.dataTransfer.files);
-    sendEl.files.value = ''; // 入れたものは up.files にある（input のほうは空にしておく）
-  });
 
   // ── ログインのあと（デモではすぐに） ─────────────────────────
   function reset() {

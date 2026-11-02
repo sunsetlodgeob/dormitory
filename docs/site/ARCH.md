@@ -7,8 +7,8 @@
 GitHub Pages で `https://sunsetlodgeob.github.io/dormitory/` に出る。リンクはすべて相対パスで書く。
 
 ```
-index.html              ホーム（ファミコンウォーズ風のモード選択）
-css/home.css  js/home/   ホーム専用
+index.html              ホーム（ファミコンウォーズ風のモード選択）と投稿フォーム（#post）
+css/home.css  js/home/   ホーム専用（投稿フォームは js/home/post.js。写真の欄は js/site/uploader.js も読む）
 game/index.html          ゲーム「男魂くんの1年」
   css/otoko.css
   js/otoko/engine.js     画面・入力・描画の土台
@@ -28,13 +28,15 @@ sanpo/index.html         寮さんぽ（建物を歩ける再現）  js/world.js
                          （?year= の部屋割りと注記のために js/site/ の 4 つも読む）
 status/index.html        進捗（作る人と幹事向け。ホームからはリンクしない）  status/status.js に中身
 css/site.css             コンテンツのページ共通の見た目
+css/uploader.css         写真を送るところの見た目（ob-up-*。写真館とトップページの投稿フォーム）
 css/login.css            Google でログインして見るページ（年表・写真館）の入り口の見た目。読み込み中などの見た目は D-1 でも使う
 js/site/config.js        設定（URL など。空ならサンプルで動く）
 js/site/sample.js        サンプルデータ（すべて架空）
 js/site/data.js          データの読み込み（OB.data）、部屋割りのそろえ方（OB.data.roomsByYear）
 js/site/common.js        注記の表示（OB.DISCLAIMER）、OB.esc・OB.safeUrl・OB.wareki・OB.normSearch
 js/site/login.js         Google のログインの入り口（OB.loginGate）。年表と写真館で使う
-js/site/zip.js           ZIP を開く小さな道具（OB.zip）。写真館の「写真を送る」で使う
+js/site/zip.js           ZIP を開く小さな道具（OB.zip）。写真を送るところで使う
+js/site/uploader.js      写真を送るしくみ（OB.uploader）。写真館の「写真を送る」とトップページの投稿フォームの「写真」で使う
 gas/                     Google Apps Script（トップページの投稿 → Gemini → スプレッドシート → サイト）
 tools/build_artifact.py  寮さんぽを 1 枚の HTML にまとめる（claude.ai に公開する用）
 tests/e2e/               ブラウザでの確認（Playwright）
@@ -146,27 +148,39 @@ docs/site/SETUP.md       Google 側の設定手順（幹事向け）
 - ID トークンは 1 時間ほどで切れる。一覧や大きい写真で `invalid_token` が返ったら、ログインの画面にもどして「もう一度ログイン」と出す。
 - 設定が空のとき（デモ）は `js/site/sample.js` の `photos`（色の四角の絵。`OB.SAMPLE.photoImage` で作る）を返す。ダウンロードもできる。
 
-#### 写真を送る（見る権限のある人だけ）
+#### 写真を送る（写真館：見る権限のある人。トップページ：だれでも、確認の問いに答えれば）
 
 `OB.data.uploadPhoto(idToken, { name, mime, data, year, note })` → 本文
 `{"type":"upload","idToken":"…","name":"IMG_0001.JPG","mime":"image/jpeg","data":"（ファイルの base64）","year":"2005","note":"…"}`
 
+ログインなし（トップページの投稿フォーム）は、`idToken` を空にして `OB.data.uploadPhoto('', { name, mime, data, year, note, quiz, hp, by })` → 本文
+`{"type":"upload","quiz":"夕照寮","hp":"","by":"一年C","name":"…","mime":"…","data":"…","year":"…","note":""}`（`idToken` は付けない）。
+`quiz`・`hp`・`by` は文字の投稿と同じ欄（確認の問い・わなの欄・投稿者）。
+
 ```json
 { "ok": true, "id": "1AbC…", "year": 2005 }          // 入れた（year は null のこともある）
 { "ok": true, "duplicate": true, "same": "big.jpg" }  // 同じ写真がもう写真館にある（入れない）
-{ "ok": false, "error": "too_large" | "bad_type" | "too_many" | "not_member" | "invalid_token" | "not_configured" | "bad_request" }
+{ "ok": true, "skipped": true }                     // ログインなしで、わなの欄に何か入っていた（入れない）
+{ "ok": false, "error": "too_large" | "bad_type" | "too_many" | "not_member" | "invalid_token" | "quiz" | "not_configured" | "bad_request" }
 ```
 
 - 1 回に 1 枚。`name` はファイルの名前（ZIP の中のものは、フォルダを除いた名前。200 字まで）。`mime` は拡張子から（jpg・jpeg → `image/jpeg`、png・gif・webp・heic・heif）。
   `year` は「年度」の欄の文字のまま（空でよい。「平成17年度」なども Apps Script 側で読む）。書いてあれば、撮影日より優先する。`note` は「ひとこと」（200 字まで。空でよい）。
+- `bad_type` は、ファイルの中身（頭の印）がほんとうの写真でないときにも返る。
+- ログインなしのとき：`quiz` は確認の答えがちがう、`too_many` は全員で 1 時間の上限（ログインありは 1 人ごと）。
 - 失敗したときは、ほかと同じく `code` 付きの Error（通信できなかったときは `'network'`）。
-- ページ（`js/shashin.js`）の約束：
+- 送るしくみは `js/site/uploader.js` の `OB.uploader.create({ el, stops, fatal })` にまとめてあり、写真館とトップページで同じものを使う。
+  `run({ send, after })` で送り、`{ total, saved, dup, fail, halt, fatal, stopped, done }` を返す（使い方はファイルの頭）。
+  写真館は `fatal: ['invalid_token', 'not_member']`（ログインの画面にもどす）、トップページは `stops: { quiz: '…' }`（確認の答えがちがう文を出して止める）。
+- 送るところの約束（`js/site/uploader.js`。写真館もトップページも同じ）：
   - 送れるのは拡張子が jpg・jpeg・png・gif・webp・heic・heif のものだけ。1 枚 20MB（20×1024×1024 バイト）をこえるものは、送らずに一覧に出す。
   - えらんだ順に送り、同時に送るのは 2 枚まで。ファイルは送る直前に 1 枚ずつ読み、base64 は少しずつ作る（大きい文字列を一度に作らない）。
   - `too_large`・`bad_type`・`bad_request`・`network` は、その 1 枚だけ「送れなかった」にして続ける（`network` が 3 回続いたら止める）。
-  - `too_many` と `not_configured` は止めて、文を出す。`invalid_token`・`not_member` は止めて、ログインの画面にもどす（一覧と同じ）。
-  - 「やめる」は、いま送っている分が終わってから止める。送れたもの（重複も）は覚えておき、同じえらび方で「送る」を押しなおすと、残りだけ送る（メモリだけ。ログアウトで消す）。
-  - 1 枚でも入ったら、終わったあとに `loadPhotos` で一覧を読みなおす（読んだ小さい写真はそのまま使い、見ていた所から動かさない）。
+  - `too_many` と `not_configured` は止めて、文を出す。写真館では `invalid_token`・`not_member` は止めて、ログインの画面にもどす（一覧と同じ）。トップページでは `quiz` も止めて、文字の投稿と同じ文を出す。
+  - 「やめる」は、いま送っている分が終わってから止める。送れたもの（重複も）は覚えておき、同じえらび方で「送る」を押しなおすと、残りだけ送る（メモリだけ。写真館ではログアウトで消す）。
+  - 写真館：1 枚でも入ったら、終わったあとに `loadPhotos` で一覧を読みなおす（読んだ小さい写真はそのまま使い、見ていた所から動かさない）。
+  - トップページ（`js/home/post.js`）：「送る ▶」で、文字の欄に何か書いてあれば先に文字の投稿を送り、そのあと写真を送る（文字の投稿で確認の答えがちがったら、写真は送らない）。
+    文字の欄が空でも、写真をえらんでいれば送れる。`note` は空。送れたら「写真館で見る ▶」（`shashin/`）を出す。設定が空（デモ）のときは準備中で、何も送らない。
 - デモ（設定が空）では通信せず、少し待って「入れた」と返す（5 枚目ごとに `duplicate`）。
 
 ZIP は `js/site/zip.js` の `OB.zip.entries(file)` で開く（外のライブラリは使わない）。返すのは `[{ name, size, read }]`（`read()` → `Uint8Array`）。
@@ -193,7 +207,8 @@ ZIP は `js/site/zip.js` の `OB.zip.entries(file)` で開く（外のライブ�
 
 ### 投稿（トップページのフォーム。だれでも送れる）
 
-`js/home/post.js` → `POST {GAS_URL}`（`Content-Type: text/plain`）。どの欄も空でよいが、事件の見出しか本文・名簿の名前か訂正・部屋割りのどれか 1 つは要る。
+`js/home/post.js` → `POST {GAS_URL}`（`Content-Type: text/plain`）。どの欄も空でよいが、事件の見出しか本文・名簿の名前か訂正・部屋割り・写真のどれか 1 つは要る。
+写真は文字の投稿とは別に、1 枚ずつ `type: 'upload'` で送る（上の「写真を送る」のログインなし）。
 
 ```json
 {
@@ -306,7 +321,7 @@ OTK.register({
 - ぜんぶまとめて動かすときは `sh tests/run-all.sh`（1 つでも失敗すると、終了コードが 0 以外になる）。30 分ほどかかる。
 - `gas/Code.gs` の確認は `node tests/gas/run.js`（Google には出ない。Apps Script のまねをして動かす）。
 - 同時に動かしても重ならないように、ポートを分ける：
-  ゲームのエンジン 8801、ホーム 8802、部屋割り 8803、名簿・年表 8804、ミニゲーム 8811〜8815、サイト全体 8805、ゲームの寸劇 8806、D-1選手権 8807、写真館 8808、写真館の「写真を送る」8809、確認役 8821〜。
+  ゲームのエンジン 8801、ホーム 8802、部屋割り 8803、名簿・年表 8804、ミニゲーム 8811〜8815、サイト全体 8805、ゲームの寸劇 8806、D-1選手権 8807、写真館 8808、写真館の「写真を送る」8809、トップページの投稿フォームの写真 8810、確認役 8821〜。
 - どの確認も、環境変数 `PORT` でポートを変えられる（例：`PORT=8821 node tests/e2e/home.test.js`）。古い名前の `HOME_PORT`・`HEYA_PORT`・`MEIBO_PORT`・`NENPYO_PORT` も使える。
 - このリポジトリの外（Google Fonts など）には出られないことがある。フォントが読めないことによるエラーは無視してよい（`realErrors()`）。
 - 確認のための入り口：

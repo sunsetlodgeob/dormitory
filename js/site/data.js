@@ -113,8 +113,10 @@
   }
 
   // 写真を送る（1 回に 1 枚）。photo：{ name, mime, data（もとのファイルの base64）, year（年度の文字。空でよい）, note }
+  // idToken が空のとき（トップページの投稿フォーム。ログインなし）は、かわりに photo の quiz（寮の名前）・hp（わなの欄）・by（投稿者）を送る
   // 返事：{ ok: true, id, year }（入れた。year は null のこともある）・{ ok: true, duplicate: true, same }（同じ写真がもうある。入れない）
-  // 失敗したときは Error に code（'too_large' | 'bad_type' | 'too_many' | 'not_member' | 'invalid_token' |
+  //       { ok: true, skipped: true }（ログインなしで、わなの欄に何か入っていた。入れない）
+  // 失敗したときは Error に code（'too_large' | 'bad_type' | 'too_many' | 'not_member' | 'invalid_token' | 'quiz' |
   // 'not_configured' | 'bad_request' | 'network' など）
   // デモ（GAS_URL が空）では送らずに、少し待って「入れた」と返す（5 枚目ごとに「同じ写真がもうある」）
   let demoSent = 0;
@@ -127,11 +129,11 @@
       const y = /^\d{4}$/.test(String(f.year || '').trim()) ? Number(String(f.year).trim()) : null;
       return { ok: true, id: 'demo-up-' + demoSent, year: y, sample: true };
     }
-    return post({
-      type: 'upload', idToken,
-      name: String(f.name || ''), mime: String(f.mime || ''), data: String(f.data || ''),
-      year: String(f.year == null ? '' : f.year), note: String(f.note == null ? '' : f.note),
-    }, '送れませんでした');
+    const str = (v) => String(v == null ? '' : v);
+    const who = idToken ? { idToken } : { quiz: str(f.quiz), hp: str(f.hp), by: str(f.by) };
+    return post(Object.assign({ type: 'upload' }, who, {
+      name: str(f.name), mime: str(f.mime), data: str(f.data), year: str(f.year), note: str(f.note),
+    }), '送れませんでした');
   }
 
   // 部屋番号の一覧（1階の 101、2・3階の 01〜17）

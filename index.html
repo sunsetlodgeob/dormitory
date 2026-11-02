@@ -12,6 +12,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=DotGothic16&display=swap">
 <link rel="stylesheet" href="css/site.css">
+<link rel="stylesheet" href="css/uploader.css">
 <link rel="stylesheet" href="css/home.css">
 </head>
 <body class="home">
@@ -64,14 +65,14 @@
     </ul>
     <h3>投稿</h3>
     <ul>
-      <li><a href="#post">情報を送る</a><span>事件・出来事、名簿の追加や訂正、部屋割り。</span></li>
+      <li><a href="#post">情報を送る</a><span>事件・出来事、名簿の追加や訂正、部屋割り、写真。</span></li>
     </ul>
   </nav>
 
   <section class="home-post" id="post" aria-labelledby="post-title">
     <h2 id="post-title">情報を送る</h2>
-    <p>寮の事件・出来事、名簿の追加や訂正、部屋割りを教えてください。<strong>書きたいところだけ</strong>書けば送れます（ほかは空欄のままで大丈夫）。</p>
-    <p>送った内容は、Google の AI（Gemini）が形を整えて、そのまま年表・名簿・部屋割りに載ります。まちがいは、あとで幹事が直します。写真はここでは受けつけていません。</p>
+    <p>寮の事件・出来事、名簿の追加や訂正、部屋割り、写真を送ってください。<strong>書きたいところだけ</strong>書けば送れます（ほかは空欄のままで大丈夫）。</p>
+    <p>送った内容は、Google の AI（Gemini）が形を整えて、そのまま年表・名簿・部屋割りに載ります。まちがいは、あとで幹事が直します。写真は写真館に並びます。</p>
     <p class="ob-notice" id="post-off" hidden>投稿フォームは、いま準備中です。もうしばらくお待ちください。</p>
     <form class="home-post-form" id="post-form" novalidate>
       <fieldset class="fc-window">
@@ -92,12 +93,36 @@
         <legend>部屋割り<small>部屋割りのページに載ります（だれでも見られます）</small></legend>
         <label>年度・部屋・名前<small>1 行に 1 部屋。例：2005年度 305号室 夕照一郎・六浦二郎（自分のことは「自分」でOK。名簿の欄のお名前になります）</small><textarea name="rm_text" rows="4" maxlength="3000"></textarea></label>
       </fieldset>
+      <fieldset class="fc-window home-post-photo" id="post-photo">
+        <legend>写真<small>写真館に並びます（見られるのは、承認された寮生だけ）。ZIP でまとめて送れます。1 枚 20MB まで</small></legend>
+        <div class="ob-up-drop" id="post-drop">
+          <label class="ob-up-file">写真か ZIP をえらぶ<small>いくつでもえらべます。パソコンなら、ここにドラッグして入れることもできます</small>
+            <input type="file" id="post-files" name="files" accept="image/*,.zip,application/zip" multiple>
+          </label>
+          <p class="ob-up-picked" id="post-picked">まだ何もえらんでいません。</p>
+        </div>
+        <label>写真の年度<small>任意。わかれば。例：2005、平成17年度。書いておくと、撮影日よりこちらを使います</small><input name="ph_year" maxlength="30" autocomplete="off"></label>
+      </fieldset>
       <div class="fc-window home-post-send">
         <label>投稿者<small>任意。呼び名でOK（サイトには出ません）</small><input name="by" maxlength="100" autocomplete="off"></label>
         <label>確認：寮の名前を漢字で<small>いたずら防止のためです</small><input name="quiz" maxlength="30" autocomplete="off"></label>
         <label class="home-post-hp" aria-hidden="true">この欄は空のままにしてください<input name="hp" tabindex="-1" autocomplete="off"></label>
-        <button type="submit" class="fc-btn" id="post-send">送る ▶</button>
+        <div class="home-post-btns">
+          <button type="submit" class="fc-btn" id="post-send">送る ▶</button>
+          <button type="button" class="fc-btn home-post-stop" id="post-stop" hidden>やめる</button>
+        </div>
         <div class="home-post-status" id="post-status" role="status" aria-live="polite"></div>
+        <!-- 写真の進み具合（js/site/uploader.js） -->
+        <div class="ob-up-prog" id="post-prog" hidden>
+          <p class="ob-up-prog-text" id="post-prog-text"></p>
+          <div class="ob-up-track" aria-hidden="true"><div class="ob-up-fill" id="post-prog-fill"></div></div>
+        </div>
+        <p class="ob-up-status" id="post-photo-status" role="status" aria-live="polite"></p>
+        <div class="ob-up-problems" id="post-problems" hidden>
+          <h3>送らなかった写真・送れなかった写真</h3>
+          <ul id="post-problem-list"></ul>
+        </div>
+        <p class="home-post-album" id="post-album" hidden><a href="shashin/">写真館で見る ▶</a></p>
       </div>
     </form>
   </section>
@@ -107,6 +132,9 @@
 
 <script src="js/site/config.js"></script>
 <script src="js/site/common.js"></script>
+<script src="js/site/data.js"></script>
+<script src="js/site/zip.js"></script>
+<script src="js/site/uploader.js"></script>
 <script src="js/home/menu.js"></script>
 <script src="js/home/art.js"></script>
 <script src="js/home/audio.js"></script>
